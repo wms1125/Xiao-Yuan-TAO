@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusAccountMapper">
+    <resultMap type="com.ruoyi.campus.domain.CampusAccount" id="CampusAccountResult">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="userName" column="user_name"/>
+        <result property="balance" column="balance"/>
+        <result property="freeze" column="freeze"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, user_id, user_name, balance, freeze, update_time
+    </sql>
+
+    <insert id="insertCampusAccount" parameterType="com.ruoyi.campus.domain.CampusAccount" useGeneratedKeys="true" keyProperty="id">
+        insert into campus_account (user_id, user_name, balance, freeze)
+        values (#{userId}, #{userName}, #{balance}, #{freeze})
+    </insert>
+
+    <update id="updateCampusAccount" parameterType="com.ruoyi.campus.domain.CampusAccount">
+        update campus_account
+        <set>
+            <if test="balance != null">balance = #{balance},</if>
+            <if test="freeze != null">freeze = #{freeze},</if>
+        </set>
+        where id = #{id}
+    </update>
+
+    <!-- 原子扣减余额：余额充足才扣减，防并发超扣 -->
+    <update id="decreaseBalance">
+        update campus_account
+        set balance = balance - #{amount}, update_time = sysdate()
+        where user_id = #{userId} and balance >= #{amount}
+    </update>
+
+    <!-- 原子增加余额：退款入账 -->
+    <update id="increaseBalance">
+        update campus_account
+        set balance = balance + #{amount}, update_time = sysdate()
+        where user_id = #{userId}
+    </update>
+
+    <select id="selectByUserId" resultMap="CampusAccountResult">
+        select <include refid="Base_Column_List"/> from campus_account where user_id = #{userId} limit 1
+    </select>
+
+    <select id="selectAccountList" resultMap="CampusAccountResult">
+        select <include refid="Base_Column_List"/> from campus_account
+        <where>
+            <if test="userName != null and userName != ''">and user_name like concat('%', #{userName}, '%')</if>
+        </where>
+        order by update_time desc
+    </select>
+</mapper>

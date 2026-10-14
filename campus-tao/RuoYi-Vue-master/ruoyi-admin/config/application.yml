@@ -1,0 +1,10 @@
+# 校园淘 - 外部覆盖配置（供同学在本机运行，优先级高于 jar 内配置）
+# 作用：把上传目录改成相对路径，避免写死原作者的本机绝对路径。
+# 其余配置沿用 jar 内 application.yml（Redis localhost:6379、devtools 关闭等）。
+
+ruoyi:
+  # 文件上传根目录：相对路径，会在启动目录下自动创建，无需改任何东西
+  profile: ./uploadPath
+
+server:
+  port: 8080

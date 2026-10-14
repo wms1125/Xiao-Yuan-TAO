@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusOrderMapper">
+    <resultMap type="com.ruoyi.campus.domain.CampusOrder" id="CampusOrderResult">
+        <id property="id" column="id"/>
+        <result property="orderNo" column="order_no"/>
+        <result property="userId" column="user_id"/>
+        <result property="userName" column="user_name"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="status" column="status"/>
+        <result property="receiverName" column="receiver_name"/>
+        <result property="receiverPhone" column="receiver_phone"/>
+        <result property="address" column="address"/>
+        <result property="remark" column="remark"/>
+        <result property="payTime" column="pay_time"/>
+        <result property="shipTime" column="ship_time"/>
+        <result property="finishTime" column="finish_time"/>
+        <result property="cancelTime" column="cancel_time"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, order_no, user_id, user_name, total_amount, status, receiver_name, receiver_phone,
+        address, remark, pay_time, ship_time, finish_time, cancel_time, create_time, update_time
+    </sql>
+
+    <insert id="insertCampusOrder" parameterType="com.ruoyi.campus.domain.CampusOrder" useGeneratedKeys="true" keyProperty="id">
+        insert into campus_order (order_no, user_id, user_name, total_amount, status,
+            receiver_name, receiver_phone, address, remark)
+        values (#{orderNo}, #{userId}, #{userName}, #{totalAmount}, #{status},
+            #{receiverName}, #{receiverPhone}, #{address}, #{remark})
+    </insert>
+
+    <update id="updateCampusOrder" parameterType="com.ruoyi.campus.domain.CampusOrder">
+        update campus_order
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="receiverName != null">receiver_name = #{receiverName},</if>
+            <if test="receiverPhone != null">receiver_phone = #{receiverPhone},</if>
+            <if test="address != null">address = #{address},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="payTime != null">pay_time = #{payTime},</if>
+            <if test="shipTime != null">ship_time = #{shipTime},</if>
+            <if test="finishTime != null">finish_time = #{finishTime},</if>
+            <if test="cancelTime != null">cancel_time = #{cancelTime},</if>
+        </set>
+        where id = #{id}
+    </update>
+
+    <select id="selectOrderByOrderNo" resultMap="CampusOrderResult">
+        select <include refid="Base_Column_List"/> from campus_order where order_no = #{orderNo} limit 1
+    </select>
+
+    <select id="selectOrderById" resultMap="CampusOrderResult">
+        select <include refid="Base_Column_List"/> from campus_order where id = #{id}
+    </select>
+
+    <select id="selectOrderList" resultMap="CampusOrderResult">
+        select <include refid="Base_Column_List"/> from campus_order
+        <where>
+            <if test="userId != null">and user_id = #{userId}</if>
+            <if test="status != null">and status = #{status}</if>
+            <if test="orderNo != null and orderNo != ''">and order_no like concat('%', #{orderNo}, '%')</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="countByUserId" resultType="int">
+        select count(1) from campus_order where user_id = #{userId}
+    </select>
+</mapper>

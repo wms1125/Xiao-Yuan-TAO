@@ -1,0 +1,26 @@
+# ===== 构建产物 =====
+target/
+dist/
+*.class
+
+# ===== 前端依赖与打包结果 =====
+node_modules/
+.vite/
+*.local
+
+# ===== 随包内置运行时（体积大，不入版本库）=====
+jdk-17/
+mysql-8.0.40/
+
+# ===== 运行时生成 =====
+uploadPath/
+logs/
+*.log
+
+# ===== IDE / 编辑器 / 系统 =====
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+Thumbs.db

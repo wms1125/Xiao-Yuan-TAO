@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusReviewMapper">
+    <resultMap type="com.ruoyi.campus.domain.CampusReview" id="CampusReviewResult">
+        <id property="id" column="id"/>
+        <result property="orderId" column="order_id"/>
+        <result property="productId" column="product_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="userName" column="user_name"/>
+        <result property="rating" column="rating"/>
+        <result property="content" column="content"/>
+        <result property="images" column="images"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, order_id, product_id, user_id, user_name, rating, content, images, create_time
+    </sql>
+
+    <insert id="insertCampusReview" parameterType="com.ruoyi.campus.domain.CampusReview" useGeneratedKeys="true" keyProperty="id">
+        insert into campus_review (order_id, product_id, user_id, user_name, rating, content, images)
+        values (#{orderId}, #{productId}, #{userId}, #{userName}, #{rating}, #{content}, #{images})
+    </insert>
+
+    <select id="selectByProductId" resultMap="CampusReviewResult">
+        select <include refid="Base_Column_List"/> from campus_review where product_id = #{productId} order by create_time desc
+    </select>
+
+    <select id="selectByOrderId" resultMap="CampusReviewResult">
+        select <include refid="Base_Column_List"/> from campus_review where order_id = #{orderId} limit 1
+    </select>
+
+    <select id="selectByOrderAndProduct" resultMap="CampusReviewResult">
+        select <include refid="Base_Column_List"/> from campus_review
+        where order_id = #{orderId} and product_id = #{productId} limit 1
+    </select>
+</mapper>

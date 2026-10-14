@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusProductMapper">
+  <resultMap type="com.ruoyi.campus.domain.CampusProduct" id="CampusProductResult">
+    <result property="id" column="id"/>
+    <result property="categoryId" column="category_id"/>
+    <result property="title" column="title"/>
+    <result property="price" column="price"/>
+    <result property="originalPrice" column="original_price"/>
+    <result property="conditionLevel" column="condition_level"/>
+    <result property="description" column="description"/>
+    <result property="images" column="images"/>
+    <result property="stock" column="stock"/>
+    <result property="sellerId" column="seller_id"/>
+    <result property="sellerName" column="seller_name"/>
+    <result property="status" column="status"/>
+    <result property="version" column="version"/>
+    <result property="createTime" column="create_time"/>
+    <result property="updateTime" column="update_time"/>
+  </resultMap>
+
+  <sql id="selectProductVo">
+    select id, category_id, title, price, original_price, condition_level,
+           description, images, stock, seller_id, seller_name, status, version,
+           create_time, update_time
+    from campus_product
+  </sql>
+
+  <insert id="insertCampusProduct" parameterType="com.ruoyi.campus.domain.CampusProduct" useGeneratedKeys="true" keyProperty="id">
+    insert into campus_product
+      (category_id, title, price, original_price, condition_level, description, images, stock, seller_id, seller_name, status, version)
+    values
+      (#{categoryId}, #{title}, #{price}, #{originalPrice}, #{conditionLevel}, #{description}, #{images}, #{stock}, #{sellerId}, #{sellerName}, #{status}, 0)
+  </insert>
+
+  <update id="updateCampusProduct" parameterType="com.ruoyi.campus.domain.CampusProduct">
+    update campus_product
+    <set>
+      <if test="categoryId != null">category_id = #{categoryId},</if>
+      <if test="title != null">title = #{title},</if>
+      <if test="price != null">price = #{price},</if>
+      <if test="originalPrice != null">original_price = #{originalPrice},</if>
+      <if test="conditionLevel != null">condition_level = #{conditionLevel},</if>
+      <if test="description != null">description = #{description},</if>
+      <if test="images != null">images = #{images},</if>
+      <if test="stock != null">stock = #{stock},</if>
+      <if test="sellerId != null">seller_id = #{sellerId},</if>
+      <if test="sellerName != null">seller_name = #{sellerName},</if>
+      <if test="status != null">status = #{status},</if>
+      version = version + 1
+    </set>
+    where id = #{id}
+  </update>
+
+  <update id="updateCampusProductWithVersion" parameterType="com.ruoyi.campus.domain.CampusProduct">
+    update campus_product
+    <set>
+      <if test="categoryId != null">category_id = #{categoryId},</if>
+      <if test="title != null">title = #{title},</if>
+      <if test="price != null">price = #{price},</if>
+      <if test="originalPrice != null">original_price = #{originalPrice},</if>
+      <if test="conditionLevel != null">condition_level = #{conditionLevel},</if>
+      <if test="description != null">description = #{description},</if>
+      <if test="images != null">images = #{images},</if>
+      <if test="stock != null">stock = #{stock},</if>
+      <if test="sellerId != null">seller_id = #{sellerId},</if>
+      <if test="sellerName != null">seller_name = #{sellerName},</if>
+      <if test="status != null">status = #{status},</if>
+      version = version + 1
+    </set>
+    where id = #{id} and version = #{version}
+  </update>
+
+  <delete id="deleteCampusProductById" parameterType="Long">
+    delete from campus_product where id = #{id}
+  </delete>
+
+  <select id="selectCampusProductById" parameterType="Long" resultMap="CampusProductResult">
+    <include refid="selectProductVo"/> where id = #{id}
+  </select>
+
+  <select id="selectCampusProductList" parameterType="com.ruoyi.campus.domain.CampusProduct" resultMap="CampusProductResult">
+    <include refid="selectProductVo"/>
+    <where>
+      <if test="categoryId != null and categoryId != 0"> and category_id = #{categoryId}</if>
+      <if test="title != null and title != ''"> and title like concat('%', #{title}, '%')</if>
+      <if test="conditionLevel != null and conditionLevel != 0"> and condition_level = #{conditionLevel}</if>
+      <if test="status != null"> and status = #{status}</if>
+      <if test="sellerId != null"> and seller_id = #{sellerId}</if>
+    </where>
+    order by create_time desc
+  </select>
+
+  <update id="decreaseStock">
+    update campus_product set stock = stock - #{count}, version = version + 1
+    where id = #{id} and stock >= #{count}
+  </update>
+
+  <update id="increaseStock">
+    update campus_product set stock = stock + #{count}, version = version + 1
+    where id = #{id}
+  </update>
+</mapper>

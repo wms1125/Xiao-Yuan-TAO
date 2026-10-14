@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusOrderItemMapper">
+    <resultMap type="com.ruoyi.campus.domain.CampusOrderItem" id="CampusOrderItemResult">
+        <id property="id" column="id"/>
+        <result property="orderId" column="order_id"/>
+        <result property="orderNo" column="order_no"/>
+        <result property="productId" column="product_id"/>
+        <result property="productTitle" column="product_title"/>
+        <result property="image" column="image"/>
+        <result property="price" column="price"/>
+        <result property="quantity" column="quantity"/>
+        <result property="subtotal" column="subtotal"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, order_id, order_no, product_id, product_title, image, price, quantity, subtotal
+    </sql>
+
+    <insert id="insertCampusOrderItem" parameterType="com.ruoyi.campus.domain.CampusOrderItem" useGeneratedKeys="true" keyProperty="id">
+        insert into campus_order_item (order_id, order_no, product_id, product_title, image, price, quantity, subtotal)
+        values (#{orderId}, #{orderNo}, #{productId}, #{productTitle}, #{image}, #{price}, #{quantity}, #{subtotal})
+    </insert>
+
+    <insert id="insertCampusOrderItemBatch" parameterType="java.util.List">
+        insert into campus_order_item (order_id, order_no, product_id, product_title, image, price, quantity, subtotal)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.orderId}, #{item.orderNo}, #{item.productId}, #{item.productTitle}, #{item.image}, #{item.price}, #{item.quantity}, #{item.subtotal})
+        </foreach>
+    </insert>
+
+    <select id="selectByOrderNo" resultMap="CampusOrderItemResult">
+        select <include refid="Base_Column_List"/> from campus_order_item where order_no = #{orderNo}
+    </select>
+
+    <select id="selectByOrderId" resultMap="CampusOrderItemResult">
+        select <include refid="Base_Column_List"/> from campus_order_item where order_id = #{orderId}
+    </select>
+</mapper>

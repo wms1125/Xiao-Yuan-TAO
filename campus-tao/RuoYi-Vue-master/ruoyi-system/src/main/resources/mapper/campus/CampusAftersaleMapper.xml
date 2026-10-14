@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusAftersaleMapper">
+    <resultMap type="com.ruoyi.campus.domain.CampusAftersale" id="CampusAftersaleResult">
+        <id property="id" column="id"/>
+        <result property="aftersaleNo" column="aftersale_no"/>
+        <result property="orderId" column="order_id"/>
+        <result property="orderNo" column="order_no"/>
+        <result property="userId" column="user_id"/>
+        <result property="userName" column="user_name"/>
+        <result property="type" column="type"/>
+        <result property="reason" column="reason"/>
+        <result property="refundAmount" column="refund_amount"/>
+        <result property="status" column="status"/>
+        <result property="handler" column="handler"/>
+        <result property="handleRemark" column="handle_remark"/>
+        <result property="createTime" column="create_time"/>
+        <result property="handleTime" column="handle_time"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, aftersale_no, order_id, order_no, user_id, user_name, type, reason, refund_amount,
+        status, handler, handle_remark, create_time, handle_time
+    </sql>
+
+    <insert id="insertCampusAftersale" parameterType="com.ruoyi.campus.domain.CampusAftersale" useGeneratedKeys="true" keyProperty="id">
+        insert into campus_aftersale (aftersale_no, order_id, order_no, user_id, user_name, type, reason, refund_amount)
+        values (#{aftersaleNo}, #{orderId}, #{orderNo}, #{userId}, #{userName}, #{type}, #{reason}, #{refundAmount})
+    </insert>
+
+    <update id="updateCampusAftersale" parameterType="com.ruoyi.campus.domain.CampusAftersale">
+        update campus_aftersale
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="handler != null">handler = #{handler},</if>
+            <if test="handleRemark != null">handle_remark = #{handleRemark},</if>
+            <if test="handleTime != null">handle_time = #{handleTime},</if>
+        </set>
+        where id = #{id}
+    </update>
+
+    <select id="selectByAftersaleNo" resultMap="CampusAftersaleResult">
+        select <include refid="Base_Column_List"/> from campus_aftersale where aftersale_no = #{aftersaleNo} limit 1
+    </select>
+
+    <select id="selectAftersaleList" resultMap="CampusAftersaleResult">
+        select <include refid="Base_Column_List"/> from campus_aftersale
+        <where>
+            <if test="userId != null">and user_id = #{userId}</if>
+            <if test="status != null">and status = #{status}</if>
+            <if test="orderNo != null and orderNo != ''">and order_no like concat('%', #{orderNo}, '%')</if>
+        </where>
+        order by create_time desc
+    </select>
+</mapper>

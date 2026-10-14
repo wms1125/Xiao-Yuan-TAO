@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusCartMapper">
+    <resultMap type="com.ruoyi.campus.domain.CampusCart" id="CampusCartResult">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="userName" column="user_name"/>
+        <result property="productId" column="product_id"/>
+        <result property="quantity" column="quantity"/>
+        <result property="checked" column="checked"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, user_id, user_name, product_id, quantity, checked, create_time, update_time
+    </sql>
+
+    <insert id="insertCampusCart" parameterType="com.ruoyi.campus.domain.CampusCart" useGeneratedKeys="true" keyProperty="id">
+        insert into campus_cart (user_id, user_name, product_id, quantity, checked)
+        values (#{userId}, #{userName}, #{productId}, #{quantity}, #{checked})
+    </insert>
+
+    <update id="updateCampusCart" parameterType="com.ruoyi.campus.domain.CampusCart">
+        update campus_cart
+        <set>
+            <if test="quantity != null">quantity = #{quantity},</if>
+            <if test="checked != null">checked = #{checked},</if>
+        </set>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteCampusCartById">
+        delete from campus_cart where id = #{id}
+    </delete>
+
+    <delete id="deleteCartByUserAndProduct">
+        delete from campus_cart where user_id = #{userId} and product_id = #{productId}
+    </delete>
+
+    <select id="selectCartById" resultMap="CampusCartResult">
+        select <include refid="Base_Column_List"/> from campus_cart where id = #{id}
+    </select>
+
+    <select id="selectByUserAndProduct" resultMap="CampusCartResult">
+        select <include refid="Base_Column_List"/> from campus_cart
+        where user_id = #{userId} and product_id = #{productId} limit 1
+    </select>
+
+    <select id="selectCartList" resultMap="CampusCartResult">
+        select <include refid="Base_Column_List"/> from campus_cart
+        <where>
+            <if test="userId != null">and user_id = #{userId}</if>
+            <if test="productId != null">and product_id = #{productId}</if>
+            <if test="checked != null">and checked = #{checked}</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="countByUserId" resultType="int">
+        select count(1) from campus_cart where user_id = #{userId}
+    </select>
+</mapper>
