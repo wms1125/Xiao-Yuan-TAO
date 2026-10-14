@@ -23,15 +23,16 @@
             <artifactId>ruoyi-common</artifactId>
         </dependency>
 
-        <!-- 单元测试（校园淘）：JUnit 5 + 参数校验 -->
+        <!-- 参数校验（Jakarta Bean Validation）：campus 模块 DTO 与部分系统模块类在编译期依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- 单元测试（校园淘）：JUnit 5 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.hibernate.validator</groupId>
-            <artifactId>hibernate-validator</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- 原子扣款 JDBC 测试需要，版本由 Spring Boot BOM 管理 -->
