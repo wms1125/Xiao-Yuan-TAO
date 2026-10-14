@@ -183,14 +183,23 @@ st, o2 = call("POST", "/campus/order/create", token=RY, body={"cartIds": [cid2],
 print("超卖下单结果:", o2.get("msg"))
 must("库存不足" in str(o2.get("msg", "")), "防超卖生效（库存不足被拦截）", str(o2))
 
-print("\n=== 16) 断言[权限收敛]：ry 调用卖家/管理员接口应 403 ===")
+print("\n=== 16) C2C 卖方能力：学生角色 ry 可自主发布商品，卖家身份强制为本人 ===")
 st, f1 = call("POST", "/campus/product", token=RY, body={
-    "title": "越权发布" + TS, "categoryId": 1, "price": 1, "stock": 1, "status": 1})
+    "title": "学生发布测试" + TS, "categoryId": 1, "price": 8, "originalPrice": 15,
+    "conditionLevel": 1, "stock": 2, "status": 1, "description": "ry 本人发布", "images": "",
+    "sellerId": 99, "sellerName": "伪造卖家"})
 print("ry 发布商品:", st, f1)
-must(st == 403 or f1.get("code") == 403, "ry 无 campus:product:add 被拒绝", f"{st} {f1}")
+must(f1.get("code") == 200, "ry 具备 campus:product:add，发布成功", f"{st} {f1}")
+st, pl3 = call("GET", "/campus/product/list?pageSize=20", token=RY)
+mine = [r for r in pl3.get("rows", []) if r.get("title") == "学生发布测试" + TS]
+must(bool(mine), "列表可见 ry 发布的商品", "未找到")
+st, pd3 = call("GET", f"/campus/product/{mine[0]['id']}", token=RY)
+must(pd3.get("data", {}).get("sellerId") == 2, "卖家身份强制为当前登录用户(2)",
+     f"实际 {pd3.get('data', {}).get('sellerId')}/{pd3.get('data', {}).get('sellerName')}")
 
+print("\n=== 17) 断言[权限收敛]：ry 调用管理员接口应 403 ===")
 st, f2 = call("POST", "/campus/aftersale/audit", token=RY, body={
-    "aftersaleNo": as_no, "pass": True, "handler": "ry", "remark": "自审"})
+    "aftersaleNo": as_no, "pass": True, "remark": "自审"})
 print("ry 售后审核:", st, f2)
 must(st == 403 or f2.get("code") == 403, "ry 无 campus:aftersale:edit 被拒绝（防自审自批）", f"{st} {f2}")
 
