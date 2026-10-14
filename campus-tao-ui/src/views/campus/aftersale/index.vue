@@ -159,10 +159,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { parseTime } from '@/utils/ruoyi'
-import useUserStore from '@/store/modules/user'
 import { listAftersale, applyAftersale, auditAftersale } from '@/api/campus/aftersale'
-
-const userStore = useUserStore()
 
 const aftersaleList = ref([])
 const loading = ref(true)
@@ -290,9 +287,7 @@ function submitAudit() {
     auditAftersale({
       aftersaleNo: auditForm.aftersaleNo,
       pass: auditForm.pass,
-      remark: auditForm.remark,
-      // 处理人取自当前登录用户，避免前端伪造审核人
-      handler: userStore.nickName || userStore.name
+      remark: auditForm.remark
     }).then(() => {
       ElMessage.success('审核完成')
       auditOpen.value = false

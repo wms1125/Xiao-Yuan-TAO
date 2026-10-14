@@ -13,8 +13,6 @@ public class CampusAftersaleAuditDTO {
     @NotNull(message = "审核结论不能为空")
     private Boolean pass;
 
-    private String handler;
-
     private String remark;
 
     public String getAftersaleNo() {
@@ -31,14 +29,6 @@ public class CampusAftersaleAuditDTO {
 
     public void setPass(Boolean pass) {
         this.pass = pass;
-    }
-
-    public String getHandler() {
-        return handler;
-    }
-
-    public void setHandler(String handler) {
-        this.handler = handler;
     }
 
     public String getRemark() {

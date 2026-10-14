@@ -41,7 +41,8 @@ public class CampusAftersaleController extends BaseController {
     @PreAuthorize("@ss.hasPermi('campus:aftersale:edit')")
     @PostMapping("/audit")
     public AjaxResult audit(@Valid @RequestBody CampusAftersaleAuditDTO body) {
-        aftersaleService.audit(body.getAftersaleNo(), body.getHandler(), body.getPass(), body.getRemark());
+        // 审核人强制取自当前登录用户，忽略前端传入，避免伪造审核归属
+        aftersaleService.audit(body.getAftersaleNo(), SecurityUtils.getUsername(), body.getPass(), body.getRemark());
         return AjaxResult.success("审核完成");
     }
 

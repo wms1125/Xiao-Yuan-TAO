@@ -137,10 +137,20 @@ as_no = asv.get("data")
 print("售后单号:", as_no)
 assert as_no, "售后申请失败"
 
-print("\n=== 13) admin 审核通过（退款+回库存）===")
+print("\n=== 13) admin 审核通过（退款+回库存），并伪造 handler ===")
 st, aud = call("POST", "/campus/aftersale/audit", token=ADMIN, body={
-    "aftersaleNo": as_no, "pass": True, "handler": "admin", "remark": "同意"})
+    "aftersaleNo": as_no, "pass": True, "handler": "forged-hacker", "remark": "同意"})
 print(st, aud)
+must(aud.get("code") == 200, "审核成功", str(aud))
+
+print("\n=== 13.1) 断言：审核人取自登录态，前端伪造值被忽略 ===")
+st, asl = call("GET", "/campus/aftersale/list?pageSize=20", token=ADMIN)
+rows = (asl.get("data") or asl.get("rows") or [])
+hit = [r for r in rows if r.get("aftersaleNo") == as_no]
+must(bool(hit), "查到售后单", str(as_no))
+stored_handler = hit[0].get("handler")
+print("库中审核人:", stored_handler)
+must(stored_handler == "admin", "审核人=admin(伪造值被忽略)", "实际 " + str(stored_handler))
 
 print("\n=== 14) 断言：余额回滚、库存回滚 ===")
 st, acc3 = call("GET", "/campus/account/balance", token=RY)
