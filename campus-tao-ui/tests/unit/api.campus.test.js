@@ -4,10 +4,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/utils/request', () => ({ default: vi.fn(() => Promise.resolve({})) }))
 
 import request from '@/utils/request'
-import { listOrder, getOrder, createOrder, payOrder, shipOrder, finishOrder } from '@/api/campus/order'
+import { listOrder, getOrder, createOrder, payOrder, shipOrder, finishOrder, getLogisticsStatus, getLogisticsTrace, syncLogisticsTrace } from '@/api/campus/order'
 import { listProduct, getProduct, addProduct, updateProduct, delProduct, changeProductStatus } from '@/api/campus/product'
 import { listCart, addCart, updateCartQty, checkCart, delCart } from '@/api/campus/cart'
 import { listCampusNotice, getCampusNoticeTop, getCampusNoticeUnreadCount, readCampusNotice, readAllCampusNotice } from '@/api/campus/notice'
+import { listNotifyLog } from '@/api/campus/notifylog'
 
 const lastCall = () => request.mock.calls[request.mock.calls.length - 1][0]
 
@@ -120,5 +121,31 @@ describe('校园淘 - 站内通知接口', () => {
 
     readAllCampusNotice()
     expect(lastCall()).toEqual({ url: '/campus/notice/readAll', method: 'post' })
+  })
+})
+
+describe('校园淘 - 物流轨迹接口', () => {
+  beforeEach(() => request.mockClear())
+
+  it('通道状态为 GET /campus/logistics/status', () => {
+    getLogisticsStatus()
+    expect(lastCall()).toEqual({ url: '/campus/logistics/status', method: 'get' })
+  })
+
+  it('轨迹查询/手工同步以订单号为路径参数', () => {
+    getLogisticsTrace('CT20241015001')
+    expect(lastCall()).toEqual({ url: '/campus/logistics/trace/CT20241015001', method: 'get' })
+
+    syncLogisticsTrace('CT20241015001')
+    expect(lastCall()).toEqual({ url: '/campus/logistics/sync/CT20241015001', method: 'post' })
+  })
+})
+
+describe('校园淘 - 外呼留痕接口', () => {
+  beforeEach(() => request.mockClear())
+
+  it('列表为 GET /campus/notifylog/list 并透传渠道/结果筛选', () => {
+    listNotifyLog({ channel: 'sms', status: 2 })
+    expect(lastCall()).toEqual({ url: '/campus/notifylog/list', method: 'get', params: { channel: 'sms', status: 2 } })
   })
 })

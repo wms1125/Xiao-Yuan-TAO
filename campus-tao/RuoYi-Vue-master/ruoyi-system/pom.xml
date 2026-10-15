@@ -29,6 +29,12 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- JSON 解析：campus 外呼通道与物流轨迹 Provider 解析网关响应；显式声明避免依赖传递被上游升级破坏 -->
+        <dependency>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
+        </dependency>
+
         <!-- 单元测试（校园淘）：JUnit 5 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -148,6 +148,38 @@
             <span class="timeline-item__time campus-num">{{ node.time ? parseTime(node.time) : '—' }}</span>
           </div>
         </div>
+
+        <!-- 物流轨迹 -->
+        <div class="detail-trace">
+          <div class="detail-trace__head">
+            <span class="detail-trace__title">物流轨迹</span>
+            <el-button
+              v-if="detail.logisticsNo && logisticsStatus"
+              link
+              type="primary"
+              size="small"
+              :loading="traceLoading"
+              v-hasRole="['admin']"
+              @click="handleSyncTrace"
+            >同步轨迹</el-button>
+          </div>
+          <div v-if="!detail.logisticsNo" class="detail-trace__empty">暂无物流单号，卖家发货后可查询轨迹</div>
+          <div v-else-if="!logisticsStatus" class="detail-trace__empty">物流轨迹查询通道未配置，已降级为仅记录物流单号</div>
+          <div v-else-if="!traceList.length" class="detail-trace__empty">暂无轨迹节点，可点击「同步轨迹」向承运商拉取</div>
+          <el-timeline v-else class="detail-trace__list">
+            <el-timeline-item
+              v-for="trace in traceList"
+              :key="trace.traceId"
+              :timestamp="parseTime(trace.traceTime)"
+              placement="top"
+            >
+              <div class="trace-node">
+                <span class="trace-node__label">{{ trace.statusLabel || '轨迹' }}</span>
+                <span class="trace-node__context">{{ trace.context }}</span>
+              </div>
+            </el-timeline-item>
+          </el-timeline>
+        </div>
       </div>
       <template #footer>
         <div class="dialog-footer">
@@ -162,12 +194,15 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { parseTime } from '@/utils/ruoyi'
-import { listOrder, getOrder, payOrder, cancelOrder, shipOrder, finishOrder } from '@/api/campus/order'
+import { listOrder, getOrder, payOrder, cancelOrder, shipOrder, finishOrder, getLogisticsTrace, syncLogisticsTrace } from '@/api/campus/order'
 
 const orderList = ref([])
 const loading = ref(true)
 const detailOpen = ref(false)
 const detail = ref(null)
+const traceList = ref([])
+const traceLoading = ref(false)
+const logisticsStatus = ref(false)
 
 const queryParams = reactive({
   status: undefined,
@@ -255,6 +290,30 @@ function handleDetail(row) {
   getOrder(row.orderNo).then(res => {
     detail.value = res.data
     detailOpen.value = true
+    loadTrace(row.orderNo)
+  })
+}
+
+// 加载物流轨迹：接口始终返回 providerEnabled，未配置通道时前端明确提示「已降级」
+function loadTrace(orderNo) {
+  traceList.value = []
+  if (!orderNo) return
+  getLogisticsTrace(orderNo).then(res => {
+    const data = res.data || {}
+    logisticsStatus.value = !!data.providerEnabled
+    traceList.value = data.traces || []
+  }).catch(() => {})
+}
+
+function handleSyncTrace() {
+  if (!detail.value) return
+  traceLoading.value = true
+  syncLogisticsTrace(detail.value.orderNo).then(res => {
+    ElMessage.success(res.msg || '同步完成')
+    loadTrace(detail.value.orderNo)
+    traceLoading.value = false
+  }).catch(() => {
+    traceLoading.value = false
   })
 }
 
@@ -445,6 +504,58 @@ onMounted(() => {
 }
 
 .timeline-item__time {
+  color: var(--c-ink-2);
+}
+
+/* 物流轨迹 */
+.detail-trace {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--c-line-soft);
+}
+
+.detail-trace__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.detail-trace__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-ink);
+  letter-spacing: .06em;
+}
+
+.detail-trace__empty {
+  padding: 10px 0;
+  font-size: 12.5px;
+  color: var(--c-ink-4);
+  letter-spacing: .04em;
+}
+
+.detail-trace__list {
+  padding-top: 6px;
+  padding-left: 2px;
+}
+
+.trace-node {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.trace-node__label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-primary);
+  letter-spacing: .04em;
+  flex-shrink: 0;
+}
+
+.trace-node__context {
+  font-size: 12.5px;
   color: var(--c-ink-2);
 }
 </style>

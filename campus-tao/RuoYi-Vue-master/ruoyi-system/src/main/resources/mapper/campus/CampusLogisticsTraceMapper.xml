@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusLogisticsTraceMapper">
+    <resultMap type="com.ruoyi.campus.domain.CampusLogisticsTrace" id="CampusLogisticsTraceResult">
+        <id property="traceId" column="trace_id"/>
+        <result property="orderNo" column="order_no"/>
+        <result property="logisticsNo" column="logistics_no"/>
+        <result property="carrier" column="carrier"/>
+        <result property="statusLabel" column="status_label"/>
+        <result property="context" column="context"/>
+        <result property="traceTime" column="trace_time"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        trace_id, order_no, logistics_no, carrier, status_label, context, trace_time, create_time
+    </sql>
+
+    <insert id="insertIgnoreBatch">
+        insert ignore into campus_logistics_trace
+        (order_no, logistics_no, carrier, status_label, context, trace_time)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.orderNo}, #{item.logisticsNo}, #{item.carrier}, #{item.statusLabel}, #{item.context}, #{item.traceTime})
+        </foreach>
+    </insert>
+
+    <select id="selectByOrderNo" resultMap="CampusLogisticsTraceResult">
+        select <include refid="Base_Column_List"/> from campus_logistics_trace
+        where order_no = #{orderNo}
+        order by trace_time asc, trace_id asc
+    </select>
+</mapper>

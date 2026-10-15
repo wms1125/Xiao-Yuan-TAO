@@ -46,7 +46,7 @@ info:
   app:
     name: campus-tao
     description: 校园淘 校园二手交易平台
-    version: 1.0.5
+    version: 1.0.7
 
 # 开发环境配置
 server:
@@ -186,3 +186,21 @@ campus:
   order:
     # 未支付订单自动取消超时（分钟），可由环境变量 CAMPUS_PAY_TIMEOUT_MINUTES 覆盖
     pay-timeout-minutes: ${CAMPUS_PAY_TIMEOUT_MINUTES:30}
+  # 短信/邮件外呼通道：站内通知为必达链路，外呼为可选增强链路。
+  # 网关地址未通过环境变量注入时通道自动视为「未启用」，降级为仅站内通知，并在 campus_notify_log 留痕。
+  # 密钥一律通过环境变量注入，禁止在本文件写明文口令。
+  notify:
+    sms:
+      endpoint: ${CAMPUS_SMS_ENDPOINT:}
+      app-key: ${CAMPUS_SMS_APP_KEY:}
+      sign: ${CAMPUS_SMS_SIGN:校园淘}
+    email:
+      endpoint: ${CAMPUS_MAIL_ENDPOINT:}
+      app-key: ${CAMPUS_MAIL_APP_KEY:}
+      from: ${CAMPUS_MAIL_FROM:noreply@campus-tao.local}
+  # 物流轨迹查询：网关地址未注入时自动降级（仅记录物流单号，轨迹查询返回空），不阻断订单流程。
+  logistics:
+    endpoint: ${CAMPUS_LOGISTICS_ENDPOINT:}
+    app-key: ${CAMPUS_LOGISTICS_APP_KEY:}
+    carrier: ${CAMPUS_LOGISTICS_CARRIER:SF}
+    sync-limit: ${CAMPUS_LOGISTICS_SYNC_LIMIT:200}

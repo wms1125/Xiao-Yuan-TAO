@@ -2,11 +2,38 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~009`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~010`，里程碑文档见 `campus-tao/M1~M5`。
 
 ## [未发布]
-- 运营侧能力仍有可扩展项：短信/邮件外呼通道未接入（站内通知已落地）、物流轨迹查询未对接第三方承运商（当前仅记录单号）。
 - 前端构建链路仍有 5 项 high 告警（根因 `braces` 上游无补丁版本），已判定为**可接受的残余风险**并记录判定依据，详见 `campus-tao/sbom/SBOM.md` 第四.4.2 节；可选替代方案为以 `unplugin-icons` 替换 `vite-plugin-svg-icons`（未实施）。
+
+## [1.0.7] - 2026-10-15
+
+运营通道对接：接入短信/邮件外呼通道与第三方物流轨迹查询，补齐 v1.0.5 遗留的两项运营侧缺口。通道以接口抽象、换网关只改环境变量；**未配置时自动降级且全程留痕**，交付默认态即安全降级态，任何情况下不阻断下单、发货等主流程。
+
+### 新增
+- **外呼通道抽象**：`CampusNotifyChannel` 接口（`code`/`name`/`enabled`/`targetOf`/`targetAvailable`/`send`）与 `CampusNotifyDispatcher`（异步分发 + 留痕）。短信通道取 `sys_user.phonenumber`、邮件通道取 `sys_user.email`；网关地址由 `CAMPUS_SMS_ENDPOINT` / `CAMPUS_MAIL_ENDPOINT` 注入，未注入即视为「未启用」并降级为仅站内通知。
+- **外呼留痕**：新增 `campus_notify_log` 表，逐通道记录 `channel`/`target`/`status`（0失败 / 1成功 / 2未启用已降级）/`response`/`error_msg`/`cost_ms`。运营侧新增「校园淘 → 通知外呼日志」菜单（`campus:notifylog:list`，仅管理员），支持按渠道、结果、业务号筛选并统计成功/失败/降级数。
+- **外呼和接入点**：`CampusNoticeServiceImpl.push()` 在站内通知落库后追加一次外呼分发，故**下单、发货、售后审核结果、超时自动取消**四类既有事件自动获得短信/邮件通知能力，业务代码零改动。
+- **物流轨迹对接**：`ILogisticsProvider` 抽象 + `HttpLogisticsProvider`（通用 HTTP 表单网关，网关地址由 `CAMPUS_LOGISTICS_ENDPOINT` 注入，承运商可用 `CAMPUS_LOGISTICS_CARRIER` 指定，默认 `SF`）。新增 `campus_logistics_trace` 表（唯一键 `(order_no, logistics_no, status_label, context)` 使重复同步幂等），订单详情新增物流轨迹时间线。
+- **物流轨迹接口**：`GET /campus/logistics/status`（通道是否启用）、`GET /campus/logistics/trace/{orderNo}`（轨迹查询）、`POST /campus/logistics/sync/{orderNo}`（手工同步，需 `campus:order:edit`）。查询接口**强制登录并校验订单归属**（本人或管理员），与订单详情同口径。
+- **物流轨迹定时同步**：Quartz 任务 `campusLogisticsTask.syncShippedTrace`（`sys_job` job_id=101，每 30 分钟一次），为已发货且有物流单号的订单拉取轨迹；通道未配置时任务自动空转，单笔失败不影响其余订单。
+- 共用 HTTP 能力 `campus/support/HttpFormClient`（POST 表单、连接 3s / 读取 5s 超时、`success` 与 `code/ret/status` 双约定判成功、响应截断），**基于 JDK `HttpURLConnection`，不新增任何第三方依赖**（SBOM 组件数保持 166）。
+- `sql/migration-v1.0.7.sql`：面向**已建库**的增量迁移（建 2 张表、注册 job 101、新增菜单 2007）；交付包全量脚本 `sql/campus_tao_full.sql` 已同步为唯一建库源。
+
+### 变更
+- `campus-tao/RuoYi-Vue-master/ruoyi-system/pom.xml`：`fastjson2` 由 `ruoyi-common` 的**传递依赖**改为**显式声明**（v1.0.6 已出现过同类幽灵依赖消失导致构建中断的问题），组件坐标与版本不变。
+- 后端 `info.app.version` 更新为 `1.0.7`。
+
+### 验证
+- **离线重建与单测**：`verify.bat` 离线 5 步 `ALL PASS`（后端 `clean package` BUILD SUCCESS、后端单测 **23/23**、前端单测 **44/44**、前端 `build:prod` 通过），退出码 0。
+- **外呼真实发出（本地 mock 网关闭环，非交付物）**：以环境变量注入本地 mock 网关后跑 e2e，网关侧 `requests.log` 实测收到 **6 次真实 HTTP 调用**（下单 / 发货 / 售后审核 × 短信 / 邮件），留痕 `status=1`、耗时 1~15ms；报文经核对，短信为 `【校园淘】订单已发货 订单 CT… 已发货，物流单号：SF1234567890…`，邮件 `to=ry@qq.com`、`subject=订单已发货`。
+- **降级态验证（交付默认态）**：不注入任何网关环境变量时，`/campus/logistics/status` 返回 `false`；e2e 断言每条业务消息均落 `status=2`（未启用降级）留痕，短信与邮件通道各一条链路，主流程全部正常通过，`RESULT: ALL_PASS`。
+- **物流轨迹专项**：手工同步 #1 新增 **2** 条节点（已揽收 09:10:00 / 运输中 13:20:00），#2 新增 **0** 条（唯一键幂等）；直接触发 `sys_job` 101 返回「操作成功」且节点数保持 2，无重复写入。
+- **越权与权限专项**（e2e 新增断言）：未登录访问物流轨迹 → **401**；ry 查询非本人订单轨迹 → 被拒（「无权查看该订单物流轨迹」）；ry 访问 `/campus/notifylog/list` → **403**（未授予 `campus:notifylog:list`），admin 可见留痕。
+- **前端 UI 实测**（Playwright，Chromium）：admin 登录 → 订单详情弹窗渲染「物流轨迹」区块与两条节点（含时间戳）；「通知外呼日志」页渲染 6 行（首行 `短信 ｜ 15666666666 ｜ 售后审核通过 ｜ 成功 ｜ 4 ms`）；全程 `pageerror` 与 console error 均为空。
+- **交付基线复核**：清空 8 张业务表（含新增的 `campus_notify_log`、`campus_logistics_trace`）并重置自增，仅保留 `campus_category` 1 条主数据；重启后 `/actuator/health` = **UP**、物流通道 = **false**、外呼留痕 0 条。
+- **产物体检**：发行 `ruoyi-admin.jar` 内 `BOOT-INF/lib` 实测 **149** 个 jar，与 SBOM 的 166 个组件逐一对照，唯一未列入 BOM 的是打包插件注入的 `spring-boot-jarmode-tools-4.1.1.jar`（非业务依赖），**无依赖缺失**。
 
 ## [1.0.6] - 2026-10-15
 

@@ -235,4 +235,39 @@ st, f2 = call("POST", "/campus/aftersale/audit", token=RY, body={
 print("ry 售后审核:", st, f2)
 must(st == 403 or f2.get("code") == 403, "ry 无 campus:aftersale:edit 被拒绝（防自审自批）", f"{st} {f2}")
 
+print("\n=== 18) 断言[运营能力 v1.0.7]：物流轨迹查询与通道降级 ===")
+st, lstat = call("GET", "/campus/logistics/status", token=RY)
+provider_on = lstat.get("data")
+print("物流轨迹通道已启用:", provider_on)
+must(st == 200, "物流通道状态接口可用", f"{st} {lstat}")
+st, tr = call("GET", f"/campus/logistics/trace/{order_no}", token=RY)
+tdata = tr.get("data") or {}
+print("轨迹接口:", st, "providerEnabled=", tdata.get("providerEnabled"),
+      "轨迹节点数=", len(tdata.get("traces") or []))
+must(st == 200 and tdata.get("logisticsNo") == "SF1234567890",
+     "本人可查询订单物流轨迹且返回物流单号", str(tr)[:200])
+
+print("\n=== 18.1) 断言[越权防护]：未登录不得访问物流轨迹 ===")
+st, anon2 = call("GET", f"/campus/logistics/trace/{order_no}")
+print("匿名访问物流轨迹:", st, anon2)
+must(st == 401 or anon2.get("code") == 401, "物流轨迹要求登录，未登录被拒", f"{st} {anon2}")
+
+print("\n=== 18.2) 断言：不存在/非本人订单的轨迹被拒绝 ===")
+st, other = call("GET", "/campus/logistics/trace/CT209901010000001", token=RY)
+print("越权查询他人订单轨迹:", st, other)
+must(other.get("code") != 200, "非本人订单轨迹被拒绝", f"{st} {other}")
+
+print("\n=== 18.3) 断言[运营能力 v1.0.7]：外呼留痕按登录态隔离（仅管理员可查）===")
+st, nl403 = call("GET", "/campus/notifylog/list", token=RY)
+print("ry 访问外呼留痕:", st, nl403)
+must(st == 403 or nl403.get("code") == 403, "ry 无 campus:notifylog:list 被拒绝", f"{st} {nl403}")
+st, nl = call("GET", "/campus/notifylog/list?limit=50", token=ADMIN)
+rows = nl.get("data") or []
+print("admin 可见外呼留痕条数:", len(rows),
+      "渠道:", sorted(set(r.get("channel") for r in rows)),
+      "结果:", sorted(set(r.get("status") for r in rows)))
+must(st == 200 and len(rows) > 0, "外呼留痕已留痕可查（短信/邮件通道各一条链路）", f"{st} {str(nl)[:200]}")
+must(any(r.get("bizNo") == order_no for r in rows), "外呼留痕关联到本次订单业务号", str([r.get("bizNo") for r in rows][:10]))
+must(set(r.get("channel") for r in rows) >= {"sms", "email"}, "短信与邮件通道均有留痕", str(sorted(set(r.get("channel") for r in rows))))
+
 print("\nRESULT:", "ALL_PASS" if ok else "HAS_FAIL")

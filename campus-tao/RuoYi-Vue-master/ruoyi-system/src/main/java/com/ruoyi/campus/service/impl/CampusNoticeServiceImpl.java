@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import com.ruoyi.campus.domain.CampusNotice;
 import com.ruoyi.campus.mapper.CampusNoticeMapper;
+import com.ruoyi.campus.notify.CampusNotifyDispatcher;
 import com.ruoyi.campus.service.ICampusNoticeService;
 
 /**
@@ -23,6 +24,9 @@ public class CampusNoticeServiceImpl implements ICampusNoticeService {
     @Autowired
     private CampusNoticeMapper noticeMapper;
 
+    @Autowired
+    private CampusNotifyDispatcher notifyDispatcher;
+
     @Override
     public void push(Long userId, String type, String title, String content, String bizNo) {
         if (userId == null) {
@@ -35,6 +39,8 @@ public class CampusNoticeServiceImpl implements ICampusNoticeService {
         notice.setContent(truncate(content, MAX_CONTENT));
         notice.setBizNo(bizNo);
         noticeMapper.insertCampusNotice(notice);
+        // 站内通知为必达链路；短信/邮件为可选外呼链路，未配置时自动降级，异常不影响主流程
+        notifyDispatcher.dispatch(userId, type, notice.getTitle(), notice.getContent(), bizNo);
     }
 
     @Override

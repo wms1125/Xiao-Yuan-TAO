@@ -81,6 +81,14 @@
         order by create_time asc
     </select>
 
+    <!-- 已发货且有物流单号的订单：供物流轨迹定时同步使用 -->
+    <select id="selectShippedOrders" resultMap="CampusOrderResult">
+        select <include refid="Base_Column_List"/> from campus_order
+        where status = 2 and logistics_no is not null and logistics_no != ''
+        order by ship_time asc
+        <if test="limit != null">limit #{limit}</if>
+    </select>
+
     <!-- 原子取消：仅当仍为待付款时才置为已取消，避免与用户支付/取消并发冲突 -->
     <update id="cancelWaitPayOrderIfStillWaitPay">
         update campus_order set status = 4, cancel_time = #{cancelTime}

@@ -28,3 +28,15 @@ export function shipOrder(orderNo, logisticsNo) {
 export function finishOrder(orderNo) {
   return request({ url: '/campus/order/finish/' + orderNo, method: 'post' })
 }
+// 物流轨迹查询通道是否已启用
+export function getLogisticsStatus() {
+  return request({ url: '/campus/logistics/status', method: 'get' })
+}
+// 订单物流轨迹
+export function getLogisticsTrace(orderNo) {
+  return request({ url: '/campus/logistics/trace/' + orderNo, method: 'get' })
+}
+// 手工同步订单物流轨迹
+export function syncLogisticsTrace(orderNo) {
+  return request({ url: '/campus/logistics/sync/' + orderNo, method: 'post' })
+}

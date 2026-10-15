@@ -22,6 +22,9 @@ public interface CampusOrderMapper {
     /** 查询超时未支付订单（status=0 且 create_time 早于 deadline），供定时任务自动取消 */
     List<CampusOrder> selectTimeoutWaitPayOrders(@Param("deadline") Date deadline);
 
+    /** 查询已发货且有物流单号的订单，供定时任务同步物流轨迹 */
+    List<CampusOrder> selectShippedOrders(@Param("limit") Integer limit);
+
     /**
      * 原子取消：仅当订单仍为待付款(0)时才改为已取消(4)，返回影响行数。
      * 影响行数=1 表示本次取消生效（可安全回补库存）；0 表示已被其他动作处理，跳过。

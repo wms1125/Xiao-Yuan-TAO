@@ -38,6 +38,9 @@
 
 > v1.0.5 引入可观测性所需的 `spring-boot-starter-actuator` 及其传递依赖（`spring-boot-actuator`、`spring-boot-actuator-autoconfigure`、`micrometer-*` 等，均为 Apache-2.0），组件数 156 → 166。
 > v1.0.6 因 CVE 治理整体升级 Spring Boot 4.1.0 → 4.1.1 及 Tomcat/Jackson 补丁版本，组件集合与许可结构基本不变（同上表，为上表口径重新生成的结果）。
+> v1.0.7 未新增任何第三方依赖：短信/邮件外呼通道与物流轨迹 Provider 的 HTTP 调用基于 JDK `HttpURLConnection`，响应解析复用已在清单内的 `com.alibaba.fastjson2:fastjson2@2.0.64`（Apache-2.0）；仅在 `ruoyi-system/pom.xml` 中把它由**传递依赖**改为**显式声明**，避免上游依赖树升级时该坐标消失导致构建中断。故组件总数仍为 **166**。
+
+- **产物体检（v1.0.7 复核）**：发行 `ruoyi-admin.jar` 内 `BOOT-INF/lib` 实测 **149** 个 jar，与 BOM 的 166 个组件逐一对照，唯一未出现在 BOM 中的是 Spring Boot 打包插件注入的引导工具 `spring-boot-jarmode-tools-4.1.1.jar`（非项目依赖），**无业务依赖缺失**。
 
 - **需关注项（均为可商用，但按规范应披露）**：
   - `GPL-2.0 with Universal FOSS Exception` / `(CDDL-1.0 OR GPL-2.0-with-classpath-exception)`：MySQL Connector/J 等。类路径例外意味着以 jar 形式链接使用不触发传染，**可随闭源项目分发**。
