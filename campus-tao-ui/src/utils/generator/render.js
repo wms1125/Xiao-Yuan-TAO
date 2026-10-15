@@ -19,12 +19,6 @@ const isAttr = makeMap(
 )
 const isNotProps = makeMap('layout,prepend,regList,tag,document,changeTag,defaultValue')
 
-function useVModel(props, emit) {
-  return {
-    modelValue: props.defaultValue,
-    'onUpdate:modelValue': (val) => emit('update:modelValue', val)
-  }
-}
 const componentChild = {
   'el-button': {
     default(h, conf, key) {
@@ -32,7 +26,7 @@ const componentChild = {
     }
   },
   'el-select': {
-    options(h, conf, key) {
+    options(h, conf) {
       return conf.options.map((item) =>
         h(resolveComponent('el-option'), {
           label: item.label,
@@ -42,7 +36,7 @@ const componentChild = {
     }
   },
   'el-radio-group': {
-    options(h, conf, key) {
+    options(h, conf) {
       return conf.optionType === 'button'
         ? conf.options.map((item) =>
             h(
@@ -66,7 +60,7 @@ const componentChild = {
     }
   },
   'el-checkbox-group': {
-    options(h, conf, key) {
+    options(h, conf) {
       return conf.optionType === 'button'
         ? conf.options.map((item) =>
             h(
@@ -90,7 +84,7 @@ const componentChild = {
     }
   },
   'el-upload': {
-    'list-type': (h, conf, key) => {
+    'list-type': (h, conf) => {
       const option = {}
       // if (conf.showTip) {
       //   tip = h('div', {
@@ -110,7 +104,7 @@ const componentChild = {
 }
 const componentSlot = {
   'el-upload': {
-    tip: (h, conf, key) => {
+    tip: (h, conf) => {
       if (conf.showTip) {
         return () =>
           h(

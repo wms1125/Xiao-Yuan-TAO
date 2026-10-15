@@ -1,0 +1,38 @@
+# 编辑器统一约定（P1：ESLint + Prettier + .editorconfig）
+#
+# 说明：
+# - 前端（JS/Vue/JSON/YAML 等）的实际排版由 Prettier 负责，这里只声明最基础的约定，
+#   避免编辑器与 Prettier 出现分歧；真正会拦人的门禁是 `npm run format:check` 与 `npm run lint`。
+# - 后端 Java 约定为 4 空格缩进（项目既有风格），本轮未接入 spotless/checkstyle，
+#   故这里只做缩进与编码声明，不构成后端门禁。
+# - 行尾：仓库根 .gitattributes 已将文本文件归一为 LF；Windows 批处理（*.bat）必须为 CRLF，
+#   否则命令解析会错位。
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{js,vue,json,yml,yaml,css,scss,html,md}]
+indent_style = space
+indent_size = 2
+
+[*.java]
+indent_style = space
+indent_size = 4
+
+[*.xml]
+indent_style = space
+indent_size = 4
+
+[*.{bat,cmd}]
+end_of_line = crlf
+
+[*.md]
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

@@ -109,7 +109,6 @@ const hiddenElements = ref([])
 const { proxy } = getCurrentInstance()
 const route = useRoute()
 const router = useRouter()
-const settingsStore = useSettingsStore()
 
 const visitedViews = computed(() => useTagsViewStore().visitedViews)
 const routes = computed(() => usePermissionStore().routes)
@@ -177,7 +176,7 @@ function isFirstView() {
   try {
     const tag = selectedTag.value && selectedTag.value.fullPath ? selectedTag.value : selectedDropdownTag.value
     return tag.fullPath === '/index' || tag.fullPath === visitedViews.value[1].fullPath
-  } catch (err) {
+  } catch {
     return false
   }
 }
@@ -186,7 +185,7 @@ function isLastView() {
   try {
     const tag = selectedTag.value && selectedTag.value.fullPath ? selectedTag.value : selectedDropdownTag.value
     return tag.fullPath === visitedViews.value[visitedViews.value.length - 1].fullPath
-  } catch (err) {
+  } catch {
     return false
   }
 }

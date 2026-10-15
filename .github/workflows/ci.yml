@@ -3,7 +3,9 @@ name: CI
 # 说明：
 # - 后端 job 覆盖「可编译 + 单元测试 + 覆盖率门禁」：一条 `mvn verify` 即完成
 #   package → test → jacoco report/check（行 ≥35%、分支 ≥18%，阈值为棘轮基线）。
-# - 前端 job 覆盖「单测 + 覆盖率门禁 + 可构建」：npm ci 保证依赖与 package-lock.json 一致。
+# - 前端 job 覆盖「静态检查 + 单测 + 覆盖率门禁 + 可构建」：npm ci 保证依赖与
+#   package-lock.json 一致；prettier --check 与 eslint 先行，任一步失败即中止。
+# - 静态检查口径：Prettier 只校验不改写；ESLint 要求 0 error（warn 不阻断）。
 # - 安全 job 覆盖依赖漏洞：前端 npm audit（生产依赖树要求 0 告警）+ 后端 osv-scanner 扫 pom.xml。
 # - 端到端回归（e2e_business.py）未纳入 CI：它需要可达的 MySQL 8 与已初始化的库，
 #   本地请用仓库根的 verify.bat 或手工执行；如需上 CI，可另加 services: mysql 的 job。
@@ -76,6 +78,16 @@ jobs:
 
       - name: 安装依赖（严格按 lock 文件）
         run: npm ci
+
+      # 静态检查：Prettier 只做校验不改写；ESLint 以 0 error 为门禁
+      #（脚手架既有债的 161 条 warn 不阻断，仅在日志中可见）。
+      # .eslintrc-auto-import.json 由 unplugin-auto-import 在构建期产出并随仓库提交，
+      # 故 npm ci 之后即可直接 lint，无需先构建。
+      - name: 格式校验（prettier --check）
+        run: npm run format:check
+
+      - name: 代码检查（eslint，0 error 门禁）
+        run: npm run lint
 
       # vitest run --coverage：v8 provider，阈值为棘轮基线（行 ≥25%）
       - name: 单元测试 + 覆盖率门禁（vitest + v8）

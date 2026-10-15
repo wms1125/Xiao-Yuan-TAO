@@ -15,6 +15,14 @@ export default function createAutoImport() {
         '@/utils/ruoyi': ['selectDictLabel', 'selectDictLabels']
       }
     ],
+    // 产出 .eslintrc-auto-import.json：把自动导入的标识符（ref/computed/watch/
+    // useDict 等）登记为 ESLint 全局变量。若缺这一步，flat config 下的 no-undef
+    // 会对每个使用自动导入的页面报“未定义”，ESLint 将形同虚设。
+    // 该文件由构建产出并随仓库提交，供 eslint.config.js 通过 createRequire 读取。
+    eslintrc: {
+      enabled: true,
+      filepath: './.eslintrc-auto-import.json'
+    },
     dts: false
   })
 }

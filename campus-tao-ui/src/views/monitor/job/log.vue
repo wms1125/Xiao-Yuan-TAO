@@ -136,7 +136,7 @@ const data = reactive({
   }
 })
 
-const { queryParams, form, rules } = toRefs(data)
+const { queryParams, form } = toRefs(data)
 
 /** 查询调度日志列表 */
 function getList() {
@@ -180,7 +180,7 @@ function handleView(row) {
 }
 
 /** 删除按钮操作 */
-function handleDelete(row) {
+function handleDelete() {
   proxy.$modal
     .confirm('是否确认删除调度日志编号为"' + ids.value + '"的数据项?')
     .then(function () {

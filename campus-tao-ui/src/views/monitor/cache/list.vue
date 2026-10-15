@@ -151,7 +151,7 @@ function refreshCacheNames() {
 
 /** 清理指定名称缓存 */
 function handleClearCacheName(row) {
-  clearCacheName(row.cacheName).then((response) => {
+  clearCacheName(row.cacheName).then(() => {
     proxy.$modal.msgSuccess('清理缓存名称[' + row.cacheName + ']成功')
     getCacheKeys()
   })
@@ -179,7 +179,7 @@ function refreshCacheKeys() {
 
 /** 清理指定键名缓存 */
 function handleClearCacheKey(cacheKey) {
-  clearCacheKey(cacheKey).then((response) => {
+  clearCacheKey(cacheKey).then(() => {
     proxy.$modal.msgSuccess('清理缓存键名[' + cacheKey + ']成功')
     getCacheKeys()
   })
@@ -204,7 +204,7 @@ function handleCacheValue(cacheKey) {
 
 /** 清理全部缓存 */
 function handleClearCacheAll() {
-  clearCacheAll().then((response) => {
+  clearCacheAll().then(() => {
     proxy.$modal.msgSuccess('清理全部缓存成功')
   })
 }

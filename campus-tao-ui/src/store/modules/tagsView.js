@@ -142,7 +142,7 @@ const useTagsViewStore = defineStore('tags-view', {
         })
       })
     },
-    delAllVisitedViews(view) {
+    delAllVisitedViews() {
       return new Promise((resolve) => {
         const affixTags = this.visitedViews.filter((tag) => tag.meta.affix)
         this.visitedViews = affixTags
@@ -151,7 +151,7 @@ const useTagsViewStore = defineStore('tags-view', {
         resolve([...this.visitedViews])
       })
     },
-    delAllCachedViews(view) {
+    delAllCachedViews() {
       return new Promise((resolve) => {
         this.cachedViews = []
         resolve([...this.cachedViews])
@@ -160,7 +160,7 @@ const useTagsViewStore = defineStore('tags-view', {
     updateVisitedView(view) {
       for (let v of this.visitedViews) {
         if (v.path === view.path) {
-          v = Object.assign(v, view)
+          Object.assign(v, view)
           break
         }
       }

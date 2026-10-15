@@ -196,7 +196,9 @@ if (props.storageKey) {
         })
       }
     }
-  } catch (e) {}
+  } catch {
+    // 忽略列宽持久化异常
+  }
 }
 if (props.showColumnsType == 'transfer') {
   // transfer穿梭显隐列初始默认隐藏列
@@ -251,7 +253,9 @@ function saveStorage() {
       })
     }
     cache.local.setJSON(props.storageKey, state)
-  } catch (e) {}
+  } catch {
+    // 忽略列显隐持久化异常
+  }
 }
 </script>
 

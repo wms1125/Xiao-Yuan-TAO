@@ -114,7 +114,6 @@ import CrontabMonth from './month.vue'
 import CrontabWeek from './week.vue'
 import CrontabYear from './year.vue'
 import CrontabResult from './result.vue'
-const { proxy } = getCurrentInstance()
 const emit = defineEmits(['hide', 'fill'])
 const props = defineProps({
   hideComponent: {
@@ -127,9 +126,6 @@ const props = defineProps({
   }
 })
 const tabTitles = ref(['秒', '分钟', '小时', '日', '月', '周', '年'])
-const tabActive = ref(0)
-const hideComponent = ref([])
-const expression = ref('')
 const crontabValueObj = ref({
   second: '*',
   min: '*',
@@ -156,14 +152,18 @@ const crontabValueString = computed(() => {
     (obj.year === '' ? '' : ' ' + obj.year)
   )
 })
-watch(expression, () => resolveExp())
+watch(
+  () => props.expression,
+  () => resolveExp(),
+  { immediate: true }
+)
 function shouldHide(key) {
-  return !(hideComponent.value && hideComponent.value.includes(key))
+  return !(props.hideComponent && props.hideComponent.includes(key))
 }
 function resolveExp() {
   // 反解析 表达式
-  if (expression.value) {
-    const arr = expression.value.split(/\s+/)
+  if (props.expression) {
+    const arr = props.expression.split(/\s+/)
     if (arr.length >= 6) {
       //6 位以上是合法表达式
       let obj = {
@@ -184,12 +184,8 @@ function resolveExp() {
     clearCron()
   }
 }
-// tab切换值
-function tabCheck(index) {
-  tabActive.value = index
-}
 // 由子组件触发，更改表达式组成的字段值
-function updateCrontabValue(name, value, from) {
+function updateCrontabValue(name, value) {
   crontabValueObj.value[name] = value
 }
 // 表单选项的子组件校验数字格式（通过-props传递）
@@ -224,10 +220,6 @@ function clearCron() {
     year: ''
   }
 }
-onMounted(() => {
-  expression.value = props.expression
-  hideComponent.value = props.hideComponent
-})
 </script>
 
 <style lang="scss" scoped>

@@ -8,7 +8,7 @@
       @open="onOpen"
       @close="onClose"
     >
-      <template #header="{ close, titleId, titleClass }">
+      <template #header>
         选择图标
         <el-input
           v-model="key"

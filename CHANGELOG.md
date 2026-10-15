@@ -2,7 +2,43 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~013`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~014`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.11] - 2026-10-15
+
+前端代码规范基线：项目此前**没有任何格式化或 lint 配置**，同一批源码里缩进、折行、空行风格并存；v1.0.10 已如实记录「直接接入 lint 会让上游数百处既有风格问题一次性变成 CI 红灯，属要么全量整改、要么形同虚设的两难」。本次按**先基线格式化、后上 ESLint**的顺序把这条路走通：先让代码整齐到"开规则不会满屏红"，再让规则真正成为门禁。
+
+### 新增
+- **Prettier 3.9.10 基线**：`campus-tao-ui/.prettierrc.json`（无分号、单引号、2 空格缩进、`printWidth 120`、`trailingComma none`、`endOfLine auto`）与 `.prettierignore`（排除依赖/产物/随包静态资源/锁文件与自动生成文件）。
+- **ESLint 10.12.0 扁平配置**：`campus-tao-ui/eslint.config.js`——`@eslint/js` recommended + `eslint-plugin-vue` 的 `flat/essential` + `eslint-config-prettier`（关闭全部与 Prettier 冲突的排版类规则）。**不使用 `eslint-plugin-prettier`**：不把格式化塞进 lint 规则，避免"linter 说左、formatter 说右"的死循环。
+- **自动导入标识符联通**：`vite/plugins/auto-import.js` 增 `eslintrc` 产出 `.eslintrc-auto-import.json`（`ref`/`computed`/`useDict` 等登记为全局变量），该文件随仓库提交，`eslint.config.js` 以 `createRequire` 读取。缺此步骤时 `no-undef` 会对每个使用自动导入的页面误报，规则开得再多也只是噪音。
+- **四个 npm 脚本**：`lint` / `lint:fix` / `format` / `format:check`，供本地与 CI 复用。
+- **CI 前端 job 增两步静态检查**：`format:check` 与 `lint` 置于单测之前，任一步失败即中止；`verify.bat` 由 5 步扩为 **6 步**（新增第 4 步静态检查）。
+
+### 变更
+- **前端源码全量基线重排**：按上述规则一次性格式化 `src/**`、`vite/**`、`tests/**` 与根配置文件。**该提交为纯机械重排，未改动任何标识符、逻辑与对外契约**，并作为独立提交单独可评审。
+- `printWidth` 取 **120** 系实测最小扰动：80 / 100 / 120 分别需重排 157 / 152 / 151 个文件、改动 21373 / 17901 / 16324 行。
+- 存量 lint 问题清零：`no-undef`、`no-unused-vars`、`vue/valid-define-emits`、`vue/require-valid-default-prop` 等 121 个 error 全部按"保持行为不变"修复（含 3 个真实缺陷，见下），**未使用任何 `eslint-disable` 豁免**。
+- 脚手架既有债显式降级为 warn（限 `views/tool/**`、`components/RightToolbar/**`、`components/Crontab/**`、`system/user/profile/userInfo.vue`）：`vue/no-mutating-props` 与 `vue/no-side-effects-in-computed-properties` 命中的是上游脚手架写法，改成 emit/defineModel 属重构且有回归风险，故**降级但不静默**——每次 lint 都会打印明细，作为后续专项重构的待办清单。
+- `vue/multi-word-component-names` 关闭：上游在 `main.js` 注册了单名全局组件（`Pagination`/`Editor`），全站模板按 `<pagination>`/`<editor>` 引用，改名仅满足命名约定而无正确性收益。
+- 后端 `info.app.version` 更新为 `1.0.11`。
+
+### 修复
+- **`src/utils/ruoyi.js:124` 真实 ReferenceError**：`sprintf` 内部使用 `args[i++]`，但函数从未声明 `args`（既无局部变量也未绑定 `arguments`），任何调用该格式化函数的分支都会在运行时抛 `ReferenceError`。已补 `const args = arguments`，行为不变。
+- **`src/views/monitor/operlog/detail.vue:177/185` 缺失导入**：解码失败分支调用 `ElMessage(...)` 但文件未导入，运行到该分支即报错。已补 `import { ElMessage } from 'element-plus'`。
+- **`src/components/DictTag/index.vue` 过滤器语法失效**：`{{ unmatchArray | handleArray }}` 是 Vue 2 过滤器写法，Vue 3 已移除该语法（会被解析为位运算，标签根本渲染不出来）。改为 `{{ handleArray(unmatchArray) }}`；同时把 `unmatchArray` 由「ref + 在 computed 内 push」改为纯 computed 返回结果、`unmatch` 由其长度派生，副作用一并消除。该组件是几乎所有业务列表页的字典标签渲染入口，已单独做等价性验证。
+- `src/utils/validate.js` 3 处正则内多余转义（`[\[\]\\]` 等）已清理，字符类语义不变。
+- `src/utils/generator/html.js` 首行失效的 `/* eslint-disable max-len */` 指令已删除（Chromium 记录无对应问题）。
+
+### 验证
+- **静态检查**：`npx eslint .` → **`✖ 161 problems (0 errors, 161 warnings)`**，warning 全部落在上述豁免路径的那两条规则内（`vue/no-mutating-props` 131 条 + `vue/no-side-effects-in-computed-properties` 30 条）；`npm run format:check` → `All matched files use Prettier code style!`。
+- **门禁有效性（负向验证）**：故意写入一个未使用变量后 `npm run lint` 报错并返回非 0 退出码；故意写入一处不合风格的间距后 `npm run format:check` 报该文件不符并返回非 0。验证后均已删除探针文件。**只做正向验证的门禁等于没有验证。**
+- **行为不变性**：基线重排后复跑前端单测 **44/44 通过**、`vite build` 通过；随后完成 121 个 error 的修复，再次复跑单测 **44/44 通过**、生产构建通过（`✓ built in ...`）。
+- **交付前离线校验**：`verify.bat`（默认 `-o` 离线、内置 Maven 与离线仓库）**6 步 ALL PASS**，退出码 **0**；后端单测 **75/75** 全绿且 jacoco 覆盖率门禁（行 ≥35% / 分支 ≥18%）通过，前端单测 **44/44** 全绿且 v8 覆盖率门禁（行 ≥25%）通过。
+- **依赖面复核**：新增的 lint/format 工具链**未引入任何漏洞**——`npm audit` 全量与 `npm audit --omit=dev` 均 **0 项**；前端包总数 **252 → 329**（+77，全部为 devDependency），**生产依赖树仍为 167 个包**，UNKNOWN 许可 0、copyleft 0；`frontend-dependencies.csv` 已重新生成（+77 行、移除 0 行，纯新增）。
+- **后端服务**：重启后 `/actuator/health` = **UP**、`/actuator/info` 版本 = **1.0.11**。
+
+> 未纳入本轮（如实记录）：**后端的 spotless/checkstyle**（P1 原文包含此项）——后端本轮仅做了前端基线，后端风格统一与静态检查尚未落地；**`vue3-recommended`/`strongly-recommended` 的更严规则集**（当前为 `essential`，收紧路径是把上面 161 条 warn 逐类重构后逐级上调）；**CI 真正跑起来**（仓库仍为本地库、无远程，工作流从未被执行，需用户提供远程仓库）；**Flyway/Liquibase 数据库版本化迁移**（待确认）。
 
 ## [1.0.10] - 2026-10-15
 

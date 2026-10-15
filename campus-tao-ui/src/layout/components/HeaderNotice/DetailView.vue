@@ -78,7 +78,7 @@ const hasContent = computed(() => {
 })
 
 function open(payload) {
-  let id = null
+  let id
   let preset = null
   if (payload != null && typeof payload === 'object') {
     id = payload.noticeId

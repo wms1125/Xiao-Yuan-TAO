@@ -88,7 +88,7 @@ const props = defineProps({
 })
 
 const { proxy } = getCurrentInstance()
-const emit = defineEmits()
+const emit = defineEmits(['update:modelValue'])
 const number = ref(0)
 const uploadList = ref([])
 const dialogImageUrl = ref('')
@@ -126,7 +126,7 @@ watch(
 
 // 上传前loading加载
 function handleBeforeUpload(file) {
-  let isImg = false
+  let isImg
   if (props.fileType.length) {
     let fileExtension = ''
     if (file.name.lastIndexOf('.') > -1) {

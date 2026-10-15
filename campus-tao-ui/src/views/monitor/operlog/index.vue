@@ -175,10 +175,8 @@ const loading = ref(true)
 const detailRow = ref({})
 const showSearch = ref(true)
 const ids = ref([])
-const single = ref(true)
 const multiple = ref(true)
 const total = ref(0)
-const title = ref('')
 const dateRange = ref([])
 const defaultSort = ref({ prop: 'operTime', order: 'descending' })
 
@@ -195,7 +193,7 @@ const data = reactive({
   }
 })
 
-const { queryParams, form } = toRefs(data)
+const { queryParams } = toRefs(data)
 
 /** 查询登录日志 */
 function getList() {
@@ -228,7 +226,7 @@ function handleSelectionChange(selection) {
 }
 
 /** 排序触发事件 */
-function handleSortChange(column, prop, order) {
+function handleSortChange(column) {
   queryParams.value.orderByColumn = column.prop
   queryParams.value.isAsc = column.order
   getList()
