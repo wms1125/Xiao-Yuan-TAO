@@ -3,8 +3,9 @@
 # 说明：
 # - 前端（JS/Vue/JSON/YAML 等）的实际排版由 Prettier 负责，这里只声明最基础的约定，
 #   避免编辑器与 Prettier 出现分歧；真正会拦人的门禁是 `npm run format:check` 与 `npm run lint`。
-# - 后端 Java 约定为 4 空格缩进（项目既有风格），本轮未接入 spotless/checkstyle，
-#   故这里只做缩进与编码声明，不构成后端门禁。
+# - 后端 Java 约定为 4 空格缩进（项目既有风格）。v1.0.12 起后端已接入 spotless，
+#   门禁是 `mvn verify` 内的 `spotless:check`（配置与取舍见根 pom.xml 注释）；
+#   此处仍只声明缩进与编码供编辑器对齐，不重复承担门禁职责。
 # - 行尾：仓库根 .gitattributes 已将文本文件归一为 LF；Windows 批处理（*.bat）必须为 CRLF，
 #   否则命令解析会错位。
 

@@ -2,7 +2,31 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~014`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~015`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.12] - 2026-10-16
+
+后端代码规范基线：v1.0.11 已如实记录「后端 spotless/checkstyle 本轮未接入」。本次按与前端相同的**先基线格式化、后上门禁**顺序补齐后端这一半，并避开了一个坑——直接用 google-java-format 会改写全部 346 个 Java 文件、约 3.3 万行，并把项目既有的 **4 空格缩进压成 2 空格**，与 `.editorconfig` 及上游 RuoYi 风格冲突，diff 噪声远超收益。故只启用三项"零争议"的卫生类步骤，把门禁从"风格口味"收窄到"客观事实"。
+
+### 新增
+- **spotless-maven-plugin 2.44.3**（根 `pom.xml`，属性 `<spotless.version>`）：仅启用 `removeUnusedImports` / `trimTrailingWhitespace` / `endWithNewline` 三项卫生类步骤。
+- **门禁绑定 verify 阶段**：`spotless:check` 绑定到 `verify`（与仓库既有 `jacoco:check` 的绑定方式一致），任何一次 `mvn verify`（含 CI 的 `mvn -B verify`）都会校验代码规范，不达标即构建失败。格式化（`apply`）刻意**不绑定生命周期**，由人工执行 `mvn spotless:apply` 触发，避免"边构建边改源码"掩盖问题。
+- **离线仓库同步**：`.tools/m2-repo` 补入 spotless 全部构件（含 `spotless-lib`、`spotless-lib-extra`、`durian-*`、`google-java-format` 等）并清理 `_remote.repositories` / `*.lastUpdated` 标记文件，离线 `-o` 下 `mvn verify` 可完整执行（已实测）。
+
+### 变更
+- **后端 Java 基线格式化（249 个 Java 文件 / 997 增 1004 删）**：242 个文件为纯行尾空白改动，7 个文件删除未使用 import（`java.math.BigDecimal`、`java.util.List`、`org.springframework.web.bind.annotation.PathVariable`、`org.springframework.http.HttpStatus`、`org.apache.ibatis.annotations.Param`，全部位于自有 `campus` 模块）。该改动独立成一个提交，**纯机械**、可单独评审。
+- **为何不用 google-java-format**：实测它改写 **346 个文件 / 29008 增 32945 删**，且把 `[*.java] indent_size=4` 的既有约定压成 2 空格；本方案实测只改 **250 个文件 / 1023 增 1004 删**，其中 pom 仅 26 行纯新增（注释与配置），其余为 Java 机械改动。
+- 行尾沿用 spotless 默认 `PLATFORM_NATIVE`（Windows 检出为 CRLF，与仓库现状一致），与前端 Prettier 的 `endOfLine: auto` 同理——只改真实格式问题，不引入行尾噪音（抽查 60 个改动文件仍为 CRLF）。
+- `.editorconfig` 注释更正：原文「本轮未接入 spotless/checkstyle，故这里只做缩进与编码声明，不构成后端门禁」已过期，改为说明后端门禁由 `mvn verify` 内的 `spotless:check` 承担。
+- `verify.bat` 第 3 步更名为「后端单元测试 + 覆盖率 + 代码规范门禁」（步数仍为 6 步，不新增步骤）；CI 后端 job 的单条 `mvn -B verify` 说明同步更新，无需增删步骤即可获得该门禁。
+- 后端 `info.app.version` 更新为 `1.0.12`。
+
+### 验证
+- **基线改动的语义等价校验**：对全部 249 个改动文件，把"全部空白字符与 import 行"剔除后与改动前版本比对 SHA-256，**249/249 全部一致**——证明改动不含任何标识符、逻辑、文案或接口契约变化。
+- **门禁有效性（负向验证）**：在 `CampusCartController.java` 注入一个未使用 import 与一行行尾空白后执行 `mvn verify`，构建按预期失败（退出码 1），日志打印该文件的违规 diff 并提示 `Run 'mvn spotless:apply' to fix these violations.`；回滚探针后 `spotless:check` 恢复通过（345 个 Java 文件全部 clean）。**只做正向验证的门禁等于没有验证。**
+- **交付前离线校验**：`verify.bat`（默认 `-o` 离线、内置 Maven 与离线仓库）**6 步 ALL PASS**、退出码 **0**；日志可见 `spotless:2.44.3:check (spotless-check)` 确实在 `mvn verify` 内执行并报告各模块 345 个 Java 文件 clean；后端单测 **75/75** 全绿、jacoco 门禁通过（行 **36.05%** ≥ 35%、分支 **19.09%** ≥ 18%，与 v1.0.11 完全一致，因本轮无业务代码变更）；前端侧未受影响：`format:check` 通过、eslint **0 error / 161 warn**、单测 **44/44**、v8 门禁通过（行 **25.33%** ≥ 25%）、`build:prod` 通过。
+- **依赖面复核**：本轮未改动任何前后端运行期依赖——后端 SBOM（CycloneDX 1.6）仍为 **166 组件**（spotless 属构建期插件，不进入运行期依赖树，已核对 BOM 内无 diffplug 条目）；前端包总数仍 **329**、生产依赖树仍 **167**，`npm audit` 全量与 `--omit=dev` 均为 **0 项**。
+- **后端服务**：重启后 `/actuator/health` = **UP**、`/actuator/info` 版本 = **1.0.12**。
 
 ## [1.0.11] - 2026-10-15
 
