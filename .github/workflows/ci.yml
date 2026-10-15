@@ -2,7 +2,7 @@ name: CI
 
 # 说明：
 # - 后端 job 覆盖「可编译 + 单元测试」，仓库未提供 mvnw，使用 setup-java 内置的 Maven。
-# - 前端 job 覆盖「可构建」，用 npm ci 保证依赖与 package-lock.json 一致。
+# - 前端 job 覆盖「单元测试（vitest）+ 可构建」，用 npm ci 保证依赖与 package-lock.json 一致。
 # - 端到端回归（e2e_business.py）未纳入 CI：它需要可达的 MySQL 8 与已初始化的库，
 #   本地请用仓库根的 verify.bat 或手工执行；如需上 CI，可另加 services: mysql 的 job。
 # - 仓库当前为本地库（无远程），推送后本工作流即自动生效。
@@ -48,7 +48,7 @@ jobs:
           if-no-files-found: error
 
   frontend:
-    name: 前端构建
+    name: 前端单测与构建
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -65,6 +65,9 @@ jobs:
 
       - name: 安装依赖（严格按 lock 文件）
         run: npm ci
+
+      - name: 单元测试（vitest）
+        run: npm run test:unit
 
       - name: 生产构建
         run: npm run build:prod

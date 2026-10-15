@@ -5,10 +5,24 @@
 开发过程留痕见 `campus-tao/ai-log/001~007`，里程碑文档见 `campus-tao/M1~M5`。
 
 ## [未发布]
-- 前端单元测试（如 vitest）尚未纳入交付验证（生产构建校验已由 CI 与 `verify.bat` 覆盖）。
-- 交付包内置 Maven 与离线依赖仓库，实现完全无网环境重建。
-- 依赖漏洞（CVE）扫描（`npm audit` / OWASP Dependency-Check）尚未接入；当前 SBOM 仅覆盖许可合规。
+- 依赖漏洞（CVE）扫描（`npm audit` / OWASP Dependency-Check）尚未接入；当前 SBOM 仅覆盖许可合规。首次 `npm audit` 提示 16 项告警（5 moderate / 11 high），待专项治理。
 - 可观测性（健康检查、关键操作审计）与运营侧能力（订单超时自动取消、物流单号、站内通知等）。
+
+## [1.0.4] - 2026-10-15
+
+交付可复现性与前端测试：交付包内置 Maven 与离线依赖仓库，打通完全无网重建；前端接入 vitest 单元测试。
+
+### 新增
+- 交付包内置 Maven（`.tools/maven`，3.9.9）与离线依赖仓库（`.tools/m2-repo`，约 153MB / 2361 文件）；`verify.bat` 默认以 `-o` **强制离线**构建，证明无网可重建。如需联网补缺件，可先 `set CTA_ONLINE=1`。
+- 前端单元测试：接入 vitest（`vitest.config.js` + `tests/unit/`，3 个测试文件 37 个用例：通用工具函数、校园淘订单/商品/购物车接口封装），新增脚本 `npm run test:unit`。
+- CI 前端 job 增加「单元测试（vitest）」步骤；`verify.bat` 增加前端单测阶段（现为 5 步）。
+
+### 变更
+- `verify.bat` 后端构建改为使用内置 Maven 与内置仓库（不再依赖 `%TEMP%\cta-mvn` 与本机 `~/.m2`）。
+- `.tools/` 已加入 `.gitignore`：Maven 与离线仓库随交付包物理内嵌，但不入版本库（避免约 160MB 二进制入库）。
+
+### 验证
+- **完全离线重建**：以 `-o` 强制离线执行 `verify.bat` → 后端 `clean package` BUILD SUCCESS、后端单测 15/15、前端单测 37/37、前端 `build:prod` 通过，末行 `ALL PASS`（退出码 0）。离线期间未访问任何远程仓库，Maven 与依赖全部来自包内 `.tools`。
 
 ## [1.0.3] - 2026-10-15
 

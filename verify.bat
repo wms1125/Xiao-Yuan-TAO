@@ -8,7 +8,8 @@ echo   校园淘 交付前校验（CI 的本地等价脚本）
 echo     1) 预检：发行 jar 是否被占用
 echo     2) 后端 mvn -B -DskipTests clean package
 echo     3) 后端 mvn -B test
-echo     4) 前端 npm run build:prod
+echo     4) 前端 npm run test:unit（vitest）
+echo     5) 前端 npm run build:prod
 echo   全部通过则退出码为 0，任一失败为 1。
 echo ============================================================
 echo.
@@ -19,12 +20,27 @@ if exist "jdk-17" (
 )
 if defined JAVA_HOME (echo [信息] JAVA_HOME=%JAVA_HOME%) else (echo [信息] 未使用随包 JDK，将沿用系统 JAVA_HOME 或默认 JDK)
 
-rem ---------- 2. 定位 Maven ----------
+rem ---------- 2. 定位 Maven（优先随包内置 .tools\maven）----------
 set "MVN="
 if defined MVN_CMD set "MVN=%MVN_CMD%"
 if not defined MVN if exist ".tools\maven\bin\mvn.cmd" set "MVN=%CD%\.tools\maven\bin\mvn.cmd"
 if not defined MVN if exist "%TEMP%\cta-mvn\apache-maven-3.9.9\bin\mvn.cmd" set "MVN=%TEMP%\cta-mvn\apache-maven-3.9.9\bin\mvn.cmd"
 if not defined MVN for %%i in (mvn.cmd) do if not "%%~$PATH:i"=="" set "MVN=mvn"
+
+rem ---------- 2b. 定位随包内置的离线依赖仓库 ----------
+rem 默认强制离线（-o）以证明"完全无网可重建"；如需联网补缺件，可先 set CTA_ONLINE=1。
+set "MVN_ARGS="
+if exist ".tools\m2-repo" (
+  if defined CTA_ONLINE (
+    set MVN_ARGS="-Dmaven.repo.local=%CD%\.tools\m2-repo"
+    echo [信息] 依赖仓库：内置 .tools\m2-repo（联网模式，可补齐缺失依赖）
+  ) else (
+    set MVN_ARGS=-o "-Dmaven.repo.local=%CD%\.tools\m2-repo"
+    echo [信息] 依赖仓库：内置 .tools\m2-repo，强制离线 -o（如需联网补件请先 set CTA_ONLINE=1）
+  )
+) else (
+  echo [信息] 未发现内置离线仓库 .tools\m2-repo，将使用默认本地仓库（可能需要网络）
+)
 
 set "FAIL=0"
 
@@ -54,18 +70,22 @@ if /i "%LOCKED%"=="locked" (
     echo.
     pushd campus-tao\RuoYi-Vue-master
     echo ---- [2/4] 后端打包 ----
-    call "%MVN%" -B -DskipTests clean package
+    call "%MVN%" %MVN_ARGS% -B -DskipTests clean package
     if errorlevel 1 (set "FAIL=1" & echo [失败] 后端打包) else (echo [通过] 后端打包)
     echo.
     echo ---- [3/4] 后端单元测试（无 MySQL 时 JDBC 用例自动跳过）----
-    call "%MVN%" -B test
+    call "%MVN%" %MVN_ARGS% -B test
     if errorlevel 1 (set "FAIL=1" & echo [失败] 后端单元测试) else (echo [通过] 后端单元测试)
     popd
   )
 )
 
 echo.
-echo ---- [4/4] 前端生产构建 ----
+echo ---- [4/5] 前端单元测试（vitest）----
+call npm run test:unit
+if errorlevel 1 (set "FAIL=1" & echo [失败] 前端单元测试) else (echo [通过] 前端单元测试)
+echo.
+echo ---- [5/5] 前端生产构建 ----
 pushd campus-tao-ui
 if not exist "node_modules" (
   echo [信息] 未发现 node_modules，先执行 npm ci（需要网络）
