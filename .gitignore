@@ -12,6 +12,9 @@ node_modules/
 jdk-17/
 mysql-8.0.40/
 
+# ===== 本地构建工具（如随交付包附带的 Maven）=====
+.tools/
+
 # ===== 运行时生成 =====
 uploadPath/
 logs/
