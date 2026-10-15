@@ -17,7 +17,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>17</java.version>
-        <spring-boot.version>4.1.0</spring-boot.version>
+        <spring-boot.version>4.1.1</spring-boot.version>
+        <!-- CVE 修复覆盖版本（在 dependencyManagement 中显式声明，见下方注释） -->
+        <tomcat.version>11.0.27</tomcat.version>
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
         <mybatis-spring-boot.version>4.1.0</mybatis-spring-boot.version>
         <druid.version>1.2.28</druid.version>
         <yauaa.version>8.2.0</yauaa.version>
@@ -36,6 +40,44 @@
     <!-- 依赖声明 -->
     <dependencyManagement>
         <dependencies>
+
+            <!--
+              CVE 修复覆盖：以下条目必须声明在 Spring Boot BOM 之前。
+              因为 import 型 BOM 的内部属性（tomcat.version / jackson-bom.version 等）
+              不随引入方 pom 的属性覆盖而改变，只能以"直接声明优先于 import"的方式生效。
+            -->
+            <!-- Jackson 2 补丁（需 >= 2.21.7：jackson-core/databind 的 DoS 与 ReDoS 通告） -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson-2-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Jackson 3（tools.jackson）补丁（需 >= 3.1.6：多态校验与 DoS 通告） -->
+            <dependency>
+                <groupId>tools.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Tomcat 补丁（需 >= 11.0.25：DIGEST/FORM 认证绕过等 3 项严重通告） -->
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
 
             <!-- SpringBoot的依赖配置 -->
             <dependency>

@@ -2,11 +2,38 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~008`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~009`，里程碑文档见 `campus-tao/M1~M5`。
 
 ## [未发布]
-- 依赖漏洞（CVE）扫描（`npm audit` / OWASP Dependency-Check）尚未接入；当前 SBOM 仅覆盖许可合规。首次 `npm audit` 提示 16 项告警（5 moderate / 11 high），待专项治理。
 - 运营侧能力仍有可扩展项：短信/邮件外呼通道未接入（站内通知已落地）、物流轨迹查询未对接第三方承运商（当前仅记录单号）。
+- 前端构建链路仍有 5 项 high 告警（根因 `braces` 上游无补丁版本），已判定为**可接受的残余风险**并记录判定依据，详见 `campus-tao/sbom/SBOM.md` 第四.4.2 节；可选替代方案为以 `unplugin-icons` 替换 `vite-plugin-svg-icons`（未实施）。
+
+## [1.0.6] - 2026-10-15
+
+依赖漏洞（CVE）专项治理：后端整体升级并清零严重项、前端生产依赖树归零，同时补齐 SBOM 的漏洞扫描口径。
+
+### 新增
+- `campus-tao/sbom/SBOM.md` 新增「依赖漏洞（CVE）扫描结果」章节：前后端治理前后对比、残余风险判定依据、可复现的复核命令（`osv-scanner` / `npm audit`）。
+
+### 变更
+- **后端依赖整体升级**：`spring-boot.version` 4.1.0 → **4.1.1**，连带 Spring Framework 7.0.8→7.0.9、Netty 4.2.15→4.2.17、Log4j 2.25.4→2.25.5。
+- **后端补丁版本显式声明**（置于根 `pom.xml` 的 `dependencyManagement` 中、**必须先于 Spring Boot BOM**）：Tomcat 11.0.22→**11.0.27**、Jackson 2 2.21.4→**2.21.7**、Jackson 3（`tools.jackson`）3.1.4→**3.1.7**。
+- **前端运行时依赖升级**：`axios` 1.13.2→**1.20.0**、`vue` 3.5.26→**3.5.44**、`js-cookie` 3.0.5→**3.0.8**、`echarts` 5.6.0→**6.1.0**。
+- **前端构建工具链升级**：`vite` 6.4.1→**6.4.4**、`unplugin-auto-import` 0.18.6→**21.1.0**；并新增 `overrides` 收敛传递依赖（`postcss` 8.5.30、`micromatch` 4.0.8、`braces` 3.0.3、`fast-glob` 3.3.3）。
+- `fast-glob` 由隐式提升改为**显式声明**为 devDependency（`vite-plugin-svg-icons` 自身 `package.json` 未声明该依赖，属幽灵依赖）。
+- `verify.bat` 前置校验步骤已在 v1.0.5 修正为在 `campus-tao-ui` 目录执行前端单测，本次治理后 5 步全绿。
+
+### 修复
+- **构建中断（幽灵依赖消失）**：`unplugin-auto-import` 升级后其依赖树精简，原本靠它提升安装的 `fast-glob` 不再存在，`vite build` 报 `Cannot find package 'fast-glob'`（由 `vite-plugin-svg-icons` 运行时 import 触发）。已显式补齐依赖后恢复正常构建。
+
+### 验证
+- **后端漏洞扫描**（`osv-scanner` v2.7.0，基于 CycloneDX BOM）：命中组件由 **10** 个 / **30** 条（含 4 项 CRITICAL）降至 **1** 个 / **1** 条（MODERATE）。残余项为 `com.ruoyi:ruoyi-common@3.9.2` 命中 `GHSA-vp22-232w-h9x8`（CVE-2022-4348，RuoYi-**Cloud** 的 JSON Handler XSS）——本项目为 RuoYi-Vue，经核查其 `ruoyi-common` 模块**不含任何 Web 端点**，且该通告无 `fixed` 版本，判定为**同名坐标碰撞误报**。
+- **前端漏洞扫描**（`npm audit`）：告警由 **16** 项（11 high / 5 moderate）降至 **5** 项（全 high，均为构建期 devDependencies）；**`npm audit --omit=dev` 生产依赖树为 0 项**。
+- **浏览器冒烟**（Playwright，Chromium，11 项检查全通过）：`echarts` 5→6 在 `/monitor/cache` 正常渲染图表 canvas；`unplugin-auto-import` 0.18→21 未静默失效（用户管理/商品/订单页表格与下拉正常，无白屏）；`axios` 1.20 拦截器与 `js-cookie` 3.0.8 令牌写入正常（登录成功进入主框架、Cookie 内含令牌）；顶部「消息通知」下拉正常；全程 `pageerror` 为空。
+- **校验与回归**：`verify.bat` 离线 5 步 `ALL PASS`（后端 `clean package` BUILD SUCCESS、后端单测 **15/15**、前端单测 **41/41**、前端 `build:prod` 通过）；`e2e_business.py` 全链路 `RESULT: ALL_PASS`。
+- **产物体检**：发行 `ruoyi-admin.jar` 的 `BOOT-INF/lib` 实测为 `tomcat-embed-core-11.0.27`、`spring-webmvc-7.0.9`、`jackson-databind-2.21.7`（2.x）与 `3.1.7`（3.x）、`netty-handler-4.2.17.Final`、`log4j-api-2.25.5`，依赖 jar 总数 149 → **150**。
+- **SBOM 同步**：后端 CycloneDX **166** 组件（160 项带许可，无 AGPL/SSPL）；前端 **398** 包（原 461，因 `unplugin-auto-import` 升级后依赖树精简），**0** 未知许可、**0** copyleft。
+- **离线仓库维护**：联网补入新版本依赖后，清理 `.tools/m2-repo` 中的 `_remote.repositories` / `*.lastUpdated`（271 / 5 个），保证 `-o` 离线构建仍可复现。
 
 ## [1.0.5] - 2026-10-15
 
