@@ -215,9 +215,11 @@ jobs:
 
       # 直接扫随包交付的 CycloneDX 物料清单（backend-bom.json），
       # 避免在 CI 中重新解析 Maven 依赖树，结果与人工扫描口径一致。
-      # 仓库根的 osv-scanner.toml 登记了经核查判定不适用于本项目的告警（当前仅 1 条：
-      # 本仓库一手模块 com.ruoyi:ruoyi-common 与上游 RuoYi-Cloud 同名构件产生的坐标碰撞），
-      # 每条均附理由与复核期限；未登记的告警照常阻断构建。
+      # 豁免登记见 campus-tao/sbom/osv-scanner.toml（当前仅 1 条：本仓库一手模块
+      # com.ruoyi:ruoyi-common 与上游 RuoYi-Cloud 同名构件产生的坐标碰撞），每条均附理由与复核期限。
+      # 注意：osv-scanner 只读「被扫描文件所在目录」下的 osv-scanner.toml 且不向子目录传播，
+      # 故该文件必须与 backend-bom.json 同目录——放在仓库根目录不会生效。
+      # 未登记的告警照常阻断构建。
       - name: 后端依赖漏洞扫描（osv-scanner）
         uses: google/osv-scanner-action/osv-scanner-action@v1.9.0
         with:
