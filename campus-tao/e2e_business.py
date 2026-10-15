@@ -114,9 +114,41 @@ mine_only = all(r.get("userId") == 2 for r in rows)
 print("ry 可见订单数:", len(rows))
 must(mine_only, "订单列表归属过滤（仅本人订单）", str([(r.get("orderNo"), r.get("userId")) for r in rows]))
 
-print("\n=== 9) admin 发货 ===")
-st, ship = call("POST", f"/campus/order/ship/{order_no}", token=ADMIN)
+print("\n=== 9) admin 发货（录入物流单号）===")
+st, ship = call("POST", f"/campus/order/ship/{order_no}?logisticsNo=SF1234567890", token=ADMIN)
 print(st, ship)
+
+print("\n=== 9.1) 断言：物流单号已随发货落库并在订单详情可见 ===")
+st, sd = call("GET", f"/campus/order/{order_no}", token=RY)
+logistics = sd.get("data", {}).get("logisticsNo")
+print("详情中物流单号:", logistics)
+must(logistics == "SF1234567890", "发货物流单号记录正确", f"实际 {logistics}")
+
+print("\n=== 9.2) 断言：发货触发站内通知（买家 ry 收到发货消息）===")
+st, nt = call("GET", "/campus/notice/top", token=RY)
+items = (nt.get("data") or {}).get("items", [])
+unread = (nt.get("data") or {}).get("unreadCount", 0)
+print("ry 未读消息数:", unread, " 类型:", [i.get("type") for i in items])
+must(any(i.get("bizNo") == order_no and i.get("type") == "ship" for i in items),
+     "发货通知已推送给买家且关联订单号", str(items))
+must(unread > 0, "未读数量 > 0", f"实际 {unread}")
+if items:
+    st, rd = call("POST", f"/campus/notice/read/{items[0]['noticeId']}", token=RY)
+    print("标记已读:", st, rd)
+    must(rd.get("code") == 200, "本人可标记自己的消息已读", str(rd))
+
+print("\n=== 9.3) 断言[越权防护]：未登录不得访问站内通知（消息按登录态隔离）===")
+st, anon = call("GET", "/campus/notice/top")
+print("匿名访问站内通知:", st, anon)
+must(st == 401 or anon.get("code") == 401, "站内通知要求登录，未登录被拒", f"{st} {anon}")
+
+print("\n=== 9.4) 断言：校园淘关键写操作已入操作日志（@Log 审计）===")
+st, lg = call("GET", "/monitor/operlog/list?pageSize=50", token=ADMIN)
+if st != 200:
+    st, lg = call("GET", "/system/log/operlog/list?pageSize=50", token=ADMIN)
+titles = [r.get("title") for r in (lg.get("rows") or [])]
+print("近期操作日志标题:", sorted(set(titles)))
+must(any(t and "校园淘" in t for t in titles), "关键操作已写入 sys_oper_log（审计留痕）", str(sorted(set(titles))))
 
 print("\n=== 10) ry 确认收货 ===")
 st, fin = call("POST", f"/campus/order/finish/{order_no}", token=RY)

@@ -11,8 +11,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.validation.annotation.Validated;
 import jakarta.validation.Valid;
+import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.campus.domain.CampusAftersale;
 import com.ruoyi.campus.dto.CampusAftersaleApplyDTO;
@@ -30,6 +32,7 @@ public class CampusAftersaleController extends BaseController {
     private ICampusAftersaleService aftersaleService;
 
     @PreAuthorize("@ss.hasPermi('campus:aftersale:add')")
+    @Log(title = "校园淘售后", businessType = BusinessType.INSERT)
     @PostMapping("/apply")
     public AjaxResult apply(@Valid @RequestBody CampusAftersaleApplyDTO body) {
         String no = aftersaleService.apply(SecurityUtils.getUserId(), SecurityUtils.getUsername(),
@@ -39,6 +42,7 @@ public class CampusAftersaleController extends BaseController {
 
     /** 审核（管理端） */
     @PreAuthorize("@ss.hasPermi('campus:aftersale:edit')")
+    @Log(title = "校园淘售后", businessType = BusinessType.UPDATE)
     @PostMapping("/audit")
     public AjaxResult audit(@Valid @RequestBody CampusAftersaleAuditDTO body) {
         // 审核人强制取自当前登录用户，忽略前端传入，避免伪造审核归属

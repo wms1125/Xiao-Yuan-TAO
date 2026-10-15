@@ -10,6 +10,7 @@ import com.ruoyi.campus.mapper.CampusOrderMapper;
 import com.ruoyi.campus.mapper.CampusProductMapper;
 import com.ruoyi.campus.service.ICampusAccountService;
 import com.ruoyi.campus.service.ICampusCartService;
+import com.ruoyi.campus.service.ICampusNoticeService;
 import com.ruoyi.campus.service.ICampusOrderService;
 import com.ruoyi.common.exception.ServiceException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
@@ -37,6 +39,8 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
     private ICampusAccountService accountService;
     @Autowired
     private ICampusCartService cartService;
+    @Autowired
+    private ICampusNoticeService noticeService;
 
     /** 订单状态常量 */
     public static final int STATUS_WAIT_PAY = 0;
@@ -126,6 +130,10 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         for (CampusCart c : carts) {
             cartMapper.deleteCartByUserAndProduct(userId, c.getProductId());
         }
+        // 站内通知：下单提醒（含未支付将自动取消的提示）
+        noticeService.push(userId, "order", "订单创建成功",
+                "订单 " + order.getOrderNo() + " 已创建，应付 ¥" + order.getTotalAmount()
+                        + "，请尽快完成支付，超时将自动取消。", order.getOrderNo());
         return order.getOrderNo();
     }
 
@@ -181,14 +189,20 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public int shipOrder(String orderNo) {
+    public int shipOrder(String orderNo, String logisticsNo) {
         CampusOrder order = orderMapper.selectOrderByOrderNo(orderNo);
         if (order == null || order.getStatus() != STATUS_PAID) {
             throw new ServiceException("订单状态异常，无法发货");
         }
         order.setStatus(STATUS_SHIPPED);
         order.setShipTime(new Date());
-        return orderMapper.updateCampusOrder(order);
+        order.setLogisticsNo(logisticsNo == null ? "" : logisticsNo.trim());
+        int rows = orderMapper.updateCampusOrder(order);
+        // 站内通知：发货提醒（含物流单号）
+        String suffix = order.getLogisticsNo().isEmpty() ? "" : "，物流单号：" + order.getLogisticsNo();
+        noticeService.push(order.getUserId(), "ship", "订单已发货",
+                "订单 " + orderNo + " 已发货" + suffix + "，请注意查收。", orderNo);
+        return rows;
     }
 
     @Override
@@ -204,6 +218,32 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         order.setStatus(STATUS_FINISHED);
         order.setFinishTime(new Date());
         return orderMapper.updateCampusOrder(order);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int autoCancelTimeoutOrder(int timeoutMinutes) {
+        if (timeoutMinutes <= 0) {
+            return 0;
+        }
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.MINUTE, -timeoutMinutes);
+        List<CampusOrder> timeouts = orderMapper.selectTimeoutWaitPayOrders(calendar.getTime());
+        int cancelled = 0;
+        Date now = new Date();
+        for (CampusOrder order : timeouts) {
+            // 原子取消：仅当仍为待付款时才生效；已被用户支付/取消的订单影响行数为 0，跳过
+            int affected = orderMapper.cancelWaitPayOrderIfStillWaitPay(order.getOrderNo(), now);
+            if (affected == 0) {
+                continue;
+            }
+            returnStock(order);
+            cancelled++;
+            noticeService.push(order.getUserId(), "order", "订单已自动取消",
+                    "订单 " + order.getOrderNo() + " 因超时未支付已被自动取消，占用库存已释放。",
+                    order.getOrderNo());
+        }
+        return cancelled;
     }
 
     /** 回补库存 */

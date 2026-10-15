@@ -13,6 +13,41 @@ ruoyi:
   # 验证码类型 math 数字计算 char 字符验证
   captchaType: math
 
+# 可观测性配置（Actuator）
+management:
+  health:
+    redis:
+      # 关闭 Redis 健康指示器：发行包内嵌的是 Windows 版 redis-server 5.0.14，
+      # 其 INFO 输出含自身可执行文件路径（如 C:\Users\...\redis-server-*.exe），
+      # Lettuce 读取 INFO 后交由 java.util.Properties.load 解析，遇到 "\U" 会抛
+      # IllegalArgumentException: Malformed \uxxxx encoding，导致健康检查误报 DOWN。
+      # Redis 连通性由业务链路（验证码/登录令牌/配置缓存）实际验证，进程无 Redis 时启动即失败。
+      enabled: false
+  endpoints:
+    # 默认关闭所有端点，仅按需开放；避免 /actuator/env 等敏感端点暴露
+    access:
+      default: none
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      access: read-only
+      # 不对外暴露组件细节，仅返回 UP/DOWN
+      show-details: never
+    info:
+      access: read-only
+  info:
+    env:
+      enabled: true
+
+# 应用信息（/actuator/info 展示）
+info:
+  app:
+    name: campus-tao
+    description: 校园淘 校园二手交易平台
+    version: 1.0.5
+
 # 开发环境配置
 server:
   # 服务器的HTTP端口，默认为8080
@@ -145,3 +180,9 @@ xss:
   excludes: /system/notice
   # 匹配链接
   urlPatterns: /system/*,/monitor/*,/tool/*
+
+# 校园淘业务配置
+campus:
+  order:
+    # 未支付订单自动取消超时（分钟），可由环境变量 CAMPUS_PAY_TIMEOUT_MINUTES 覆盖
+    pay-timeout-minutes: ${CAMPUS_PAY_TIMEOUT_MINUTES:30}

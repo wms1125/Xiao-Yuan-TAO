@@ -14,9 +14,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.validation.annotation.Validated;
 import jakarta.validation.Valid;
 import com.ruoyi.common.annotation.Anonymous;
+import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
+import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.campus.domain.CampusProduct;
 import com.ruoyi.campus.dto.CampusProductCreateDTO;
@@ -47,6 +49,7 @@ public class CampusProductController extends BaseController {
     }
 
     @PreAuthorize("@ss.hasPermi('campus:product:add')")
+    @Log(title = "校园淘商品", businessType = BusinessType.INSERT)
     @PostMapping
     public AjaxResult add(@Valid @RequestBody CampusProductCreateDTO body) {
         CampusProduct product = new CampusProduct();
@@ -65,6 +68,7 @@ public class CampusProductController extends BaseController {
     }
 
     @PreAuthorize("@ss.hasPermi('campus:product:edit')")
+    @Log(title = "校园淘商品", businessType = BusinessType.UPDATE)
     @PutMapping
     public AjaxResult edit(@RequestBody CampusProduct body) {
         // 仅允许修改可编辑字段，sellerId/sellerName 不接受前端传入，防止篡改归属
@@ -83,12 +87,14 @@ public class CampusProductController extends BaseController {
     }
 
     @PreAuthorize("@ss.hasPermi('campus:product:remove')")
+    @Log(title = "校园淘商品", businessType = BusinessType.DELETE)
     @DeleteMapping("/{ids}")
     public AjaxResult remove(@PathVariable Long[] ids) {
         return AjaxResult.success(productService.deleteCampusProductByIds(ids, SecurityUtils.getUserId()));
     }
 
     @PreAuthorize("@ss.hasPermi('campus:product:edit')")
+    @Log(title = "校园淘商品", businessType = BusinessType.UPDATE)
     @PutMapping("/status")
     public AjaxResult changeStatus(@RequestBody CampusProduct product) {
         return AjaxResult.success(

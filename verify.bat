@@ -81,17 +81,18 @@ if /i "%LOCKED%"=="locked" (
 )
 
 echo.
-echo ---- [4/5] 前端单元测试（vitest）----
-call npm run test:unit
-if errorlevel 1 (set "FAIL=1" & echo [失败] 前端单元测试) else (echo [通过] 前端单元测试)
-echo.
-echo ---- [5/5] 前端生产构建 ----
 pushd campus-tao-ui
 if not exist "node_modules" (
   echo [信息] 未发现 node_modules，先执行 npm ci（需要网络）
   call npm ci
   if errorlevel 1 set "FAIL=1"
 )
+echo.
+echo ---- [4/5] 前端单元测试（vitest）----
+call npm run test:unit
+if errorlevel 1 (set "FAIL=1" & echo [失败] 前端单元测试) else (echo [通过] 前端单元测试)
+echo.
+echo ---- [5/5] 前端生产构建 ----
 call npm run build:prod
 if errorlevel 1 (set "FAIL=1" & echo [失败] 前端构建) else (echo [通过] 前端构建)
 popd

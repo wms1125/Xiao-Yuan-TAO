@@ -135,6 +135,9 @@
           <el-descriptions-item label="收货人">{{ detail.receiverName || '—' }}</el-descriptions-item>
           <el-descriptions-item label="联系电话">{{ detail.receiverPhone || '—' }}</el-descriptions-item>
           <el-descriptions-item label="收货地址" :span="2">{{ detail.address || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="物流单号" :span="2">
+            <span class="campus-num">{{ detail.logisticsNo || '—' }}</span>
+          </el-descriptions-item>
           <el-descriptions-item label="备注" :span="2">{{ detail.remark || '—' }}</el-descriptions-item>
         </el-descriptions>
 
@@ -274,8 +277,14 @@ function handleCancel(row) {
 }
 
 function handleShip(row) {
-  ElMessageBox.confirm('确认将订单「' + row.orderNo + '」标记为已发货？', '发货确认', { type: 'warning' }).then(() => {
-    shipOrder(row.orderNo).then(() => {
+  ElMessageBox.prompt('请输入物流单号（可留空）', '发货确认：' + row.orderNo, {
+    confirmButtonText: '确认发货',
+    cancelButtonText: '取消',
+    inputPlaceholder: '如 SF1234567890',
+    inputValidator: value => !value || value.length <= 64 || '物流单号不超过 64 个字符',
+    type: 'warning'
+  }).then(({ value }) => {
+    shipOrder(row.orderNo, value || '').then(() => {
       ElMessage.success('已发货')
       getList()
     })

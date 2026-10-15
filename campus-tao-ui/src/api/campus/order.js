@@ -20,9 +20,9 @@ export function payOrder(orderNo) {
 export function cancelOrder(orderNo) {
   return request({ url: '/campus/order/cancel/' + orderNo, method: 'post' })
 }
-// 发货（管理端）
-export function shipOrder(orderNo) {
-  return request({ url: '/campus/order/ship/' + orderNo, method: 'post' })
+// 发货（管理端，可录入物流单号）
+export function shipOrder(orderNo, logisticsNo) {
+  return request({ url: '/campus/order/ship/' + orderNo, method: 'post', params: { logisticsNo } })
 }
 // 确认收货
 export function finishOrder(orderNo) {

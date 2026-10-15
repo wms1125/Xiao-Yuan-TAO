@@ -9,6 +9,7 @@ import com.ruoyi.campus.mapper.CampusOrderMapper;
 import com.ruoyi.campus.mapper.CampusProductMapper;
 import com.ruoyi.campus.service.ICampusAccountService;
 import com.ruoyi.campus.service.ICampusAftersaleService;
+import com.ruoyi.campus.service.ICampusNoticeService;
 import com.ruoyi.common.exception.ServiceException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,8 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
     private CampusProductMapper productMapper;
     @Autowired
     private ICampusAccountService accountService;
+    @Autowired
+    private ICampusNoticeService noticeService;
 
     private String genAftersaleNo(Long userId) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
@@ -94,6 +97,16 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
         as.setHandleTime(new Date());
         aftersaleMapper.updateCampusAftersale(as);
         orderMapper.updateCampusOrder(order);
+        // 站内通知：审核结果（通过 = 已退款；驳回 = 已关闭）
+        if (pass) {
+            noticeService.push(as.getUserId(), "aftersale", "售后审核通过",
+                    "售后单 " + aftersaleNo + " 已审核通过，退款 ¥" + as.getRefundAmount() + " 已退回沙箱余额。",
+                    aftersaleNo);
+        } else {
+            noticeService.push(as.getUserId(), "aftersale", "售后申请被驳回",
+                    "售后单 " + aftersaleNo + " 未通过审核" + (remark == null || remark.isEmpty() ? "。" : "，原因：" + remark),
+                    aftersaleNo);
+        }
         return true;
     }
 

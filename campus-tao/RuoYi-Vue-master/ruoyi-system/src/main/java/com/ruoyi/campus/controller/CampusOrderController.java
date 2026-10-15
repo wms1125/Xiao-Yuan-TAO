@@ -8,11 +8,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.validation.annotation.Validated;
 import jakarta.validation.Valid;
+import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.campus.domain.CampusOrder;
 import com.ruoyi.campus.dto.CampusOrderCreateDTO;
@@ -29,6 +32,7 @@ public class CampusOrderController extends BaseController {
     private ICampusOrderService orderService;
 
     @PreAuthorize("@ss.hasPermi('campus:order:add')")
+    @Log(title = "校园淘订单", businessType = BusinessType.INSERT)
     @PostMapping("/create")
     public AjaxResult create(@Valid @RequestBody CampusOrderCreateDTO body) {
         Long userId = SecurityUtils.getUserId();
@@ -39,6 +43,7 @@ public class CampusOrderController extends BaseController {
     }
 
     @PreAuthorize("@ss.hasPermi('campus:order:edit')")
+    @Log(title = "校园淘订单", businessType = BusinessType.UPDATE)
     @PostMapping("/pay/{orderNo}")
     public AjaxResult pay(@PathVariable String orderNo) {
         boolean ok = orderService.payOrder(orderNo, SecurityUtils.getUserId());
@@ -49,22 +54,25 @@ public class CampusOrderController extends BaseController {
     }
 
     @PreAuthorize("@ss.hasPermi('campus:order:edit')")
+    @Log(title = "校园淘订单", businessType = BusinessType.UPDATE)
     @PostMapping("/cancel/{orderNo}")
     public AjaxResult cancel(@PathVariable String orderNo) {
         orderService.cancelOrder(orderNo, SecurityUtils.getUserId());
         return AjaxResult.success("已取消");
     }
 
-    /** 发货（管理端） */
+    /** 发货（管理端，可录入物流单号） */
     @PreAuthorize("@ss.hasPermi('campus:order:edit')")
+    @Log(title = "校园淘订单", businessType = BusinessType.UPDATE)
     @PostMapping("/ship/{orderNo}")
-    public AjaxResult ship(@PathVariable String orderNo) {
-        orderService.shipOrder(orderNo);
+    public AjaxResult ship(@PathVariable String orderNo, @RequestParam(required = false) String logisticsNo) {
+        orderService.shipOrder(orderNo, logisticsNo);
         return AjaxResult.success("已发货");
     }
 
     /** 确认收货（买家） */
     @PreAuthorize("@ss.hasPermi('campus:order:edit')")
+    @Log(title = "校园淘订单", businessType = BusinessType.UPDATE)
     @PostMapping("/finish/{orderNo}")
     public AjaxResult finish(@PathVariable String orderNo) {
         orderService.finishOrder(orderNo, SecurityUtils.getUserId());

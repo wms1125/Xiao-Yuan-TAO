@@ -151,6 +151,37 @@ INSERT INTO `campus_category` VALUES (1,'教材书籍',0,1,'2026-10-13 17:57:43'
 UNLOCK TABLES;
 
 --
+-- Table structure for table `campus_notice`
+--
+
+DROP TABLE IF EXISTS `campus_notice`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `campus_notice` (
+  `notice_id` bigint NOT NULL AUTO_INCREMENT COMMENT '通知ID',
+  `user_id` bigint NOT NULL COMMENT '接收用户ID',
+  `type` varchar(20) NOT NULL DEFAULT 'order' COMMENT '类型 order订单 create/ship发货/aftersale售后/system系统',
+  `title` varchar(100) NOT NULL DEFAULT '' COMMENT '标题',
+  `content` varchar(500) NOT NULL DEFAULT '' COMMENT '内容',
+  `biz_no` varchar(32) DEFAULT '' COMMENT '关联业务号（订单号/售后单号）',
+  `is_read` tinyint NOT NULL DEFAULT '0' COMMENT '是否已读 0未读 1已读',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `read_time` datetime DEFAULT NULL COMMENT '阅读时间',
+  PRIMARY KEY (`notice_id`),
+  KEY `idx_user_read` (`user_id`,`is_read`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='站内通知（面向用户的订单/售后消息）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `campus_notice`
+--
+
+LOCK TABLES `campus_notice` WRITE;
+/*!40000 ALTER TABLE `campus_notice` DISABLE KEYS */;
+/*!40000 ALTER TABLE `campus_notice` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `campus_order`
 --
 
@@ -170,6 +201,7 @@ CREATE TABLE `campus_order` (
   `remark` varchar(255) DEFAULT '' COMMENT '买家备注',
   `pay_time` datetime DEFAULT NULL COMMENT '支付时间',
   `ship_time` datetime DEFAULT NULL COMMENT '发货时间',
+  `logistics_no` varchar(64) DEFAULT '' COMMENT '物流单号',
   `finish_time` datetime DEFAULT NULL COMMENT '完成时间',
   `cancel_time` datetime DEFAULT NULL COMMENT '取消时间',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -187,7 +219,7 @@ CREATE TABLE `campus_order` (
 
 LOCK TABLES `campus_order` WRITE;
 /*!40000 ALTER TABLE `campus_order` DISABLE KEYS */;
-INSERT INTO `campus_order` VALUES (1,'CT202610131812541',1,'admin',60.00,6,'张三','13800000000','1号宿舍楼','尽快发货','2026-10-13 18:12:54','2026-10-13 18:12:54','2026-10-13 18:12:54',NULL,'2026-10-13 18:12:54','2026-10-13 18:12:54'),(2,'CT202610131817461',1,'admin',60.00,6,'张三','13800000000','1号宿舍楼','尽快发货','2026-10-13 18:17:47','2026-10-13 18:17:47','2026-10-13 18:17:47',NULL,'2026-10-13 18:17:46','2026-10-13 18:17:47');
+INSERT INTO `campus_order` VALUES (1,'CT202610131812541',1,'admin',60.00,6,'张三','13800000000','1号宿舍楼','尽快发货','2026-10-13 18:12:54','2026-10-13 18:12:54','','2026-10-13 18:12:54',NULL,'2026-10-13 18:12:54','2026-10-13 18:12:54'),(2,'CT202610131817461',1,'admin',60.00,6,'张三','13800000000','1号宿舍楼','尽快发货','2026-10-13 18:17:47','2026-10-13 18:17:47','','2026-10-13 18:17:47',NULL,'2026-10-13 18:17:46','2026-10-13 18:17:47');
 /*!40000 ALTER TABLE `campus_order` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -865,7 +897,7 @@ CREATE TABLE `sys_job` (
 
 LOCK TABLES `sys_job` WRITE;
 /*!40000 ALTER TABLE `sys_job` DISABLE KEYS */;
-INSERT INTO `sys_job` VALUES (1,'系统默认（无参）','DEFAULT','ryTask.ryNoParams','0/10 * * * * ?','3','1','1','admin','2026-10-12 09:34:20','',NULL,''),(2,'系统默认（有参）','DEFAULT','ryTask.ryParams(\'ry\')','0/15 * * * * ?','3','1','1','admin','2026-10-12 09:34:20','',NULL,''),(3,'系统默认（多参）','DEFAULT','ryTask.ryMultipleParams(\'ry\', true, 2000L, 316.50D, 100)','0/20 * * * * ?','3','1','1','admin','2026-10-12 09:34:20','',NULL,'');
+INSERT INTO `sys_job` VALUES (1,'系统默认（无参）','DEFAULT','ryTask.ryNoParams','0/10 * * * * ?','3','1','1','admin','2026-10-12 09:34:20','',NULL,''),(2,'系统默认（有参）','DEFAULT','ryTask.ryParams(\'ry\')','0/15 * * * * ?','3','1','1','admin','2026-10-12 09:34:20','',NULL,''),(3,'系统默认（多参）','DEFAULT','ryTask.ryMultipleParams(\'ry\', true, 2000L, 316.50D, 100)','0/20 * * * * ?','3','1','1','admin','2026-10-12 09:34:20','',NULL,''),(100,'校园淘-超时未支付订单自动取消','DEFAULT','campusOrderTask.autoCancelTimeoutOrder','0 0/1 * * * ?','3','1','0','admin','2026-10-15 09:00:00','',NULL,'每分钟扫描一次：取消超时未支付订单并回补库存，已支付订单不受影响');
 /*!40000 ALTER TABLE `sys_job` ENABLE KEYS */;
 UNLOCK TABLES;
 

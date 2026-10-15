@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusNoticeMapper">
+    <resultMap type="com.ruoyi.campus.domain.CampusNotice" id="CampusNoticeResult">
+        <id property="noticeId" column="notice_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="type" column="type"/>
+        <result property="title" column="title"/>
+        <result property="content" column="content"/>
+        <result property="bizNo" column="biz_no"/>
+        <result property="isRead" column="is_read"/>
+        <result property="createTime" column="create_time"/>
+        <result property="readTime" column="read_time"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        notice_id, user_id, type, title, content, biz_no, is_read, create_time, read_time
+    </sql>
+
+    <insert id="insertCampusNotice" parameterType="com.ruoyi.campus.domain.CampusNotice" useGeneratedKeys="true" keyProperty="noticeId">
+        insert into campus_notice (user_id, type, title, content, biz_no, is_read)
+        values (#{userId}, #{type}, #{title}, #{content}, #{bizNo}, 0)
+    </insert>
+
+    <select id="selectByNoticeId" resultMap="CampusNoticeResult">
+        select <include refid="Base_Column_List"/> from campus_notice where notice_id = #{noticeId}
+    </select>
+
+    <select id="selectListByUser" resultMap="CampusNoticeResult">
+        select <include refid="Base_Column_List"/> from campus_notice
+        <where>
+            user_id = #{userId}
+            <if test="isRead != null">and is_read = #{isRead}</if>
+        </where>
+        order by is_read asc, create_time desc
+        <if test="limit != null">limit #{limit}</if>
+    </select>
+
+    <select id="countUnread" resultType="int">
+        select count(1) from campus_notice where user_id = #{userId} and is_read = 0
+    </select>
+
+    <update id="markRead">
+        update campus_notice set is_read = 1, read_time = #{readTime}
+        where notice_id = #{noticeId} and user_id = #{userId} and is_read = 0
+    </update>
+
+    <update id="markReadAll">
+        update campus_notice set is_read = 1, read_time = #{readTime}
+        where user_id = #{userId} and is_read = 0
+    </update>
+</mapper>

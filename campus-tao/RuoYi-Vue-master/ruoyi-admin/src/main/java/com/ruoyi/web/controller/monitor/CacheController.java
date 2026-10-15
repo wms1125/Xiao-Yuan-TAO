@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.ruoyi.common.constant.CacheConstants;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.utils.StringUtils;
@@ -31,6 +33,8 @@ import com.ruoyi.system.domain.SysCache;
 @RequestMapping("/monitor/cache")
 public class CacheController
 {
+    private static final Logger log = LoggerFactory.getLogger(CacheController.class);
+
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
@@ -50,22 +54,42 @@ public class CacheController
     @GetMapping()
     public AjaxResult getInfo() throws Exception
     {
-        Properties info = (Properties) redisTemplate.execute((RedisCallback<Object>) connection -> connection.info());
-        Properties commandStats = (Properties) redisTemplate.execute((RedisCallback<Object>) connection -> connection.info("commandstats"));
-        Object dbSize = redisTemplate.execute((RedisCallback<Object>) connection -> connection.dbSize());
+        // 降级读取 INFO：发行包内嵌 Windows 版 redis-server，其 INFO 含自身可执行文件完整路径
+        // （形如 C 盘 Users 目录下的 redis-server-*.exe），Lettuce 读取后经 java.util.Properties.load
+        // 解析会抛 "Malformed unicode encoding"（反斜杠路径被当作 Unicode 转义），使整页 500。
+        // 此处捕获后返回空统计，保证监控页可用（Redis 连通性另由业务链路验证）。
+        Properties info;
+        Properties commandStats;
+        Object dbSize;
+        try
+        {
+            Object rawInfo = redisTemplate.execute((RedisCallback<Object>) connection -> connection.info());
+            Object rawStats = redisTemplate.execute((RedisCallback<Object>) connection -> connection.info("commandstats"));
+            info = rawInfo instanceof Properties ? (Properties) rawInfo : new Properties();
+            commandStats = rawStats instanceof Properties ? (Properties) rawStats : new Properties();
+            dbSize = redisTemplate.execute((RedisCallback<Object>) connection -> connection.dbSize());
+        }
+        catch (Exception e)
+        {
+            log.warn("读取 Redis INFO 失败，已降级返回空统计：{}", e.getMessage());
+            info = new Properties();
+            commandStats = new Properties();
+            dbSize = null;
+        }
 
         Map<String, Object> result = new HashMap<>(3);
         result.put("info", info);
         result.put("dbSize", dbSize);
 
         List<Map<String, String>> pieList = new ArrayList<>();
-        commandStats.stringPropertyNames().forEach(key -> {
+        for (String key : commandStats.stringPropertyNames())
+        {
             Map<String, String> data = new HashMap<>(2);
             String property = commandStats.getProperty(key);
             data.put("name", StringUtils.removeStart(key, "cmdstat_"));
             data.put("value", StringUtils.substringBetween(property, "calls=", ",usec"));
             pieList.add(data);
-        });
+        }
         result.put("commandStats", pieList);
         return AjaxResult.success(result);
     }

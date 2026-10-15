@@ -3,7 +3,7 @@
     <el-popover ref="noticePopover" placement="bottom-end" :width="320" trigger="manual" v-model:visible="noticeVisible" popper-class="notice-popover">
       <!-- 弹出内容 -->
       <div class="notice-header">
-        <span class="notice-title">通知公告</span>
+        <span class="notice-title">消息通知</span>
         <span class="notice-mark-all" @click="markAllRead">全部已读</span>
       </div>
       <div v-if="noticeLoading" class="notice-loading">
@@ -11,15 +11,13 @@
       </div>
       <div v-else-if="noticeList.length === 0" class="notice-empty">
         <el-icon style="font-size:24px;display:block;margin-bottom:6px;"><Postcard /></el-icon>
-        暂无公告
+        暂无消息
       </div>
       <div v-else>
-        <div v-for="item in noticeList" :key="item.noticeId" class="notice-item" :class="{ 'is-read': item.isRead }" @click="previewNotice(item)">
-          <el-tag size="small" :type="item.noticeType === '1' ? 'warning' : 'success'" class="notice-tag">
-            {{ item.noticeType === '1' ? '通知' : '公告' }}
-          </el-tag>
-          <span class="notice-item-title">{{ item.noticeTitle }}</span>
-          <span class="notice-item-date">{{ item.createTime }}</span>
+        <div v-for="item in noticeList" :key="item.key" class="notice-item" :class="{ 'is-read': item.isRead }" @click="openNotice(item)">
+          <el-tag size="small" :type="item.tagType" class="notice-tag">{{ item.tagText }}</el-tag>
+          <span class="notice-item-title">{{ item.title }}</span>
+          <span class="notice-item-date">{{ item.date }}</span>
         </div>
       </div>
 
@@ -39,7 +37,10 @@
 
 <script setup>
 import NoticeDetailView from './DetailView'
+import { ElMessageBox } from 'element-plus'
+import { parseTime } from '@/utils/ruoyi'
 import { listNoticeTop, markNoticeRead, markNoticeReadAll } from '@/api/system/notice'
+import { getCampusNoticeTop, readCampusNotice, readAllCampusNotice } from '@/api/campus/notice'
 
 const noticePopover = ref(null)
 const noticeList = ref([])
@@ -49,12 +50,48 @@ const noticeVisible = ref(false)
 const noticeLeaveTimer = ref(null)
 const { proxy } = getCurrentInstance()
 
-// 加载顶部公告列表
+// 校园淘消息类型 → 标签样式
+const CAMPUS_TAG = {
+  order: { text: '订单', type: 'warning' },
+  ship: { text: '发货', type: 'primary' },
+  aftersale: { text: '售后', type: 'danger' },
+  system: { text: '消息', type: 'info' }
+}
+
+// 加载顶部消息：系统公告（sys_notice）+ 校园淘消息（campus_notice，未读取前 5 条）
 function loadNoticeTop() {
   noticeLoading.value = true
-  listNoticeTop().then(res => {
-    noticeList.value = res.data || []
-    unreadCount.value = res.unreadCount !== undefined ? res.unreadCount : noticeList.value.filter(n => !n.isRead).length
+  Promise.all([
+    listNoticeTop().catch(() => ({ data: [], unreadCount: 0 })),
+    getCampusNoticeTop().catch(() => ({ data: { items: [], unreadCount: 0 } }))
+  ]).then(([sysRes, campusRes]) => {
+    const campusData = campusRes.data || {}
+    const campusItems = (campusData.items || []).map(n => {
+      const tag = CAMPUS_TAG[n.type] || CAMPUS_TAG.system
+      return {
+        key: 'c' + n.noticeId,
+        source: 'campus',
+        noticeId: n.noticeId,
+        tagText: tag.text,
+        tagType: tag.type,
+        title: n.title,
+        content: n.content,
+        date: parseTime(n.createTime),
+        isRead: n.isRead === 1
+      }
+    })
+    const sysItems = (sysRes.data || []).map(n => ({
+      key: 's' + n.noticeId,
+      source: 'system',
+      noticeId: n.noticeId,
+      tagText: n.noticeType === '1' ? '通知' : '公告',
+      tagType: n.noticeType === '1' ? 'warning' : 'success',
+      title: n.noticeTitle,
+      date: n.createTime,
+      isRead: !!n.isRead
+    }))
+    noticeList.value = [...campusItems, ...sysItems]
+    unreadCount.value = (sysRes.unreadCount || 0) + (campusData.unreadCount || 0)
   }).finally(() => {
     noticeLoading.value = false
   })
@@ -83,22 +120,32 @@ function onNoticeLeave() {
   noticeLeaveTimer.value = setTimeout(() => { noticeVisible.value = false }, 150)
 }
 
-// 预览公告详情
-function previewNotice(item) {
+// 点击消息：标记已读并查看内容
+function openNotice(item) {
   if (!item.isRead) {
-    markNoticeRead(item.noticeId).catch(() => {})
-    const idx = noticeList.value.indexOf(item)
+    if (item.source === 'campus') {
+      readCampusNotice(item.noticeId).catch(() => {})
+    } else {
+      markNoticeRead(item.noticeId).catch(() => {})
+    }
+    const idx = noticeList.value.findIndex(n => n.key === item.key)
     if (idx !== -1) noticeList.value[idx] = { ...item, isRead: true }
     unreadCount.value = Math.max(0, unreadCount.value - 1)
   }
-  proxy.$refs["noticeViewRef"].open(item.noticeId)
+  if (item.source === 'system') {
+    proxy.$refs["noticeViewRef"].open(item.noticeId)
+  } else {
+    ElMessageBox.alert(item.content || item.title, item.title || '校园淘消息', { confirmButtonText: '知道了' }).catch(() => {})
+  }
 }
 
-// 全部已读
+// 全部已读（系统公告 + 校园淘消息）
 function markAllRead() {
-  const ids = noticeList.value.map(n => n.noticeId).join(',')
-  if (!ids) return
-  markNoticeReadAll(ids).catch(() => {})
+  const sysIds = noticeList.value.filter(n => n.source === 'system').map(n => n.noticeId).join(',')
+  if (sysIds) {
+    markNoticeReadAll(sysIds).catch(() => {})
+  }
+  readAllCampusNotice().catch(() => {})
   noticeList.value = noticeList.value.map(n => ({ ...n, isRead: true }))
   unreadCount.value = 0
 }

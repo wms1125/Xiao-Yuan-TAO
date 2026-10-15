@@ -17,24 +17,28 @@
 
 ## 二、后端（CycloneDX）
 
-- 组件总数：**156**，其中 **150** 项带许可信息。
-- **覆盖度校验**：与发行 fat jar `ruoyi-admin.jar` 内 `BOOT-INF/lib` 的 **141** 个依赖 jar 逐一对照，未发现 BOM 缺失。
+- 组件总数：**166**，其中 **160** 项带许可信息。
+- **覆盖度校验**：与发行 fat jar `ruoyi-admin.jar` 内 `BOOT-INF/lib` 的 **149** 个依赖 jar 逐一对照，未发现 BOM 缺失。
 - 许可分布：
 
 | 许可 | 组件数 |
 |---|---|
-| Apache-2.0 | 126 |
+| Apache-2.0 | 135 |
 | MIT | 11 |
 | EPL-2.0 | 5 |
 | LGPL-2.1-only / LGPL-2.1-or-later | 3 / 2 |
 | GPL-2.0 with Classpath Exception | 3 |
 | BSD-3-Clause | 3 |
 | CDDL-1.1 | 1 |
+| (CDDL-1.0 OR GPL-2.0-with-classpath-exception) | 1 |
 | MIT-0 | 1 |
 | GPL-2.0 with Universal FOSS Exception | 1 |
+| BSD-2-Clause | 1 |
+| CC0-1.0 | 1 |
 | Public Domain | 1 |
-| UNKNOWN | 1 |
 | **未声明** | 6 |
+
+> 本次为 v1.0.5 重新生成：引入可观测性所需的 `spring-boot-starter-actuator` 及其传递依赖（`spring-boot-actuator`、`spring-boot-actuator-autoconfigure`、`micrometer-*` 等，均为 Apache-2.0），组件数 156 → 166。
 
 - **需关注项（均为可商用，但按规范应披露）**：
   - `GPL-2.0 with Classpath Exception` / `GPL-2.0 with Universal FOSS Exception`：MySQL Connector/J 等。类路径例外意味着以 jar 形式链接使用不触发传染，**可随闭源项目分发**。

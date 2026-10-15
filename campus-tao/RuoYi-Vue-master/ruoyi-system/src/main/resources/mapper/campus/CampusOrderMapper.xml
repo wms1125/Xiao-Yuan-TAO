@@ -16,6 +16,7 @@
         <result property="remark" column="remark"/>
         <result property="payTime" column="pay_time"/>
         <result property="shipTime" column="ship_time"/>
+        <result property="logisticsNo" column="logistics_no"/>
         <result property="finishTime" column="finish_time"/>
         <result property="cancelTime" column="cancel_time"/>
         <result property="createTime" column="create_time"/>
@@ -24,7 +25,7 @@
 
     <sql id="Base_Column_List">
         id, order_no, user_id, user_name, total_amount, status, receiver_name, receiver_phone,
-        address, remark, pay_time, ship_time, finish_time, cancel_time, create_time, update_time
+        address, remark, pay_time, ship_time, logistics_no, finish_time, cancel_time, create_time, update_time
     </sql>
 
     <insert id="insertCampusOrder" parameterType="com.ruoyi.campus.domain.CampusOrder" useGeneratedKeys="true" keyProperty="id">
@@ -44,6 +45,7 @@
             <if test="remark != null">remark = #{remark},</if>
             <if test="payTime != null">pay_time = #{payTime},</if>
             <if test="shipTime != null">ship_time = #{shipTime},</if>
+            <if test="logisticsNo != null">logistics_no = #{logisticsNo},</if>
             <if test="finishTime != null">finish_time = #{finishTime},</if>
             <if test="cancelTime != null">cancel_time = #{cancelTime},</if>
         </set>
@@ -71,4 +73,17 @@
     <select id="countByUserId" resultType="int">
         select count(1) from campus_order where user_id = #{userId}
     </select>
+
+    <!-- 超时未支付订单：仅取待付款(0)且创建时间早于 deadline -->
+    <select id="selectTimeoutWaitPayOrders" resultMap="CampusOrderResult">
+        select <include refid="Base_Column_List"/> from campus_order
+        where status = 0 and create_time &lt; #{deadline}
+        order by create_time asc
+    </select>
+
+    <!-- 原子取消：仅当仍为待付款时才置为已取消，避免与用户支付/取消并发冲突 -->
+    <update id="cancelWaitPayOrderIfStillWaitPay">
+        update campus_order set status = 4, cancel_time = #{cancelTime}
+        where order_no = #{orderNo} and status = 0
+    </update>
 </mapper>

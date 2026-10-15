@@ -2,11 +2,38 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~007`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~008`，里程碑文档见 `campus-tao/M1~M5`。
 
 ## [未发布]
 - 依赖漏洞（CVE）扫描（`npm audit` / OWASP Dependency-Check）尚未接入；当前 SBOM 仅覆盖许可合规。首次 `npm audit` 提示 16 项告警（5 moderate / 11 high），待专项治理。
-- 可观测性（健康检查、关键操作审计）与运营侧能力（订单超时自动取消、物流单号、站内通知等）。
+- 运营侧能力仍有可扩展项：短信/邮件外呼通道未接入（站内通知已落地）、物流轨迹查询未对接第三方承运商（当前仅记录单号）。
+
+## [1.0.5] - 2026-10-15
+
+可观测性与运营侧能力建设：接入 Actuator 健康检查、关键操作审计留痕，并补齐订单超时自动取消、物流单号、站内通知三项运营能力。
+
+### 新增
+- **可观测性（Actuator）**：`ruoyi-admin` 引入 `spring-boot-starter-actuator`（4.1.0）。`/actuator/health`（含 `liveness`/`readiness` 分组）与 `/actuator/info`（应用名、描述、版本）匿名开放；`/actuator/env`、`/actuator/beans` 等敏感端点默认关闭（实测返回 401）。`show-details: never`，不对外暴露组件细节。
+- **关键操作审计**：校园淘全部写接口补 `@Log` 注解——下单/支付/取消/发货/收货、售后申请与审核、充值、商品增删改与上下架；操作留痕自动写入框架 `sys_oper_log`，可按「系统管理 → 操作日志」检索（实测日志标题已出现「校园淘订单 / 校园淘商品 / 校园淘账户」）。
+- **运营能力 · 订单超时自动取消**：新增 Quartz 任务 `campusOrderTask.autoCancelTimeoutOrder`（`sys_job` job_id=100，每分钟扫描一次，超时阈值 `campus.order.pay-timeout-minutes`，默认 30 分钟，可用环境变量 `CAMPUS_PAY_TIMEOUT_MINUTES` 覆盖）。取消动作使用原子 UPDATE（仅 `status=0` 才置为已取消），随后回补库存并向买家推送站内通知；已支付订单不受影响，重复执行幂等。
+- **运营能力 · 物流单号**：`campus_order` 新增 `logistics_no`。发货接口支持录入（`POST /campus/order/ship/{orderNo}?logisticsNo=`），订单详情展示物流单号；前端发货交互由「二次确认弹窗」升级为「录入物流单号的提示弹窗」。
+- **运营能力 · 站内通知**：新增 `campus_notice` 表与 `/campus/notice/**` 接口（`top` / `list` / `unreadCount` / `read/{id}` / `readAll`）。下单、发货、售后审核结果、订单自动取消四类事件均向买家推送消息；顶部铃铛由「仅系统公告」升级为「系统公告 + 校园淘消息合并展示」（消息类型以标签区分：订单/发货/售后/消息），未读数为两者之和。消息按登录态隔离：未登录访问返回 401，标记已读限定本人（实测他人消息不可代标记）。
+- `sql/migration-v1.0.5.sql`：面向**已建库**的增量迁移脚本（新增物流单号列、建 `campus_notice` 表、注册定时任务）；交付包全量脚本 `sql/campus_tao_full.sql` 已同步为唯一建库源。
+
+### 修复
+- **系统监控 → 缓存监控页整页 500**：发行包内嵌的 Windows 版 `redis-server`，其 `INFO` 输出包含自身可执行文件的完整路径（形如 `C 盘 Users 目录下的 redis-server-*.exe`）。Lettuce 读取 `INFO` 后交由 `java.util.Properties.load` 解析，反斜杠被当作 Unicode 转义，抛出 `Malformed unicode encoding`，使 `/monitor/cache` 返回 500 且前端弹出「Cannot read Redis info」。`CacheController.getInfo()` 改为捕获异常后降级返回空统计，页面恢复可渲染。
+- **`/actuator/health` 误报 DOWN**：Redis 健康指示器在同样的 `INFO` 解析问题下会把整体健康状态判为 DOWN。已显式关闭该指示器（`management.health.redis.enabled=false`，并在配置中注明原因）；Redis 连通性由业务链路（验证码、登录令牌、字典/参数缓存）实际验证，进程无 Redis 时应用启动即失败，不会静默降级。
+
+### 变更
+- `ruoyi-quartz/pom.xml` 新增对 `ruoyi-system` 的依赖，用于承载校园淘业务定时任务（`ruoyi-system` 仅依赖 `ruoyi-common`，无循环依赖）。
+- 定时任务按框架约定置于 `com.ruoyi.quartz.task` 包（命中 `Constants.JOB_WHITELIST_STR` 白名单），可直接在「系统监控 → 定时任务」界面维护、启停与手工触发。
+
+### 验证
+- **离线重建**：`verify.bat` 以 `-o` 强制离线执行 5 步校验 → 后端 `clean package` BUILD SUCCESS、后端单测 15/15、前端单测 **41/41**（新增 4 例站内通知接口用例）、前端 `build:prod` 通过，末行 `ALL PASS`。
+- **端到端回归**：`e2e_business.py` 全链路 `RESULT: ALL_PASS`（双账号、资金与库存回滚、防超卖、越权拦截均保持通过），并新增断言：物流单号随发货落库并在详情可见、发货触发买家站内通知、本人可标记已读、未登录访问通知接口被拒(401)、关键操作已写入 `sys_oper_log`。
+- **超时自动取消专项**（SQL 辅助脚手架，非交付物）：构造未支付订单 → 回拨创建时间 → **不调用任何手动触发接口，等待调度器自动执行**，51 秒内订单自动置为已取消(4)、库存由 3 回补至 4、买家收到「订单已自动取消」通知；重复执行不重复回补（幂等）；已支付订单保持 status=1 不受影响。
+- **前端 UI 实测**（Playwright，Chromium）：admin 登录 → 订单列表 4 行正常渲染 → 对「已付款」订单点击发货并录入 `SF999888777` → 提示「已发货」、行状态变「已发货」、详情弹窗 `物流单号 = SF999888777`（与库中记录一致）；顶部铃铛未读徽标 4，下拉标题「消息通知」，条目含「消息/通知/公告」标签；`/monitor/cache` 正常渲染且无 Redis 报错；全程 `pageerror` 为空。
+- **SBOM 同步**：后端 CycloneDX 由 156 → **166** 组件（新增 actuator/micrometer 等 10 项），与发行 jar 内 `BOOT-INF/lib` 的 **149** 个依赖 jar 逐一对照无缺失；无 AGPL/SSPL 强传染组件。前端依赖未变动。
 
 ## [1.0.4] - 2026-10-15
 

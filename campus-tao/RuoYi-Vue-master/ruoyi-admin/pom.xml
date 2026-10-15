@@ -30,6 +30,12 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
 
+        <!-- 可观测性：健康检查 / 应用信息（Actuator） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
          <!-- Mysql驱动包 -->
         <dependency>
             <groupId>com.mysql</groupId>

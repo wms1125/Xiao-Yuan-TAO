@@ -23,6 +23,8 @@ public class CampusOrder implements Serializable {
     private String remark;
     private Date payTime;
     private Date shipTime;
+    /** 物流单号（发货时录入） */
+    private String logisticsNo;
     private Date finishTime;
     private Date cancelTime;
     private Date createTime;
@@ -55,6 +57,8 @@ public class CampusOrder implements Serializable {
     public void setPayTime(Date payTime) { this.payTime = payTime; }
     public Date getShipTime() { return shipTime; }
     public void setShipTime(Date shipTime) { this.shipTime = shipTime; }
+    public String getLogisticsNo() { return logisticsNo; }
+    public void setLogisticsNo(String logisticsNo) { this.logisticsNo = logisticsNo; }
     public Date getFinishTime() { return finishTime; }
     public void setFinishTime(Date finishTime) { this.finishTime = finishTime; }
     public Date getCancelTime() { return cancelTime; }

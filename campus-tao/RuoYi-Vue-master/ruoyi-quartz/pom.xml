@@ -29,6 +29,12 @@
             <artifactId>ruoyi-common</artifactId>
         </dependency>
 
+        <!-- 校园淘业务任务需要调用 campus 服务（ruoyi-system 仅依赖 ruoyi-common，无循环依赖） -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-system</artifactId>
+        </dependency>
+
     </dependencies>
 
 </project>

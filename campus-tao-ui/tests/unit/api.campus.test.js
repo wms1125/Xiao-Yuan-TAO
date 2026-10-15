@@ -7,6 +7,7 @@ import request from '@/utils/request'
 import { listOrder, getOrder, createOrder, payOrder, shipOrder, finishOrder } from '@/api/campus/order'
 import { listProduct, getProduct, addProduct, updateProduct, delProduct, changeProductStatus } from '@/api/campus/product'
 import { listCart, addCart, updateCartQty, checkCart, delCart } from '@/api/campus/cart'
+import { listCampusNotice, getCampusNoticeTop, getCampusNoticeUnreadCount, readCampusNotice, readAllCampusNotice } from '@/api/campus/notice'
 
 const lastCall = () => request.mock.calls[request.mock.calls.length - 1][0]
 
@@ -18,18 +19,24 @@ describe('校园淘 - 订单接口', () => {
     expect(lastCall()).toEqual({ url: '/campus/order/list', method: 'get', params: { status: '1' } })
   })
 
-  it('详情/支付/发货/收货以订单号为路径参数', () => {
+  it('详情/支付/收货以订单号为路径参数', () => {
     getOrder('CT20241015001')
     expect(lastCall()).toEqual({ url: '/campus/order/CT20241015001', method: 'get' })
 
     payOrder('CT20241015001')
     expect(lastCall()).toEqual({ url: '/campus/order/pay/CT20241015001', method: 'post' })
 
-    shipOrder('CT20241015001')
-    expect(lastCall()).toEqual({ url: '/campus/order/ship/CT20241015001', method: 'post' })
-
     finishOrder('CT20241015001')
     expect(lastCall()).toEqual({ url: '/campus/order/finish/CT20241015001', method: 'post' })
+  })
+
+  it('发货为 POST /campus/order/ship/{orderNo} 并携带物流单号', () => {
+    shipOrder('CT20241015001', 'SF1234567890')
+    expect(lastCall()).toEqual({
+      url: '/campus/order/ship/CT20241015001',
+      method: 'post',
+      params: { logisticsNo: 'SF1234567890' }
+    })
   })
 
   it('下单为 POST /campus/order/create 且携带 data', () => {
@@ -88,5 +95,30 @@ describe('校园淘 - 购物车接口', () => {
 
     delCart('1')
     expect(lastCall()).toEqual({ url: '/campus/cart/1', method: 'delete' })
+  })
+})
+
+describe('校园淘 - 站内通知接口', () => {
+  beforeEach(() => request.mockClear())
+
+  it('列表 GET /campus/notice/list 透传已读筛选', () => {
+    listCampusNotice({ isRead: 0 })
+    expect(lastCall()).toEqual({ url: '/campus/notice/list', method: 'get', params: { isRead: 0 } })
+  })
+
+  it('铃铛聚合与未读数接口为 GET', () => {
+    getCampusNoticeTop()
+    expect(lastCall()).toEqual({ url: '/campus/notice/top', method: 'get' })
+
+    getCampusNoticeUnreadCount()
+    expect(lastCall()).toEqual({ url: '/campus/notice/unreadCount', method: 'get' })
+  })
+
+  it('标记已读以通知ID为路径参数，全部已读为 POST /readAll', () => {
+    readCampusNotice(12)
+    expect(lastCall()).toEqual({ url: '/campus/notice/read/12', method: 'post' })
+
+    readAllCampusNotice()
+    expect(lastCall()).toEqual({ url: '/campus/notice/readAll', method: 'post' })
   })
 })
