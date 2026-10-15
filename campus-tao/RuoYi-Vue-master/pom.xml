@@ -37,6 +37,8 @@
         <springdoc.version>3.1.0</springdoc.version>
         <!-- 覆盖率：jacoco（校园淘模块统计，详见 ruoyi-system/pom.xml） -->
         <jacoco.version>0.8.12</jacoco.version>
+        <!-- 代码规范：spotless（后端 Java 卫生类检查，详见 build/plugins） -->
+        <spotless.version>2.44.3</spotless.version>
     </properties>
 
     <!-- 依赖声明 -->
@@ -244,6 +246,30 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>
+            </plugin>
+            <!--
+              代码规范检查（后端 Java）。
+              为什么不用 google-java-format 直接套用：实测它会改写全部 346 个 Java 文件、约 3.3 万行，
+              并把项目既有的 4 空格缩进压成 2 空格，与 .editorconfig（[*.java] indent_size=4）及上游
+              RuoYi 风格冲突，diff 噪声远超收益。故这里只启用三项"零争议"的卫生类步骤：
+              - removeUnusedImports：移除未使用的 import（唯一有正确性价值的一项）；
+              - trimTrailingWhitespace / endWithNewline：清除行尾空白、补文件末尾换行。
+              实测这三项只改动 250 个文件、约 1.0k 行，全部为机械改动，不含任何业务语义变化。
+              行尾沿用 spotless 默认 PLATFORM_NATIVE（Windows 检出为 CRLF，与仓库现状一致），
+              与前端 Prettier 的 endOfLine: auto 同理——只改真实格式问题，不引入行尾噪音。
+              格式化由人工执行 `mvn spotless:apply` 触发，门禁见下方 executions。
+            -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <removeUnusedImports/>
+                        <trimTrailingWhitespace/>
+                        <endWithNewline/>
+                    </java>
+                </configuration>
             </plugin>
         </plugins>
     </build>

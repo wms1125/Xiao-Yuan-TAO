@@ -11,7 +11,7 @@ import com.ruoyi.common.constant.Constants;
 
 /**
  * 资源文件配置加载
- * 
+ *
  * @author ruoyi
  */
 @Configuration

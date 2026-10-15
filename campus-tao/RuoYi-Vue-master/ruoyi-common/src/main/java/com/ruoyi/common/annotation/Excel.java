@@ -11,7 +11,7 @@ import com.ruoyi.common.utils.poi.ExcelHandlerAdapter;
 
 /**
  * 自定义导出Excel数据注解
- * 
+ *
  * @author ruoyi
  */
 @Retention(RetentionPolicy.RUNTIME)
@@ -85,7 +85,7 @@ public @interface Excel
     public String prompt() default "";
 
     /**
-     * 是否允许内容换行 
+     * 是否允许内容换行
      */
     public boolean wrapText() default false;
 

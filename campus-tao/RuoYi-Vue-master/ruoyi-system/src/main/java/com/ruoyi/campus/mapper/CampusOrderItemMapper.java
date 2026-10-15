@@ -2,7 +2,6 @@ package com.ruoyi.campus.mapper;
 
 import com.ruoyi.campus.domain.CampusOrderItem;
 import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 

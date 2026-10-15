@@ -18,7 +18,7 @@ import com.ruoyi.common.utils.uuid.Seq;
 
 /**
  * 文件上传工具类
- * 
+ *
  * @author ruoyi
  */
 public class FileUploadUtils
@@ -105,7 +105,7 @@ public class FileUploadUtils
     {
         return upload(baseDir, file, allowedExtension, false);
     }
-    
+
     /**
      * 文件上传
      *
@@ -244,7 +244,7 @@ public class FileUploadUtils
 
     /**
      * 获取文件名的后缀
-     * 
+     *
      * @param file 表单文件
      * @return 后缀名
      */

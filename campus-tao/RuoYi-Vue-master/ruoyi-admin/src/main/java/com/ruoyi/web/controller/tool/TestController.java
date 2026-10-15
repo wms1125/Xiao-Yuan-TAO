@@ -34,7 +34,7 @@ public class TestController extends BaseController
         users.put(1, new UserEntity(1, "admin", "admin123", "15888888888"));
         users.put(2, new UserEntity(2, "ry", "admin123", "15666666666"));
     }
-    
+
     @Operation(summary = "获取用户列表")
     @GetMapping("/list")
     public R<List<UserEntity>> userList()
@@ -42,7 +42,7 @@ public class TestController extends BaseController
         List<UserEntity> userList = new ArrayList<UserEntity>(users.values());
         return R.ok(userList);
     }
-    
+
     @Operation(summary = "获取用户详细")
     @GetMapping("/{userId}")
     public R<UserEntity> getUser(@PathVariable(name = "userId")
@@ -57,7 +57,7 @@ public class TestController extends BaseController
             return R.fail("用户不存在");
         }
     }
-    
+
     @Operation(summary = "新增用户")
     @PostMapping("/save")
     public R<String> save(UserEntity user)
@@ -69,7 +69,7 @@ public class TestController extends BaseController
         users.put(user.getUserId(), user);
         return R.ok();
     }
-    
+
     @Operation(summary = "更新用户")
     @PutMapping("/update")
     public R<String> update(@RequestBody
@@ -87,7 +87,7 @@ public class TestController extends BaseController
         users.put(user.getUserId(), user);
         return R.ok();
     }
-    
+
     @Operation(summary = "删除用户信息")
     @DeleteMapping("/{userId}")
     public R<String> delete(@PathVariable(name = "userId")
@@ -110,21 +110,21 @@ class UserEntity
 {
     @Schema(title = "用户ID")
     private Integer userId;
-    
+
     @Schema(title = "用户名称")
     private String username;
-    
+
     @Schema(title = "用户密码")
     private String password;
-    
+
     @Schema(title = "用户手机")
     private String mobile;
-    
+
     public UserEntity()
     {
-        
+
     }
-    
+
     public UserEntity(Integer userId, String username, String password, String mobile)
     {
         this.userId = userId;
@@ -132,42 +132,42 @@ class UserEntity
         this.password = password;
         this.mobile = mobile;
     }
-    
+
     public Integer getUserId()
     {
         return userId;
     }
-    
+
     public void setUserId(Integer userId)
     {
         this.userId = userId;
     }
-    
+
     public String getUsername()
     {
         return username;
     }
-    
+
     public void setUsername(String username)
     {
         this.username = username;
     }
-    
+
     public String getPassword()
     {
         return password;
     }
-    
+
     public void setPassword(String password)
     {
         this.password = password;
     }
-    
+
     public String getMobile()
     {
         return mobile;
     }
-    
+
     public void setMobile(String mobile)
     {
         this.mobile = mobile;

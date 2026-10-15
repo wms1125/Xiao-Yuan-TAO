@@ -13,7 +13,7 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 
 /**
  * Swagger2的接口配置
- * 
+ *
  * @author ruoyi
  */
 @Configuration
@@ -22,7 +22,7 @@ public class SwaggerConfig
     /** 系统基础配置 */
     @Autowired
     private RuoYiConfig ruoyiConfig;
-    
+
     /**
      * 自定义的 OpenAPI 对象
      */
@@ -35,7 +35,7 @@ public class SwaggerConfig
             .addSecurityItem(new SecurityRequirement().addList("apikey"))
             .info(getApiInfo());
     }
-    
+
     @Bean
     public SecurityScheme securityScheme()
     {
@@ -45,7 +45,7 @@ public class SwaggerConfig
             .in(SecurityScheme.In.HEADER)
             .scheme("Bearer");
     }
-    
+
     /**
      * 添加摘要信息
      */
