@@ -51,27 +51,26 @@
 
 ## 三、前端
 
-- 包总数：**398**（含嵌套重复版本）。
+- 包总数：**243**（含嵌套重复版本）。
 - 许可分布：
 
 | 许可 | 包数 |
 |---|---|
-| MIT | 345 |
-| ISC | 21 |
-| BSD-2-Clause | 12 |
-| BSD-3-Clause | 7 |
+| MIT | 208 |
+| ISC | 17 |
 | Apache-2.0 | 6 |
-| BlueOak-1.0.0 | 5 |
-| CC0-1.0 | 1 |
+| BSD-3-Clause | 6 |
+| BlueOak-1.0.0 | 4 |
+| BSD-2-Clause | 1 |
 | 0BSD | 1 |
 | **UNKNOWN** | **0** |
 | **copyleft（GPL/AGPL/LGPL/MPL 等）** | **0** |
 
 - 结论：**全部为宽松许可，无未知许可、无 copyleft 组件**，前端依赖不构成许可风险。
-- v1.0.6 重新生成：升级 `vue/unplugin-auto-import/vite/js-cookie/axios/echarts` 并加入 `overrides` 后，
-  包总数由 461 降至 398（`unplugin-auto-import` 0.18 → 21 的依赖树大幅精简），许可结构不变。
+- 包总数变更轨迹：**461**（v1.0.5）→ **398**（v1.0.6，`unplugin-auto-import` 0.18 → 21 依赖树精简）
+  → **243**（v1.0.9，移除 `vite-plugin-svg-icons` 整条传递链），许可结构不变。
 
-## 四、依赖漏洞（CVE）扫描结果（v1.0.6）
+## 四、依赖漏洞（CVE）扫描结果（v1.0.9）
 
 扫描工具：`npm audit`（前端，基于 npm registry 通告）与 `osv-scanner` v2.7.0 `scan source -S backend-bom.cdx.json`（后端，基于 OSV/GHSA 数据库，需联网）。
 
@@ -97,23 +96,30 @@
 | 阶段 | 告警总数 | 严重度构成 |
 |---|---|---|
 | 治理前 | 16 | 11 high / 5 moderate |
-| 治理后（`npm audit`） | **5** | 5 high |
-| 治理后（`npm audit --omit=dev`，**生产依赖树**） | **0** | — |
+| v1.0.6 治理后（`npm audit`） | 5 | 5 high（全在构建期 devDependencies） |
+| v1.0.6 治理后（`npm audit --omit=dev`，**生产依赖树**） | **0** | — |
+| **v1.0.9 治理后（`npm audit` 全量）** | **0** | — |
 
-治理动作：
+v1.0.6 治理动作：
 - 运行时依赖升级：`axios` 1.13.2→1.20.0、`vue` 3.5.26→3.5.44、`js-cookie` 3.0.5→3.0.8、`echarts` 5.6.0→6.1.0。
 - 构建期工具链升级：`vite` 6.4.1→6.4.4、`unplugin-auto-import` 0.18.6→21.1.0。
-- 传递依赖收敛：`overrides` 固定 `postcss` 8.5.30、`micromatch` 4.0.8、`braces` 3.0.3、`fast-glob` 3.3.3。
-- 显式声明 `fast-glob` 为 devDependency：`vite-plugin-svg-icons` 未在自身 `package.json` 声明该依赖（幽灵依赖），
-  升级 `unplugin-auto-import` 后原先的提升安装消失，导致 `vite build` 报 `Cannot find package 'fast-glob'`，故显式补齐。
+- 传递依赖收敛：`overrides` 固定 `postcss` 8.5.30。
 
-残余 5 项（`braces` / `micromatch` / `svg-baker` / `vite-plugin-svg-icons` / `fast-glob`）**已接受并记录为残余风险**，理由：
-1. 全部位于 `devDependencies` 构建链路（SVG 图标生成），**不进入运行时产物**（生产构建输出为预编译静态文件）；
-2. 输入为**可信源码**（`src/icons` 下的自家 SVG），非外部用户可控数据；
-3. 根因是 `braces` 的 ReDoS 通告在 OSV/npm 中**至今无已修复版本**（`RANGE=*`，最新 3.0.3 仍命中），属上游无补丁而非本项目遗漏；
-4. npm 给出的"修复方案"是把 `vite-plugin-svg-icons` 由 2.0.1 **降级到 0.1.0**（假修复），会破坏图标管线，**明确不采纳**。
+v1.0.6 的剩余 5 项与 v1.0.9 的处置：
+1. 剩余 5 项为 `braces` / `micromatch` / `svg-baker` / `vite-plugin-svg-icons` / `fast-glob`，**全部位于 `devDependencies` 构建链路**（SVG 图标 sprite 生成），不进入运行时产物（生产构建输出为预编译静态文件）；
+2. 依赖路径实测为 `vite-plugin-svg-icons@2.0.1 → svg-baker@1.7.0 → micromatch@4.0.8 → braces@3.0.3`（另 `fast-glob@3.3.3 → micromatch` 同源），
+   根因是 `braces` 命中 `GHSA-vfj7-8cjw-p6xm`（深层嵌套模式的栈耗尽拒绝服务，影响区间 `<=3.0.3`）；
+   `npm view braces dist-tags` 实测 **latest 仍为 3.0.3**，即**上游尚无补丁版本**，`overrides` 无法修复；
+3. npm 给出的"修复方案"是把 `vite-plugin-svg-icons` 由 2.0.1 **降级到 0.1.0**（假修复），会破坏图标管线，**不采纳**；
+4. v1.0.9 采用**移除依赖链**而非"接受残余风险"：以自研零依赖插件 `campus-tao-ui/vite/plugins/svg-icon.js`
+   取代 `vite-plugin-svg-icons`（继续提供 `virtual:svg-icons-register`，`#icon-{iconClass}` 契约与页面代码零改动），
+   同时删除 `fast-glob` 显式依赖与相应的 `micromatch` / `braces` / `fast-glob` 三条 `overrides`；
+5. 处置后 `npm ls braces micromatch fast-glob svg-baker vite-plugin-svg-icons` 实测为**空**（链路整体消失），
+   `npm audit` 全量 **0** 项、`npm audit --omit=dev` **0** 项；生产依赖树 167 个包未受任何影响。
 
-> 可选替代（未实施）：以 `unplugin-icons` 替换 `vite-plugin-svg-icons`，可彻底移除该链路。
+> 代价（如实记录）：自研插件未内置 SVG 压缩（原链路的 `svgo`），90 个图标的 sprite 实测 **106.9 KB**（gzip **39.2 KB**），
+> 较原链路（svgo 压缩后 86.5 KB / gzip 32.5 KB）增约 20 KB、gzip 后增约 7 KB，
+> 换掉了 6 个传递依赖与 5 项 high 告警。交付取舍为：**优先消除依赖面与告警**，体积增量可接受。
 
 ## 五、已知缺口（如实记录）
 
@@ -136,9 +142,11 @@ osv-scanner scan source -S backend-bom.cdx.json
 rem 前端清单（离线，扫描 node_modules）
 python tools\sbom-frontend.py
 
-rem 前端漏洞扫描（生产依赖树）
+rem 前端漏洞扫描（全量 + 生产依赖树）
+rem 注意：npmmirror 镜像未实现 /-/npm/v1/security/* 接口，必须显式指定官方 registry
 cd campus-tao-ui
-npm audit --omit=dev
+npm audit --registry=https://registry.npmjs.org
+npm audit --omit=dev --registry=https://registry.npmjs.org
 ```
 
 前端扫描脚本见 `tools/sbom-frontend.py`，与本文件同批交付。

@@ -2,10 +2,31 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~011`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~012`，里程碑文档见 `campus-tao/M1~M5`。
 
-## [未发布]
-- 前端构建链路仍有 5 项 high 告警（根因 `braces` 上游无补丁版本），已判定为**可接受的残余风险**并记录判定依据，详见 `campus-tao/sbom/SBOM.md` 第四.4.2 节；可选替代方案为以 `unplugin-icons` 替换 `vite-plugin-svg-icons`（未实施）。
+## [1.0.9] - 2026-10-15
+
+前端构建链路告警清零：v1.0.6 曾把前端 16 项告警压到 5 项 high，剩余 5 项全部来自 `vite-plugin-svg-icons` 的 SVG 图标 sprite 链路（`→ svg-baker → micromatch → braces`），根因 `braces` 上游无补丁版本，当时判定为"可接受的残余风险"。本次不再接受，改为**移除该依赖链**，前端 `npm audit` 全量归零。
+
+### 变更
+- **SVG 图标插件自研替换**：`campus-tao-ui/vite/plugins/svg-icon.js` 重写为**零第三方依赖**的 sprite 插件（仅用 Node `fs`/`path`），
+  继续提供 `virtual:svg-icons-register`，仍把 `src/assets/icons/svg` 下全部 SVG 拼为 `<symbol id="icon-{name}">` 注入 body 的隐藏容器，
+  `SvgIcon` 组件与全部页面用的 `#icon-{iconClass}` 契约**零改动**（103 处用法、22 个文件不受影响）；另附 `configureServer` 监听 SVG 增删改触发整页刷新，保留原插件的开发体验。
+- **依赖移除**：`package.json` 删除 `vite-plugin-svg-icons` 2.0.1 与其幽灵依赖 `fast-glob` 3.3.3，
+  并删除随之失效的 `overrides`（`micromatch` 4.0.8、`braces` 3.0.3、`fast-glob` 3.3.3），仅保留 `quill` / `postcss` 两条。
+- 后端 `info.app.version` 更新为 `1.0.9`。
+
+### 修复
+- **构建期 high 告警清零**：`npm audit` 由 5 项 high（`braces` / `micromatch` / `svg-baker` / `vite-plugin-svg-icons` / `fast-glob`）降为 **0** 项；`npm audit --omit=dev` 生产依赖树保持 **0** 项。实测 `npm ls braces micromatch fast-glob svg-baker vite-plugin-svg-icons` 为空——整条链路从依赖树中消失。
+- 之前 npm 给出的"修复"是把 `vite-plugin-svg-icons` 降级到 0.1.0（假修复，会破坏图标管线），本次以替换实现的方式规避，未做任何降级。
+
+### 验证
+- **漏洞扫描**（`npm audit`，官方 registry）：全量 **0** 项（0 告警）；`--omit=dev` **0** 项。作为对照，处置前同一命令为 5 项 high。
+- **图标渲染实测**（Playwright，Chromium，headless）：登录页 sprite 容器 `__svg__icons__dom__` 存在且含 **90** 个 `<symbol>`；`#icon-user` 实际渲染 **15×15 px**、`use.getBBox()` 为 **15×15**（确证 symbol 内容被正确引用而非空引用）；登录 `admin/admin123` 后共 **39** 个 `svg-icon` 实例，其中侧边栏可见图标 `#icon-dashboard` / `#icon-system` 渲染 **14×14 px** 且 `getBBox` 非零；**console error 0 条、失败请求 0 条**；截图核对侧边栏与顶栏图标均正常显示。
+- **交付前校验**：`verify.bat` 离线 5 步 **ALL PASS**（后端 `clean package` BUILD SUCCESS、后端单测 **23/23**、前端单测 **44/44**、前端 `build:prod` 通过），退出码 0；重启后端后 `/actuator/health` = **UP**、`/actuator/info` 版本 = **1.0.9**。
+- **SBOM 同步**：前端包总数 **398 → 243**（-155，即移除的整条链路及其传递依赖），许可分布仍为全宽松、**0** 未知许可、**0** copyleft；`frontend-dependencies.csv` 已重新生成。
+- **产物体积如实记录**：自研插件未内置 `svgo` 压缩，90 个图标的 sprite 实测 **106.9 KB**（gzip **39.2 KB**），
+  较原链路（svgo 压缩后 **86.5 KB** / gzip 32.5 KB）增约 **20 KB**、gzip 后增约 **7 KB**。取舍是"以可接受的体积增量换取依赖面收敛与告警清零"。
 
 ## [1.0.8] - 2026-10-15
 

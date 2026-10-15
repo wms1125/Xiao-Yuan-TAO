@@ -38,21 +38,16 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "5.2.4",
-    "fast-glob": "3.3.3",
     "sass": "1.80.6",
     "unplugin-auto-import": "21.1.0",
     "unplugin-vue-setup-extend-plus": "1.0.1",
     "vite": "6.4.4",
     "vite-plugin-compression": "0.5.1",
-    "vite-plugin-svg-icons": "2.0.1",
     "vitest": "4.1.11"
   },
   "overrides": {
     "quill": "2.0.2",
-    "postcss": "8.5.30",
-    "micromatch": "4.0.8",
-    "braces": "3.0.3",
-    "fast-glob": "3.3.3"
+    "postcss": "8.5.30"
   },
   "resolutions": {
     "quill": "2.0.2"
