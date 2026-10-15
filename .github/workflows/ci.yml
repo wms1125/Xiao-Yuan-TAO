@@ -1,8 +1,9 @@
 name: CI
 
 # 说明：
-# - 后端 job 覆盖「可编译 + 单元测试 + 覆盖率门禁」：一条 `mvn verify` 即完成
-#   package → test → jacoco report/check（行 ≥35%、分支 ≥18%，阈值为棘轮基线）。
+# - 后端 job 覆盖「可编译 + 单元测试 + 覆盖率门禁 + 代码规范门禁」：一条 `mvn verify`
+#   即完成 package → test → jacoco report/check（行 ≥35%、分支 ≥18%，棘轮基线）
+#   → spotless:check（后端 Java 卫生类检查，详见根 pom 注释）。
 # - 前端 job 覆盖「静态检查 + 单测 + 覆盖率门禁 + 可构建」：npm ci 保证依赖与
 #   package-lock.json 一致；prettier --check 与 eslint 先行，任一步失败即中止。
 # - 静态检查口径：Prettier 只校验不改写；ESLint 要求 0 error（warn 不阻断）。
@@ -38,9 +39,9 @@ jobs:
             campus-tao/RuoYi-Vue-master/pom.xml
             campus-tao/RuoYi-Vue-master/*/pom.xml
 
-      # verify = clean package + test + jacoco:report + jacoco:check
-      # 覆盖率不达标时该步骤直接失败，构建产物不会上传。
-      - name: 构建 · 测试 · 覆盖率门禁（mvn -B verify）
+      # verify = clean package + test + jacoco:report/check + spotless:check
+      # 覆盖率或代码规范不达标时该步骤直接失败，构建产物不会上传。
+      - name: 构建 · 测试 · 覆盖率与代码规范门禁（mvn -B verify）
         run: mvn -B verify
 
       - name: 上传后端构建产物

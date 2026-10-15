@@ -7,7 +7,7 @@ echo ============================================================
 echo   校园淘 交付前校验（CI 的本地等价脚本）
 echo     1) 预检：发行 jar 是否被占用
 echo     2) 后端 mvn -B -DskipTests clean package
-echo     3) 后端 mvn -B verify（单元测试 + jacoco 覆盖率门禁）
+echo     3) 后端 mvn -B verify（单元测试 + jacoco 覆盖率门禁 + spotless 代码规范门禁）
 echo     4) 前端静态检查（prettier --check + eslint）
 echo     5) 前端 npm run test:coverage（vitest + v8 覆盖率门禁）
 echo     6) 前端 npm run build:prod
@@ -74,9 +74,10 @@ if /i "%LOCKED%"=="locked" (
     call "%MVN%" %MVN_ARGS% -B -DskipTests clean package
     if errorlevel 1 (set "FAIL=1" & echo [失败] 后端打包) else (echo [通过] 后端打包)
     echo.
-    echo ---- [3/6] 后端单元测试 + 覆盖率门禁（mvn verify；无 MySQL 时 JDBC 用例自动跳过）----
+    echo ---- [3/6] 后端单元测试 + 覆盖率 + 代码规范门禁（mvn verify；spotless:check 绑定 verify 阶段，无 MySQL 时 JDBC 用例自动跳过）----
+    rem 代码规范不达标时同样会使本步失败；修复命令：mvn spotless:apply（仅后端目录）
     call "%MVN%" %MVN_ARGS% -B verify
-    if errorlevel 1 (set "FAIL=1" & echo [失败] 后端单元测试/覆盖率门禁) else (echo [通过] 后端单元测试/覆盖率门禁)
+    if errorlevel 1 (set "FAIL=1" & echo [失败] 后端单元测试/覆盖率/代码规范门禁) else (echo [通过] 后端单元测试/覆盖率/代码规范门禁)
     popd
   )
 )

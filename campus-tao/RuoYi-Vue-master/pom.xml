@@ -270,6 +270,21 @@
                         <endWithNewline/>
                     </java>
                 </configuration>
+                <executions>
+                    <!--
+                      门禁绑定 verify 阶段，与本仓库 jacoco:check 的绑定方式一致：
+                      任何一次 `mvn verify`（含 CI 的 mvn -B verify）都会在测试与覆盖率之后
+                      校验代码规范，不达标即构建失败。格式化（apply）刻意不绑定生命周期，
+                      避免"边构建边改源码"掩盖问题；需要修复时人工执行 `mvn spotless:apply`。
+                    -->
+                    <execution>
+                        <id>spotless-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
