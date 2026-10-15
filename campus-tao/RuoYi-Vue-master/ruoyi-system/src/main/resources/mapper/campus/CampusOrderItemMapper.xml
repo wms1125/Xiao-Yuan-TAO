@@ -39,4 +39,12 @@
     <select id="selectByOrderId" resultMap="CampusOrderItemResult">
         select <include refid="Base_Column_List"/> from campus_order_item where order_id = #{orderId}
     </select>
+
+    <!-- 批量查询：列表页一次取回整页订单项，替代"逐单查询"的 N+1 -->
+    <select id="selectByOrderNos" resultMap="CampusOrderItemResult">
+        select <include refid="Base_Column_List"/> from campus_order_item
+        where order_no in
+        <foreach collection="list" item="orderNo" open="(" separator="," close=")">#{orderNo}</foreach>
+        order by id asc
+    </select>
 </mapper>

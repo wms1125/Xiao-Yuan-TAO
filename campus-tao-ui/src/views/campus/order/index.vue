@@ -7,7 +7,7 @@
           <p class="campus-head__desc">查看订单状态，完成支付、发货与确认收货</p>
         </div>
         <div class="campus-head__extra">
-          <el-button icon="Refresh" @click="getList">刷新</el-button>
+          <el-button icon="Refresh" @click="refresh">刷新</el-button>
         </div>
       </div>
 
@@ -28,22 +28,22 @@
       <div class="campus-stats">
         <div class="campus-stat">
           <div class="campus-stat__label">订单总数</div>
-          <div class="campus-stat__value">{{ orderList.length }}</div>
+          <div class="campus-stat__value">{{ total }}</div>
           <div class="campus-stat__hint">当前筛选条件下的订单数</div>
         </div>
         <div class="campus-stat">
           <div class="campus-stat__label">待付款</div>
-          <div class="campus-stat__value">{{ countByStatus(0) }}</div>
+          <div class="campus-stat__value">{{ statsCount(0) }}</div>
           <div class="campus-stat__hint">请及时完成沙箱支付</div>
         </div>
         <div class="campus-stat">
           <div class="campus-stat__label">待收货</div>
-          <div class="campus-stat__value">{{ countByStatus(2) }}</div>
+          <div class="campus-stat__value">{{ statsCount(2) }}</div>
           <div class="campus-stat__hint">卖家已发货，待确认</div>
         </div>
         <div class="campus-stat">
           <div class="campus-stat__label">已完成</div>
-          <div class="campus-stat__value campus-stat__value--accent">{{ countByStatus(3) }}</div>
+          <div class="campus-stat__value campus-stat__value--accent">{{ statsCount(3) }}</div>
           <div class="campus-stat__hint">交易已结束</div>
         </div>
       </div>
@@ -136,6 +136,14 @@
             </div>
           </template>
         </el-table>
+
+        <pagination
+          v-show="total > 0"
+          :total="total"
+          v-model:page="queryParams.pageNum"
+          v-model:limit="queryParams.pageSize"
+          @pagination="getList"
+        />
       </div>
     </div>
 
@@ -240,6 +248,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { parseTime } from '@/utils/ruoyi'
 import {
   listOrder,
+  orderStats,
   getOrder,
   payOrder,
   cancelOrder,
@@ -256,8 +265,13 @@ const detail = ref(null)
 const traceList = ref([])
 const traceLoading = ref(false)
 const logisticsStatus = ref(false)
+const total = ref(0)
+// 概览数字改由服务端按状态聚合（分页后不能再遍历当前页推导）
+const statusStats = ref({})
 
 const queryParams = reactive({
+  pageNum: 1,
+  pageSize: 10,
   status: undefined,
   orderNo: undefined
 })
@@ -320,15 +334,17 @@ function firstImage(items) {
   return String(items[0].image).split(',')[0].trim()
 }
 
-function countByStatus(status) {
-  return orderList.value.filter((row) => row.status === status).length
+function statsCount(status) {
+  const item = statusStats.value[status]
+  return item ? item.count : 0
 }
 
 function getList() {
   loading.value = true
   listOrder(queryParams)
     .then((res) => {
-      orderList.value = res.data || []
+      orderList.value = res.rows || []
+      total.value = res.total || 0
       loading.value = false
     })
     .catch(() => {
@@ -336,9 +352,28 @@ function getList() {
     })
 }
 
+// 概览与列表使用同一筛选条件（分页参数不参与聚合）
+function getStats() {
+  orderStats({ status: queryParams.status, orderNo: queryParams.orderNo }).then((res) => {
+    const map = {}
+    const rows = res.data || []
+    rows.forEach((row) => {
+      map[row.status] = row
+    })
+    statusStats.value = map
+  })
+}
+
+// 列表与概览一起刷新，避免两者不同步
+function refresh() {
+  getList()
+  getStats()
+}
+
 function handleStatusFilter(status) {
   queryParams.status = status
-  getList()
+  queryParams.pageNum = 1
+  refresh()
 }
 
 function handleDetail(row) {
@@ -381,7 +416,7 @@ function handlePay(row) {
     .then(() => {
       payOrder(row.orderNo).then(() => {
         ElMessage.success('支付成功')
-        getList()
+        refresh()
       })
     })
     .catch(() => {})
@@ -394,7 +429,7 @@ function handleCancel(row) {
     .then(() => {
       cancelOrder(row.orderNo).then(() => {
         ElMessage.success('已取消')
-        getList()
+        refresh()
       })
     })
     .catch(() => {})
@@ -411,7 +446,7 @@ function handleShip(row) {
     .then(({ value }) => {
       shipOrder(row.orderNo, value || '').then(() => {
         ElMessage.success('已发货')
-        getList()
+        refresh()
       })
     })
     .catch(() => {})
@@ -422,14 +457,14 @@ function handleFinish(row) {
     .then(() => {
       finishOrder(row.orderNo).then(() => {
         ElMessage.success('已确认收货')
-        getList()
+        refresh()
       })
     })
     .catch(() => {})
 }
 
 onMounted(() => {
-  getList()
+  refresh()
 })
 </script>
 

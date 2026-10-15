@@ -98,8 +98,10 @@ const router = useRouter()
 const { proxy } = getCurrentInstance()
 
 const loginForm = ref({
-  username: 'admin',
-  password: 'admin123',
+  // 刻意不预填演示账号：预填 admin/admin123 会让任何拿到发行包的人都直接登录成功。
+  // 演示账号清单见 同学运行指南.md 第四节。
+  username: '',
+  password: '',
   rememberMe: false,
   code: '',
   uuid: ''

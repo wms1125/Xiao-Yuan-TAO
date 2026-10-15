@@ -1,5 +1,7 @@
 package com.ruoyi.campus.controller;
 
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +16,7 @@ import jakarta.validation.Valid;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.campus.domain.CampusOrder;
@@ -78,14 +81,29 @@ public class CampusOrderController extends BaseController {
         return AjaxResult.success("已确认收货");
     }
 
-    /** 我的订单：登录后仅可见自己的订单；管理员可见全部（管理端） */
+    /** 我的订单：登录后仅可见自己的订单；管理员可见全部（管理端）。分页返回，避免列表无界增长 */
     @GetMapping("/list")
-    public AjaxResult list(CampusOrder order) {
+    public TableDataInfo list(CampusOrder order) {
         Long userId = SecurityUtils.getUserId();
         if (!SecurityUtils.isAdmin(userId)) {
             order.setUserId(userId);
         }
-        return AjaxResult.success(orderService.selectList(order));
+        startPage();
+        List<CampusOrder> list = orderService.selectList(order);
+        return getDataTable(list);
+    }
+
+    /**
+     * 列表页概览：按状态分组统计（与列表使用同一筛选条件）。
+     * 分页后前端不能再遍历当前页推导概览数字，故由服务端聚合返回。
+     */
+    @GetMapping("/stats")
+    public AjaxResult stats(CampusOrder order) {
+        Long userId = SecurityUtils.getUserId();
+        if (!SecurityUtils.isAdmin(userId)) {
+            order.setUserId(userId);
+        }
+        return AjaxResult.success(orderService.countGroupByStatus(order));
     }
 
     /** 订单详情：仅订单归属人（或管理员）可查看 */

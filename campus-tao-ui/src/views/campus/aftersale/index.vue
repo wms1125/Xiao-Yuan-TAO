@@ -43,12 +43,12 @@
       <div class="campus-stats">
         <div class="campus-stat">
           <div class="campus-stat__label">售后单总数</div>
-          <div class="campus-stat__value">{{ aftersaleList.length }}</div>
+          <div class="campus-stat__value">{{ total }}</div>
           <div class="campus-stat__hint">当前筛选条件下的记录数</div>
         </div>
         <div class="campus-stat">
           <div class="campus-stat__label">待审核</div>
-          <div class="campus-stat__value">{{ countByStatus(0) }}</div>
+          <div class="campus-stat__value">{{ statsCount(0) }}</div>
           <div class="campus-stat__hint">需要处理</div>
         </div>
         <div class="campus-stat">
@@ -118,6 +118,14 @@
             </div>
           </template>
         </el-table>
+
+        <pagination
+          v-show="total > 0"
+          :total="total"
+          v-model:page="queryParams.pageNum"
+          v-model:limit="queryParams.pageSize"
+          @pagination="getList"
+        />
       </div>
     </div>
 
@@ -182,7 +190,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { parseTime } from '@/utils/ruoyi'
-import { listAftersale, applyAftersale, auditAftersale } from '@/api/campus/aftersale'
+import { listAftersale, aftersaleStats, applyAftersale, auditAftersale } from '@/api/campus/aftersale'
 
 const aftersaleList = ref([])
 const loading = ref(true)
@@ -190,12 +198,17 @@ const showSearch = ref(true)
 const applyOpen = ref(false)
 const auditOpen = ref(false)
 const submitting = ref(false)
+const total = ref(0)
+// 概览数字改由服务端按状态聚合（分页后不能再遍历当前页推导）
+const statusStats = ref({})
 
 const queryRef = ref()
 const applyRef = ref()
 const auditRef = ref()
 
 const queryParams = reactive({
+  pageNum: 1,
+  pageSize: 10,
   orderNo: undefined,
   status: undefined
 })
@@ -223,9 +236,10 @@ const auditRules = {
   pass: [{ required: true, message: '请选择审核结论', trigger: 'change' }]
 }
 
+// 退款金额合计同样取自服务端聚合（每个状态行的 amount 为该状态退款金额小计）
 const refundTotal = computed(() => {
-  const total = aftersaleList.value.reduce((sum, row) => sum + (Number(row.refundAmount) || 0), 0)
-  return total.toFixed(2)
+  const sum = Object.values(statusStats.value).reduce((acc, item) => acc + (Number(item.amount) || 0), 0)
+  return sum.toFixed(2)
 })
 
 const statusMap = {
@@ -251,15 +265,17 @@ function money(value) {
   return (Number(value) || 0).toFixed(2)
 }
 
-function countByStatus(status) {
-  return aftersaleList.value.filter((row) => row.status === status).length
+function statsCount(status) {
+  const item = statusStats.value[status]
+  return item ? item.count : 0
 }
 
 function getList() {
   loading.value = true
   listAftersale(queryParams)
     .then((res) => {
-      aftersaleList.value = res.data || []
+      aftersaleList.value = res.rows || []
+      total.value = res.total || 0
       loading.value = false
     })
     .catch(() => {
@@ -267,13 +283,33 @@ function getList() {
     })
 }
 
-function handleQuery() {
+// 概览与列表使用同一筛选条件（分页参数不参与聚合）
+function getStats() {
+  aftersaleStats({ orderNo: queryParams.orderNo, status: queryParams.status }).then((res) => {
+    const map = {}
+    const rows = res.data || []
+    rows.forEach((row) => {
+      map[row.status] = row
+    })
+    statusStats.value = map
+  })
+}
+
+// 列表与概览一起刷新，避免两者不同步
+function refresh() {
   getList()
+  getStats()
+}
+
+function handleQuery() {
+  queryParams.pageNum = 1
+  refresh()
 }
 
 function resetQuery() {
   queryRef.value.resetFields()
-  getList()
+  queryParams.pageNum = 1
+  refresh()
 }
 
 function openApply() {
@@ -291,7 +327,7 @@ function submitApply() {
       .then((res) => {
         ElMessage.success('申请已提交，售后单号 ' + res.data)
         applyOpen.value = false
-        getList()
+        refresh()
       })
       .catch(() => {})
       .finally(() => {
@@ -320,7 +356,7 @@ function submitAudit() {
       .then(() => {
         ElMessage.success('审核完成')
         auditOpen.value = false
-        getList()
+        refresh()
       })
       .catch(() => {})
       .finally(() => {
@@ -330,7 +366,7 @@ function submitAudit() {
 }
 
 onMounted(() => {
-  getList()
+  refresh()
 })
 </script>
 

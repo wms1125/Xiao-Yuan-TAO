@@ -57,9 +57,11 @@
               - prepare-agent：仅在跑测试时对 com.ruoyi.campus 下的类插桩；
               - report：绑定 test 阶段，产出 target/site/jacoco 报告（HTML + CSV）；
               - check：绑定 verify 阶段，行覆盖率低于阈值即构建失败。
-              阈值为"棘轮基线"：2026-10-15 实测 行 36.05% / 分支 19.09%，向下取整设为
-              行 35% / 分支 18%；后续只允许上调，不允许下调（补测试后同步抬高阈值）。
-              Controller 层与 DTO 层当前已 100% 覆盖，缺口集中在 service/notify 层。
+              阈值为"棘轮基线"：2026-10-16 补齐 service 层交易逻辑单测后实测
+              行 58.43% / 分支 43.79%（此前 36.05% / 19.09%），本次上调至
+              行 55% / 分支 40%（在实测值下方留出余量），后续只允许上调，不允许下调。
+              Controller 层与 DTO 层已 100% 覆盖；service 层交易链路（下单/支付/取消/
+              超时取消/售后审核）本轮补齐，剩余缺口在 notify/logistics 等外部网关适配层。
             -->
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -106,12 +108,12 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.35</minimum>
+                                            <minimum>0.55</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.18</minimum>
+                                            <minimum>0.40</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

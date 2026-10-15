@@ -20,9 +20,24 @@
         <result property="handleTime" column="handle_time"/>
     </resultMap>
 
+    <resultMap type="com.ruoyi.campus.domain.vo.CampusStatusStat" id="StatusStatResult">
+        <result property="status" column="status"/>
+        <result property="count" column="cnt"/>
+        <result property="amount" column="amount"/>
+    </resultMap>
+
     <sql id="Base_Column_List">
         id, aftersale_no, order_id, order_no, user_id, user_name, type, reason, refund_amount,
         status, handler, handle_remark, create_time, handle_time
+    </sql>
+
+    <!-- 列表与概览共用同一筛选条件，避免两处 where 漂移 -->
+    <sql id="Filter_Where">
+        <where>
+            <if test="userId != null">and user_id = #{userId}</if>
+            <if test="status != null">and status = #{status}</if>
+            <if test="orderNo != null and orderNo != ''">and order_no like concat('%', #{orderNo}, '%')</if>
+        </where>
     </sql>
 
     <insert id="insertCampusAftersale" parameterType="com.ruoyi.campus.domain.CampusAftersale" useGeneratedKeys="true" keyProperty="id">
@@ -47,11 +62,15 @@
 
     <select id="selectAftersaleList" resultMap="CampusAftersaleResult">
         select <include refid="Base_Column_List"/> from campus_aftersale
-        <where>
-            <if test="userId != null">and user_id = #{userId}</if>
-            <if test="status != null">and status = #{status}</if>
-            <if test="orderNo != null and orderNo != ''">and order_no like concat('%', #{orderNo}, '%')</if>
-        </where>
+        <include refid="Filter_Where"/>
         order by create_time desc
+    </select>
+
+    <!-- 概览聚合：分页后前端不再遍历当前页推导数字，改由本查询按同一筛选条件聚合 -->
+    <select id="countGroupByStatus" resultMap="StatusStatResult">
+        select status as status, count(1) as cnt, coalesce(sum(refund_amount), 0) as amount
+        from campus_aftersale
+        <include refid="Filter_Where"/>
+        group by status
     </select>
 </mapper>

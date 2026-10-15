@@ -1,6 +1,7 @@
 package com.ruoyi.campus.mapper;
 
 import com.ruoyi.campus.domain.CampusOrder;
+import com.ruoyi.campus.domain.vo.CampusStatusStat;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -18,6 +19,9 @@ public interface CampusOrderMapper {
     CampusOrder selectOrderById(Long id);
     List<CampusOrder> selectOrderList(CampusOrder order);
     int countByUserId(@Param("userId") Long userId);
+
+    /** 按状态分组统计订单数（与 selectOrderList 使用同一筛选条件），供列表页概览使用 */
+    List<CampusStatusStat> countGroupByStatus(CampusOrder order);
 
     /** 查询超时未支付订单（status=0 且 create_time 早于 deadline），供定时任务自动取消 */
     List<CampusOrder> selectTimeoutWaitPayOrders(@Param("deadline") Date deadline);

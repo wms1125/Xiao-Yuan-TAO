@@ -1,6 +1,7 @@
 package com.ruoyi.campus.service;
 
 import com.ruoyi.campus.domain.CampusOrder;
+import com.ruoyi.campus.domain.vo.CampusStatusStat;
 
 import java.util.List;
 
@@ -40,6 +41,9 @@ public interface ICampusOrderService {
     CampusOrder selectWithItemsById(Long id);
 
     List<CampusOrder> selectList(CampusOrder order);
+
+    /** 列表页概览：按状态分组统计（与 selectList 使用同一筛选条件） */
+    List<CampusStatusStat> countGroupByStatus(CampusOrder order);
 
     int countByUserId(Long userId);
 }

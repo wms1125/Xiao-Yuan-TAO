@@ -2,7 +2,41 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~015`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~016`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.13] - 2026-10-16
+
+企业级评估 P0 项集中治理：按上一轮评估报告（综合 77/100）列出的四组 P0 差距逐项修复——**业务边界**（列表无界增长 / N+1 / 空指针）、**测试纵深**（核心交易逻辑无 service 层单测）、**交付安全**（配置内置弱口令默认值、登录页预填演示凭证）、**持续集成**（e2e 未入流水线）。此外补上**真实 SQL 层集成测试**：此前测试纵深只到 Mockito 打桩，本轮让真实 mapper XML 与真实 MySQL 一起进入回归。
+
+### 新增
+- **订单/售后列表页概览接口**：`GET /campus/order/stats`、`GET /campus/aftersale/stats`，按状态分组聚合（售后单另带退款金额合计），与列表复用同一筛选条件（`Filter_Where` 片段），避免两处 where 漂移。新增 `CampusStatusStat` 聚合 VO。
+- **service 层单测**：`CampusOrderServiceTest`（25 例）、`CampusAftersaleServiceTest`（10 例），覆盖下单扣库存/防超卖拦截、支付扣款与幂等、取消退款与回库存、超时取消的原子性分支、售后审核退款与回滚、**列表批量查询的 N+1 回归**、**关联订单缺失时的 fail-fast 回归**。
+- **SQL 层集成测试**：`CampusMapperSqlIntegrationTest`（9 例）。不启动 Spring 上下文，用 MyBatis 直接加载**仓库里真实的 mapper XML**连本地 MySQL 执行真 SQL，断言：`countGroupByStatus` 的聚合结果与"列表查询后内存分组"**逐项一致**（含 `userId` / `status` / `orderNo` 三种筛选与无筛选共 4 种口径，证明 `Filter_Where` 片段复用没有漂移）、`selectByOrderNos` 一次取回与逐单查询**逐字段一致**且不串单（消除 N+1 的回归防线）、售后概览的状态分组计数与**退款金额合计**与列表口径一致。用例沿用既有 `Assumptions.assumeTrue(库可达)` 约定，**无 MySQL 时自动跳过**，不影响无库环境的构建。
+- **CI `e2e` job**：`services: mysql:8.0 + redis:7`，导入全量建库脚本 → **执行 SQL 层集成测试（真实 MySQL）** → 打包后端 → 启动 jar 并轮询 `/actuator/health` → 执行 `e2e_business.py`，失败时自动输出后端日志尾部。SQL 层用例在无库的 `backend` job 只会显示 skipped，故必须放到有 service 容器的 `e2e` job 里真实执行。
+- **前端接口单测**：补 `orderStats` / 售后模块（`listAftersale` / `aftersaleStats` / `applyAftersale` / `auditAftersale`）的 url/method/params 断言。
+
+### 修复
+- **订单与售后列表无分页**：两处 `list` 接口补 `startPage()` 并改为 `getDataTable(list)` 分页信封（`{code,msg,rows,total}`）；前端订单页、售后页补 `<pagination>` 并改读 `res.rows` / `res.total`。
+- **订单列表 N+1**：原实现先查订单再逐条 `selectByOrderNo` 取明细；改为 `selectByOrderNos` 一次批量取回整页订单项后按订单号分组装配，查询次数由 `1+N` 降为 `2`。
+- **售后审核空指针与半成品状态风险**：`CampusAftersaleServiceImpl.audit` 取关联订单后未判空即 `setStatus`，订单缺失时会先退款/回库存再抛 NPE。现改为在退款动作**之前**显式抛 `ServiceException("关联订单不存在，无法审核")` 并整体回滚。
+- **配置内置弱口令默认值**：`application-druid.yml` 的 `DB_USERNAME`/`DB_PASSWORD`/`DRUID_LOGIN_USERNAME`/`DRUID_LOGIN_PASSWORD` 与 `application.yml` 的 `JWT_SECRET` 原为 `${VAR:默认值}` 形式，生产一旦忘记覆盖即等于无防护。现全部移除默认值，**缺失即启动失败（fail-fast）**；本地/演示值改由 `2-启动后端.bat` 显式注入（生产部署走系统环境变量，见 `启动说明.md` 11.4）。
+- **登录页预填演示凭证**：`login.vue` 原预填 `admin`/`admin123`，任何拿到发行包的人可直接登录。现改为空表单。
+- `CampusAccountAtomicSqlTest` 的连接凭据改为读 `DB_USERNAME`/`DB_PASSWORD` 环境变量（保留本地演示回退值），便于在 CI 指向服务容器。
+
+### 变更
+- **JaCoCo 覆盖率门禁上调**：行 **35% → 55%**、分支 **18% → 40%**（实测 行 **58.43%** / 分支 **43.79%**，下方留出余量）。补齐 service 层单测与 SQL 层集成测试后，后端用例由 **75 → 119**。
+- 前端覆盖率门禁维持棘轮基线不变（本轮仅新增接口封装用例，未改统计口径），实测 行 **26.2%** / 语句 **25.04%** / 分支 **23.61%** / 函数 **35.57%**。
+- 后端 `info.app.version` 更新为 `1.0.13`；`2-启动后端.bat` 增补演示环境变量注入段与"生产务必覆盖"提示。
+
+### 验证
+- **后端**：离线 `mvn -B verify` **BUILD SUCCESS**；单测 **119/119** 全绿（0 失败 / 0 错误 / **0 跳过**，即 SQL 层用例真实执行而非跳过）；jacoco 门禁通过（行 **58.43%** ≥ 55%、分支 **43.79%** ≥ 40%）；`spotless:check` 通过（新增/修改文件 0 needs changes）。
+- **SQL 层集成测试**：本地 MySQL（8.0.40 / `campus_tao`）在跑时用例**真跑非跳过**，9/9 全绿。**负向验证**：临时删掉 `CampusOrderMapper.xml` 中 `countGroupByStatus` 的 `group by status` 后，3 条相关用例立即失败（MySQL `only_full_group_by` 直接拒绝该 SQL），改回后恢复全绿——证明该测试确实在拦截 SQL 语义错误，而非摆设。
+- **端到端**：注入环境变量重启后端（验证 fail-fast 配置下可正常启动，`/actuator/health` = 200）后执行 `e2e_business.py` → **RESULT: ALL_PASS**（双账号全链路、防超卖、越权 403、余额与库存回滚一致）。
+- **分页与概览实测**（API 层）：`/campus/order/list?pageNum=1&pageSize=5` → `rows=5 / total=25` 且第 2 页与第 1 页首单不同；`/campus/order/stats` 返回 6 条状态分组；`/campus/aftersale/list?pageSize=2` → `rows=2 / total=5`；`/campus/aftersale/stats` 金额合计 **3169.00**（950 + 1650 + 569）。
+- **前端实测**（浏览器，直连 8088）：订单页概览显示「订单总数=25 / 待付款=0 / 待收货=4 / 已完成=11」（与接口聚合逐项一致，证明概览已脱离"当前页"口径）、分页控件「共 25 条」且表格 10 行；售后页概览「售后单总数=5 / 待审核=1 / 涉及退款金额=¥3169.00」；登录页账号密码为空（预填已移除）。
+- **前端门禁**：`format:check` 通过、eslint **0 error / 161 warn**（与基线一致）、单测 **48/48**、v8 覆盖率门禁通过、`build:prod` 通过。
+- **CI**：`ci.yml` 结构校验通过（4 个 job：backend / e2e / frontend / security），YAML 可正常解析。
+- **CI 首次真实执行**：本轮已将本地库推送至 GitHub（`wms1125/Xiao-Yuan-TAO`），4 个 job 的实际执行结论以其 Actions run 为准；`e2e` job 依赖的官方 `mysql:8.0` / `redis:7` service 镜像可用性亦在此首次被实证——这正是把"纸面门禁"变成"实证门禁"的一步。
 
 ## [1.0.12] - 2026-10-16
 

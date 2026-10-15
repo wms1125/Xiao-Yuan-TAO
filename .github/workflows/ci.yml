@@ -8,8 +8,11 @@ name: CI
 #   package-lock.json 一致；prettier --check 与 eslint 先行，任一步失败即中止。
 # - 静态检查口径：Prettier 只校验不改写；ESLint 要求 0 error（warn 不阻断）。
 # - 安全 job 覆盖依赖漏洞：前端 npm audit（生产依赖树要求 0 告警）+ 后端 osv-scanner 扫 pom.xml。
-# - 端到端回归（e2e_business.py）未纳入 CI：它需要可达的 MySQL 8 与已初始化的库，
-#   本地请用仓库根的 verify.bat 或手工执行；如需上 CI，可另加 services: mysql 的 job。
+# - 端到端回归（e2e_business.py）已纳入 CI：e2e job 拉起 MySQL 8 与 Redis service，
+#   导入全量建库脚本后启动后端 jar，执行双账号全链路回归（含防超卖/越权/退款回滚断言）。
+#   同 job 内还真实执行 SQL 层集成测试（CampusMapperSqlIntegrationTest / CampusAccountAtomicSqlTest）：
+#   这两类用例直连真实 MySQL，在无库的 backend job 会自动跳过，故必须在有 service 的 e2e job 里跑。
+#   本地等价执行见仓库根 verify.bat 与 campus-tao/启动说明.md。
 # - 仓库当前为本地库（无远程），推送后本工作流即自动生效。
 
 on:
@@ -60,6 +63,93 @@ jobs:
             campus-tao/RuoYi-Vue-master/ruoyi-system/target/site/jacoco/
             campus-tao/RuoYi-Vue-master/ruoyi-system/target/surefire-reports/
           if-no-files-found: warn
+
+  e2e:
+    name: 端到端业务回归（MySQL 8 · 双账号全链路）
+    runs-on: ubuntu-latest
+    needs: [backend]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: 123456
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p123456 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      # 应用内置的 embedded-redis 在端口被占用时会自动让位（见 EmbeddedRedisConfig），
+      # 故这里直接提供官方 Redis service，避免依赖 jar 内打包的 Linux 版 redis-server 二进制。
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      # 应用已移除内置默认凭据（缺失即启动失败），CI 显式注入一次性值；
+      # 均为构建容器的临时值，非真实密钥。
+      DB_USERNAME: root
+      DB_PASSWORD: 123456
+      JWT_SECRET: ci-e2e-only-jwt-secret
+      DRUID_LOGIN_USERNAME: ruoyi
+      DRUID_LOGIN_PASSWORD: 123456
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 JDK 17 与 Maven 缓存
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: |
+            campus-tao/RuoYi-Vue-master/pom.xml
+            campus-tao/RuoYi-Vue-master/*/pom.xml
+
+      # 全量脚本自带 CREATE DATABASE campus_tao 与 USE，故直接整份导入
+      - name: 导入全量建库脚本
+        run: |
+          mysql -h 127.0.0.1 -uroot -p123456 < campus-tao/sql/campus_tao_full.sql
+          mysql -h 127.0.0.1 -uroot -p123456 -N -e "select concat('campus_product rows=', count(*)) from campus_tao.campus_product"
+
+      # SQL 层集成测试（真实 mapper XML / 原子 UPDATE）× 真实 MySQL。
+      # 这些用例在无库环境下靠 Assumptions 自动跳过，故 backend job（无 MySQL service）
+      # 只会显示 skipped；真正执行它们的是这里——用 service 容器当数据库。
+      - name: SQL 层集成测试（mapper XML 与原子 SQL × MySQL）
+        working-directory: campus-tao/RuoYi-Vue-master
+        run: mvn -B -Dtest=CampusMapperSqlIntegrationTest,CampusAccountAtomicSqlTest -Dsurefire.failIfNoSpecifiedTests=false test
+
+      # 单测与覆盖率门禁已在 backend job 完成，这里只产出可运行的发行 jar
+      - name: 打包后端
+        working-directory: campus-tao/RuoYi-Vue-master
+        run: mvn -B -DskipTests clean package
+
+      - name: 启动后端并等待就绪
+        run: |
+          nohup java -jar campus-tao/RuoYi-Vue-master/ruoyi-admin/target/ruoyi-admin.jar > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/actuator/health > /dev/null; then
+              echo "后端已就绪"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "后端启动超时，输出日志尾部："
+          tail -100 /tmp/backend.log
+          exit 1
+
+      - name: 执行端到端业务回归
+        run: python3 campus-tao/e2e_business.py
+
+      - name: 失败时输出后端日志
+        if: failure()
+        run: tail -150 /tmp/backend.log
 
   frontend:
     name: 前端单测 · 覆盖率门禁 · 生产构建

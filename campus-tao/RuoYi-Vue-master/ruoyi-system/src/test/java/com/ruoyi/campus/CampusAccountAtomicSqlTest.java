@@ -30,11 +30,17 @@ class CampusAccountAtomicSqlTest {
     private static final long TEST_USER = 999001L;
     private static Connection conn;
 
+    /** 与 2-启动后端.bat 一致的本地演示库连接信息，可由环境变量覆盖以便在 CI 中指向服务容器 */
+    private static String env(String key, String fallback) {
+        String value = System.getenv(key);
+        return (value == null || value.isEmpty()) ? fallback : value;
+    }
+
     @BeforeAll
     static void openConnection() {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-            conn = DriverManager.getConnection(URL, "root", "123456");
+            conn = DriverManager.getConnection(URL, env("DB_USERNAME", "root"), env("DB_PASSWORD", "123456"));
         } catch (Exception e) {
             // 无本地 MySQL 时自动跳过，保证 CI/无库环境不会因此失败
             Assumptions.assumeTrue(false, "跳过：本地未提供 campus_tao 库或 MySQL 驱动 -> " + e.getMessage());

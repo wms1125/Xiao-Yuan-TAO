@@ -3,6 +3,7 @@ package com.ruoyi.campus.service.impl;
 import com.ruoyi.campus.domain.CampusAftersale;
 import com.ruoyi.campus.domain.CampusOrder;
 import com.ruoyi.campus.domain.CampusOrderItem;
+import com.ruoyi.campus.domain.vo.CampusStatusStat;
 import com.ruoyi.campus.mapper.CampusAftersaleMapper;
 import com.ruoyi.campus.mapper.CampusOrderItemMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
@@ -78,6 +79,11 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
             throw new ServiceException("售后单状态异常");
         }
         CampusOrder order = orderMapper.selectOrderByOrderNo(as.getOrderNo());
+        if (order == null) {
+            // 售后单存在但关联订单缺失属数据一致性问题：显式失败并整体回滚，
+            // 否则后续 order.setStatus(...) 会抛 NPE 并可能已先执行退款/回库存造成半成品状态。
+            throw new ServiceException("关联订单不存在，无法审核");
+        }
         if (pass) {
             // 退款到沙箱余额 + 回库存
             accountService.refund(as.getUserId(), as.getRefundAmount());
@@ -117,5 +123,10 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
     @Override
     public List<CampusAftersale> selectList(CampusAftersale aftersale) {
         return aftersaleMapper.selectAftersaleList(aftersale);
+    }
+
+    @Override
+    public List<CampusStatusStat> countGroupByStatus(CampusAftersale aftersale) {
+        return aftersaleMapper.countGroupByStatus(aftersale);
     }
 }

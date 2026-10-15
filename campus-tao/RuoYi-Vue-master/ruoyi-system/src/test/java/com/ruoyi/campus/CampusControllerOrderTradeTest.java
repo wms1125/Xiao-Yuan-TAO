@@ -1,6 +1,7 @@
 package com.ruoyi.campus;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.AdditionalMatchers.aryEq;
@@ -37,6 +38,7 @@ import com.ruoyi.campus.service.ICampusLogisticsService;
 import com.ruoyi.campus.service.ICampusOrderService;
 import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
 
 /**
  * Controller 层测试：订单 / 售后 / 物流轨迹——重点覆盖归属与越权判定分支。
@@ -151,22 +153,26 @@ class CampusControllerOrderTradeTest {
     }
 
     @Test
-    @DisplayName("我的订单：普通用户查询条件被强制改写为本人")
+    @DisplayName("我的订单：普通用户查询条件被强制改写为本人，并以分页信封返回")
     void orderListForcesCurrentUser() {
+        CampusTestSupport.bindRequest();
         CampusOrder query = new CampusOrder();
         query.setUserId(99L);
         when(orderService.selectList(any())).thenReturn(Collections.emptyList());
 
-        orderController.list(query);
+        TableDataInfo result = orderController.list(query);
 
         verify(orderService).selectList(orderCaptor.capture());
         assertEquals(STUDENT_ID, orderCaptor.getValue().getUserId());
+        assertNotNull(result.getRows(), "分页信封必须带 rows 字段");
+        assertEquals(0, result.getTotal(), "空结果集应返回 total=0");
     }
 
     @Test
     @DisplayName("我的订单：管理员不加归属过滤")
     void orderListForAdminKeepsFilterOpen() {
         CampusTestSupport.loginAs(ADMIN_ID, "admin");
+        CampusTestSupport.bindRequest();
         CampusOrder query = new CampusOrder();
         when(orderService.selectList(any())).thenReturn(Collections.emptyList());
 
@@ -265,22 +271,25 @@ class CampusControllerOrderTradeTest {
     }
 
     @Test
-    @DisplayName("我的售后：普通用户被强制改写为本人")
+    @DisplayName("我的售后：普通用户被强制改写为本人，并以分页信封返回")
     void aftersaleListForcesCurrentUser() {
+        CampusTestSupport.bindRequest();
         CampusAftersale query = new CampusAftersale();
         query.setUserId(99L);
         when(aftersaleService.selectList(any())).thenReturn(Collections.emptyList());
 
-        aftersaleController.list(query);
+        TableDataInfo result = aftersaleController.list(query);
 
         verify(aftersaleService).selectList(aftersaleCaptor.capture());
         assertEquals(STUDENT_ID, aftersaleCaptor.getValue().getUserId());
+        assertNotNull(result.getRows(), "分页信封必须带 rows 字段");
     }
 
     @Test
     @DisplayName("我的售后：管理员不加归属过滤")
     void aftersaleListForAdminKeepsFilterOpen() {
         CampusTestSupport.loginAs(ADMIN_ID, "admin");
+        CampusTestSupport.bindRequest();
         CampusAftersale query = new CampusAftersale();
         when(aftersaleService.selectList(any())).thenReturn(Collections.emptyList());
 

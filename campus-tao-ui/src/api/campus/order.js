@@ -1,8 +1,12 @@
 import request from '@/utils/request'
 
-// 我的订单列表
+// 我的订单列表（分页）
 export function listOrder(params) {
   return request({ url: '/campus/order/list', method: 'get', params: params })
+}
+// 订单概览（按状态分组统计，供列表页统计卡片使用）
+export function orderStats(params) {
+  return request({ url: '/campus/order/stats', method: 'get', params: params })
 }
 // 订单详情
 export function getOrder(orderNo) {

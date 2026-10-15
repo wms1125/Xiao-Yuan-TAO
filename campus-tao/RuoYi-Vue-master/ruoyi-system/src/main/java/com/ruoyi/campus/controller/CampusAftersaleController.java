@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.campus.domain.CampusAftersale;
@@ -49,14 +50,28 @@ public class CampusAftersaleController extends BaseController {
         return AjaxResult.success("审核完成");
     }
 
-    /** 我的售后：普通用户仅可见自己的售后单；管理员可见全部（管理端） */
+    /** 我的售后：普通用户仅可见自己的售后单；管理员可见全部（管理端）。分页返回，避免列表无界增长 */
     @GetMapping("/list")
-    public AjaxResult list(CampusAftersale aftersale) {
+    public TableDataInfo list(CampusAftersale aftersale) {
         Long userId = SecurityUtils.getUserId();
         if (!SecurityUtils.isAdmin(userId)) {
             aftersale.setUserId(userId);
         }
+        startPage();
         List<CampusAftersale> list = aftersaleService.selectList(aftersale);
-        return AjaxResult.success(list);
+        return getDataTable(list);
+    }
+
+    /**
+     * 列表页概览：按状态分组统计售后单数与退款金额（与列表使用同一筛选条件）。
+     * 分页后前端不能再遍历当前页推导概览数字，故由服务端聚合返回。
+     */
+    @GetMapping("/stats")
+    public AjaxResult stats(CampusAftersale aftersale) {
+        Long userId = SecurityUtils.getUserId();
+        if (!SecurityUtils.isAdmin(userId)) {
+            aftersale.setUserId(userId);
+        }
+        return AjaxResult.success(aftersaleService.countGroupByStatus(aftersale));
     }
 }

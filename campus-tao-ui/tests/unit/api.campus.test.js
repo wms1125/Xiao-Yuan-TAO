@@ -6,6 +6,7 @@ vi.mock('@/utils/request', () => ({ default: vi.fn(() => Promise.resolve({})) })
 import request from '@/utils/request'
 import {
   listOrder,
+  orderStats,
   getOrder,
   createOrder,
   payOrder,
@@ -15,6 +16,7 @@ import {
   getLogisticsTrace,
   syncLogisticsTrace
 } from '@/api/campus/order'
+import { listAftersale, aftersaleStats, applyAftersale, auditAftersale } from '@/api/campus/aftersale'
 import {
   listProduct,
   getProduct,
@@ -69,6 +71,49 @@ describe('校园淘 - 订单接口', () => {
       url: '/campus/order/create',
       method: 'post',
       data: { cartIds: [1], receiverName: '张三' }
+    })
+  })
+
+  it('概览统计为 GET /campus/order/stats 并透传筛选条件', () => {
+    orderStats({ status: 0, orderNo: 'CT2026' })
+    expect(lastCall()).toEqual({
+      url: '/campus/order/stats',
+      method: 'get',
+      params: { status: 0, orderNo: 'CT2026' }
+    })
+  })
+})
+
+describe('校园淘 - 售后接口', () => {
+  beforeEach(() => request.mockClear())
+
+  it('列表为 GET /campus/aftersale/list 并透传分页与筛选', () => {
+    listAftersale({ pageNum: 1, pageSize: 10, status: 0 })
+    expect(lastCall()).toEqual({
+      url: '/campus/aftersale/list',
+      method: 'get',
+      params: { pageNum: 1, pageSize: 10, status: 0 }
+    })
+  })
+
+  it('概览统计为 GET /campus/aftersale/stats', () => {
+    aftersaleStats({ orderNo: 'CT2026' })
+    expect(lastCall()).toEqual({ url: '/campus/aftersale/stats', method: 'get', params: { orderNo: 'CT2026' } })
+  })
+
+  it('申请与审核均为 POST 且携带 data', () => {
+    applyAftersale({ orderNo: 'CT2026', type: 1, reason: '商品与描述不符' })
+    expect(lastCall()).toEqual({
+      url: '/campus/aftersale/apply',
+      method: 'post',
+      data: { orderNo: 'CT2026', type: 1, reason: '商品与描述不符' }
+    })
+
+    auditAftersale({ aftersaleNo: 'AS2026', pass: true, remark: '同意' })
+    expect(lastCall()).toEqual({
+      url: '/campus/aftersale/audit',
+      method: 'post',
+      data: { aftersaleNo: 'AS2026', pass: true, remark: '同意' }
     })
   })
 })

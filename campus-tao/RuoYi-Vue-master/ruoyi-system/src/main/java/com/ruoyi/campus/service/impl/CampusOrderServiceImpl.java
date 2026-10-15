@@ -4,6 +4,7 @@ import com.ruoyi.campus.domain.CampusCart;
 import com.ruoyi.campus.domain.CampusOrder;
 import com.ruoyi.campus.domain.CampusOrderItem;
 import com.ruoyi.campus.domain.CampusProduct;
+import com.ruoyi.campus.domain.vo.CampusStatusStat;
 import com.ruoyi.campus.mapper.CampusCartMapper;
 import com.ruoyi.campus.mapper.CampusOrderItemMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
@@ -23,6 +24,8 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class CampusOrderServiceImpl implements ICampusOrderService {
@@ -275,10 +278,22 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
     @Override
     public List<CampusOrder> selectList(CampusOrder order) {
         List<CampusOrder> list = orderMapper.selectOrderList(order);
+        if (list.isEmpty()) {
+            return list;
+        }
+        // 一次批量取回整页订单项再按订单号分组，替代原先"逐单查询"的 N+1
+        List<String> orderNos = list.stream().map(CampusOrder::getOrderNo).collect(Collectors.toList());
+        Map<String, List<CampusOrderItem>> itemsByOrderNo = orderItemMapper.selectByOrderNos(orderNos).stream()
+                .collect(Collectors.groupingBy(CampusOrderItem::getOrderNo));
         for (CampusOrder o : list) {
-            o.setItems(orderItemMapper.selectByOrderNo(o.getOrderNo()));
+            o.setItems(itemsByOrderNo.getOrDefault(o.getOrderNo(), new ArrayList<>()));
         }
         return list;
+    }
+
+    @Override
+    public List<CampusStatusStat> countGroupByStatus(CampusOrder order) {
+        return orderMapper.countGroupByStatus(order);
     }
 
     @Override

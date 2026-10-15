@@ -1,6 +1,7 @@
 package com.ruoyi.campus.service;
 
 import com.ruoyi.campus.domain.CampusAftersale;
+import com.ruoyi.campus.domain.vo.CampusStatusStat;
 import java.util.List;
 
 /**
@@ -14,4 +15,7 @@ public interface ICampusAftersaleService {
     boolean audit(String aftersaleNo, String handler, boolean pass, String remark);
     CampusAftersale selectByAftersaleNo(String aftersaleNo);
     List<CampusAftersale> selectList(CampusAftersale aftersale);
+
+    /** 列表页概览：按状态分组统计售后单数与退款金额（与 selectList 使用同一筛选条件） */
+    List<CampusStatusStat> countGroupByStatus(CampusAftersale aftersale);
 }
