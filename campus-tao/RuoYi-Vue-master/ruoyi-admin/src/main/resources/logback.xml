@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <!-- 日志存放路径 -->
-	<property name="log.path" value="/home/ruoyi/logs" />
+	<!--
+	  日志目录使用相对路径（相对于进程启动目录），不再硬编码上游若依的 /home/ruoyi/logs。
+	  绝对路径属于开发机残留：本地 Windows 上 /home/ruoyi/logs 会被映射到当前盘符根目录且恰好可写，
+	  于是问题被掩盖；到 Linux/容器环境（如 CI runner）该目录无写权限，logback 无法创建父目录，
+	  Spring Boot 的 LogbackLoggingSystem 会直接抛 IllegalStateException 中止应用启动。
+	-->
+	<property name="log.path" value="logs" />
     <!-- 日志输出格式 -->
 	<property name="log.pattern" value="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - %msg%n" />
 

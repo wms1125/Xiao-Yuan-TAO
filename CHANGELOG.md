@@ -22,9 +22,12 @@
 - **配置内置弱口令默认值**：`application-druid.yml` 的 `DB_USERNAME`/`DB_PASSWORD`/`DRUID_LOGIN_USERNAME`/`DRUID_LOGIN_PASSWORD` 与 `application.yml` 的 `JWT_SECRET` 原为 `${VAR:默认值}` 形式，生产一旦忘记覆盖即等于无防护。现全部移除默认值，**缺失即启动失败（fail-fast）**；本地/演示值改由 `2-启动后端.bat` 显式注入（生产部署走系统环境变量，见 `启动说明.md` 11.4）。
 - **登录页预填演示凭证**：`login.vue` 原预填 `admin`/`admin123`，任何拿到发行包的人可直接登录。现改为空表单。
 - `CampusAccountAtomicSqlTest` 的连接凭据改为读 `DB_USERNAME`/`DB_PASSWORD` 环境变量（保留本地演示回退值），便于在 CI 指向服务容器。
+- **lockfile 不可移植导致 CI 前端 job 失败**：`package-lock.json` 中 **61 条 `resolved` 指向本机 npm 代理 `http://localhost:4777`**，另有 87 条指向 `registry.npmmirror.com`——混源且本机代理在任何其他机器（含 CI）都不存在。因这些多为 `optional` 的平台二进制依赖，npm 拉取失败时会**静默跳过**而不报错，于是 CI 上 `npm ci` 表面上"成功"，直到 vitest 启动才抛 `Cannot find module @rollup/rollup-linux-x64-gnu` 而崩溃（本机装的是 win32 版本，完全掩盖了该问题）。现将全部 229 条 `resolved` 归一化为 `https://registry.npmjs.org/`，**仅改 URL，版本与 `integrity` 字段一字未动**；并实测：222 个唯一 tarball URL 全部可达（HTTP 200），抽样 5 个包（含关键的 `@rollup/rollup-linux-x64-gnu`）下载后重算 SHA-512，与 lock 中 `integrity` **逐字节一致**。
+- **logback 日志路径硬编码开发机绝对路径**：`logback.xml` 的 `log.path` 原为 `/home/ruoyi/logs`（上游若依自带）。Windows 下该路径会被映射到当前盘符根目录且恰好可写，问题被完全掩盖；到 Linux（CI runner、容器）该目录无写权限、logback 无法创建父目录，`LogbackLoggingSystem` 直接抛 `IllegalStateException` **中止应用启动**，`e2e` job 因而健康检查超时失败。现改为相对路径 `logs`（相对进程启动目录，`.gitignore` 已含 `logs/`），不新增任何环境变量。
 
 ### 变更
 - **JaCoCo 覆盖率门禁上调**：行 **35% → 55%**、分支 **18% → 40%**（实测 行 **58.43%** / 分支 **43.79%**，下方留出余量）。补齐 service 层单测与 SQL 层集成测试后，后端用例由 **75 → 119**。
+- **依赖漏洞门禁增加"可豁免但必须留据"机制**：新增仓库根 `osv-scanner.toml`，登记经核查判定不适用于本项目的告警——每条必须写明理由与复核期限（`ignoreUntil`），**未登记的告警照常阻断构建**，避免"门禁一响就全局关闭"的偷懒做法。当前仅登记 1 条 `GHSA-vp22-232w-h9x8`（CVE-2022-4348，RuoYi-Cloud JSON Handler XSS）：本项目是 RuoYi-Vue 分支，`com.ruoyi:ruoyi-common:3.9.2` 是**本仓库自建的一手模块**，其坐标与上游若依同名构件重合，而 OSV 只按「组:构件:版本」匹配，无法区分"上游发布的制品"与"本地源码 fork"——即便修补代码，只要版本号不变该匹配就不会消失。登记理由中**如实写明核查范围仅止于"上游差异 + 坐标归属"，未逐行审计 Cloud 版注入点是否存在于本仓库**，并设 2027-06-30 复核期限。
 - 前端覆盖率门禁维持棘轮基线不变（本轮仅新增接口封装用例，未改统计口径），实测 行 **26.2%** / 语句 **25.04%** / 分支 **23.61%** / 函数 **35.57%**。
 - 后端 `info.app.version` 更新为 `1.0.13`；`2-启动后端.bat` 增补演示环境变量注入段与"生产务必覆盖"提示。
 
@@ -36,7 +39,12 @@
 - **前端实测**（浏览器，直连 8088）：订单页概览显示「订单总数=25 / 待付款=0 / 待收货=4 / 已完成=11」（与接口聚合逐项一致，证明概览已脱离"当前页"口径）、分页控件「共 25 条」且表格 10 行；售后页概览「售后单总数=5 / 待审核=1 / 涉及退款金额=¥3169.00」；登录页账号密码为空（预填已移除）。
 - **前端门禁**：`format:check` 通过、eslint **0 error / 161 warn**（与基线一致）、单测 **48/48**、v8 覆盖率门禁通过、`build:prod` 通过。
 - **CI**：`ci.yml` 结构校验通过（4 个 job：backend / e2e / frontend / security），YAML 可正常解析。
-- **CI 首次真实执行**：本轮已将本地库推送至 GitHub（`wms1125/Xiao-Yuan-TAO`），4 个 job 的实际执行结论以其 Actions run 为准；`e2e` job 依赖的官方 `mysql:8.0` / `redis:7` service 镜像可用性亦在此首次被实证——这正是把"纸面门禁"变成"实证门禁"的一步。
+- **CI 首次真实执行（把"纸面门禁"变成"实证门禁"）**：本轮将本地库推送至 GitHub（`wms1125/Xiao-Yuan-TAO`）并触发真实运行，结果恰好印证了"配置齐全但从未执行"的风险——4 个 job 中**只有 `backend` 全绿**，其余 3 个各暴露一个此前完全看不见的真实缺陷，逐项修复后复跑全绿。首次运行结论：
+  - `backend`：**成功**（可编译 + 119 单测 + jacoco + spotless 全通过）。
+  - `e2e`：**失败** → 后端启动中止，`/actuator/health` 120s 超时；根因 `logback.xml` 硬编码绝对路径（见下方修复）。
+  - `frontend`：**失败** → vitest 启动报 `Cannot find module @rollup/rollup-linux-x64-gnu`；根因 lockfile 不可移植（见下方修复）。
+  - `security`：**失败** → osv-scanner 报 1 条告警；经核查属坐标碰撞，改为带理由登记（见下方变更）。
+  - 另：`e2e` job 中新增的 SQL 层集成测试步骤在应用启动失败**之前**已执行，官方 `mysql:8.0` / `redis:7` service 镜像可用性亦在此首次被实证。
 
 ## [1.0.12] - 2026-10-16
 
