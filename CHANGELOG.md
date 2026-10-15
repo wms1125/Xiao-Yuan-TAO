@@ -22,6 +22,7 @@
 
 ### 修复
 - **系统监控 → 缓存监控页整页 500**：发行包内嵌的 Windows 版 `redis-server`，其 `INFO` 输出包含自身可执行文件的完整路径（形如 `C 盘 Users 目录下的 redis-server-*.exe`）。Lettuce 读取 `INFO` 后交由 `java.util.Properties.load` 解析，反斜杠被当作 Unicode 转义，抛出 `Malformed unicode encoding`，使 `/monitor/cache` 返回 500 且前端弹出「Cannot read Redis info」。`CacheController.getInfo()` 改为捕获异常后降级返回空统计，页面恢复可渲染。
+- **`verify.bat` 前端单测在错误目录执行**：第 4 步 `npm run test:unit` 原本在交付根目录运行，而根目录没有 `package.json`，导致该步必然失败（`ENOENT: Could not read package.json`）。已把前端单测与构建统一并入 `campus-tao-ui` 目录执行，交付前校验 5 步方能真实全绿。
 - **`/actuator/health` 误报 DOWN**：Redis 健康指示器在同样的 `INFO` 解析问题下会把整体健康状态判为 DOWN。已显式关闭该指示器（`management.health.redis.enabled=false`，并在配置中注明原因）；Redis 连通性由业务链路（验证码、登录令牌、字典/参数缓存）实际验证，进程无 Redis 时应用启动即失败，不会静默降级。
 
 ### 变更
