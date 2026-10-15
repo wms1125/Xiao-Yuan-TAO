@@ -323,13 +323,26 @@
 }
 .detail-item:last-child { border-bottom: none; }
 
+/*
+  标签列宽必须容纳最长标签，并显式声明单行。
+  原 width:72px 放不下 6 个 13px 汉字（"下次执行时间" 实测 78px），该标签会被挤成两行，
+  而同一列表里 "日志编号""执行状态" 等 4 字标签仍是单行 —— 视觉上就是"部分文字错行"。
+  这里把宽度补到 84px（容纳 6 汉字并留 6px 余量）并加 nowrap，标签一律单行显示。
+*/
 .detail-label {
   flex-shrink: 0;
-  width: 72px;
+  width: 84px;
+  white-space: nowrap;
   color: #909399;
   margin-right: 12px;
 }
-.detail-value { color: #303133; flex: 1; word-break: break-all; }
+
+/*
+  break-all 会在任意字符位置断行，把请求地址、类方法名等 ASCII 文本拦腰截断
+  （例如 ".../CampusOrd" + "erController.list()"）；改为 anywhere 后优先在自然断点
+  换行，仅在单个超长词确实放不下时才断词，长 URL 依旧不会溢出。
+*/
+.detail-value { color: #303133; flex: 1; overflow-wrap: anywhere; }
 .detail-location { color: #999; font-size: 12px; }
 
 .method-tag {

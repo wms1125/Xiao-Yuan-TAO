@@ -474,10 +474,19 @@ h1, h2, h3, .campus-title {
   box-shadow: 0 0 0 1.5px var(--c-primary) inset !important;
 }
 
+/*
+  表单标签不参与字距加宽（显式归零，覆盖 body 的 .01em 继承）。
+  Element Plus 标签带 12px 右内边距，查询表单普遍用 label-width="68px"，
+  可用宽度只有 68 - 12 = 56px，而 4 个 14px 汉字恰好 56px。
+  一旦叠加任何正字距（原先 .02em + 继承的 .01em）就会超出 0.13~0.56px，
+  "用户名称""手机号码""创建时间" 这类 4 字标签便被挤成两行，
+  且第二行溢出标签框、盖到下一行控件上——视觉上就是"表单文字错行、被异常截断换行"。
+  归零字距后恰好单行，与上游若依默认表现一致。
+*/
 .el-form-item__label {
   font-weight: 500 !important;
   color: var(--c-ink-2) !important;
-  letter-spacing: .02em;
+  letter-spacing: normal;
 }
 
 /* 表格：去纵向网格、表头淡底、行悬停微染 */
@@ -501,8 +510,22 @@ h1, h2, h3, .campus-title {
   background: var(--c-line-soft) !important;
   font-weight: 600 !important;
   font-size: 12.5px !important;
-  letter-spacing: .06em;
   border-bottom: 1px solid var(--c-line) !important;
+}
+
+/*
+  表头文字固定单行，避免短表头在窄列里被挤成两行。
+  说明：Element Plus 的 .cell 自带左右各 12px 内边距，并显式声明了 white-space: normal，
+  所以必须直接命中 .cell 才能生效。
+  另外，原先表头额外加了 .06em 字距，"序号" 这类 2 字表头落在 50px 的索引列里时，
+  可用宽度只剩 50 - 12 × 2 = 26px，而 12.5px 字号叠加 .06em 字距后约需 26.5px，
+  于是被挤成两行（同表其它 3~4 字表头仍是单行，视觉上就是"部分文字错行"）。
+  这里去掉表头字距让文字恰好放得下，再配合 nowrap 稳定单行；
+  不可只加 nowrap —— 字距仍在时文字会溢出 26px 被 text-overflow: ellipsis 截断。
+*/
+.el-table th.el-table__cell > .cell {
+  letter-spacing: normal;
+  white-space: nowrap;
 }
 
 .el-table td.el-table__cell {
@@ -780,6 +803,8 @@ h1, h2, h3, .campus-title {
   border-radius: 999px;
   font-size: 12px;
   letter-spacing: .04em;
+  /* 胶囊高度固定为 22px，一旦文字折行就会溢出到胶囊之外，故强制单行显示 */
+  white-space: nowrap;
   background: var(--c-line-soft);
   color: var(--c-ink-2);
 }
