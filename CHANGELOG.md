@@ -2,7 +2,30 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~016`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~017`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.14] - 2026-10-16
+
+前端测试纵深：v1.0.13 已如实记录「**前端组件测试仍为 0**」——分页与概览联动的页面行为只靠人工浏览器实测，没有沉淀成自动化用例。本轮把它补上，并把前端覆盖率门禁从"只盖纯逻辑层（接口封装 + 工具函数）"扩到"覆盖页面行为"。
+
+### 新增
+- **devDependency `jsdom` + `@vue/test-utils`**：共引入 50 个包，`npm audit`（全量与 `--omit=dev`）仍为 **0 项**，`resolved` 全部指向 `registry.npmjs.org`（与 v1.0.13 归一化后的口径一致，未回落到本机代理/镜像源）。
+- **`tests/unit/support/element-stubs.js`**：Element Plus 轻量替身。不把整个组件库挂进 jsdom——`el-table`/`el-scrollbar` 依赖 jsdom 未实现的 `ResizeObserver`，真实挂载需要额外 polyfill，且会把用例变成"验证 Element Plus 自己"。替身按"结构保真、能力最小"实现：需要渲染处渲染默认插槽（保证模板绑定被求值）、`el-table`/`el-table-column` 之间用 provide/inject 按行调用列的 scoped slot（否则 `scope.row` 为 undefined，模板表达式直接抛错）、`el-form` 暴露 `validate`/`resetFields` 使表单提交与重置路径可被驱动。
+- **组件用例**：`tests/unit/views.campus.order.test.js`（10 例）、`tests/unit/views.campus.aftersale.test.js`（8 例），合计 **18 例**。聚焦本轮新增行为：分页翻页后 `listOrder` 收到新 `pageNum` 且列表条数取自分页信封 `rows`/`total`；状态筛选后 `pageNum` 归 1 且**概览与列表一起刷新**；概览卡片数字与退款金额合计**来自 `/stats` 聚合而非当前页**（构造"当前页全是已完成"的数据，若按当前页推导则待付款/待收货会显示 0，直接揭穿分页后统计卡片"撒谎"）。另覆盖详情、支付、取消、发货、收货、售后申请与审核等交互路径，以及金额/状态文案格式化与缺失关联订单的文案兜底。
+
+### 变更
+- **`vitest.config.js` 挂 `@vitejs/plugin-vue`**：否则 `.vue` 单文件组件无法在测试中被编译。刻意不引入 `vite.config.js` 里的压缩、图标、自动导入等构建期插件——测试只需要能跑业务逻辑。
+- **按文件切换运行环境**：保留默认 `environment: 'node'`（纯逻辑层用例无需 DOM），需要 DOM 的组件用例在文件首行用 `// @vitest-environment jsdom` 就近声明。**未使用 `environmentMatchGlobs`**：该配置项已在 Vitest 3 弃用、Vitest 4 移除，按文件声明是它替代方案里最直观的一种。
+- **覆盖率白名单纳入两个列表页**：`src/views/campus/order/index.vue`、`src/views/campus/aftersale/index.vue` 进入 `coverage.include`，使"页面行为"真正被门禁覆盖，而不是只统计它们调用的接口封装。
+- **覆盖率门禁整体上调（棘轮）**：语句 24→**45**、分支 23→**45**、函数 32→**55**、行 25→**40**（按计划要求行覆盖率抬到 40%，其余三项同步上调，且均比实测值留出若干百分点余量——门禁的职责是拦住覆盖率塌方，不是拦掉无关改动的正常抖动）。前端用例由 **48 → 66**。
+- 后端 `info.app.version` 更新为 `1.0.14`。
+
+### 验证
+- **前端单测**：`66/66` 全绿（原 48 例全部保留，新增 18 例组件用例）。实测覆盖率 语句 **50.17%** / 分支 **50.35%** / 函数 **60.93%** / 行 **51.27%**（上一版为 25.04 / 23.61 / 35.57 / 26.2），四项门禁全部通过。
+- **负向验证 A（门禁真会拦）**：以 `--coverage.thresholds.lines=90` 覆盖阈值运行 → 退出码 **1**，日志 `ERROR: Coverage for lines (51.27%) does not meet global threshold (90%)`。证明阈值不是摆设。
+- **负向验证 B（用例真在断言新行为）**：① 删掉 `order/index.vue` 中 `handleStatusFilter` 的 `queryParams.pageNum = 1` → 「切换状态筛选」用例失败（`expected { pageNum: 3, … } to match object { pageNum: 1, … }`）；② 把 `aftersale/index.vue` 的 `handleQuery` 由 `refresh()` 改为只 `getList()` → 「按订单号搜索」用例失败。两处均改回即恢复 66/66 全绿，且 `git diff` 确认源码无残留改动。
+- **前端其余门禁**：`format:check` 通过；eslint **0 error / 161 warn**（与基线逐项一致，新增文件未引入任何告警）；`build:prod` 通过。
+- **观察项（未改动，如实记录）**：两个页面的 `getStats()` 只有 `.then()` 没有 `.catch()`，概览请求失败会产生未处理的 Promise rejection（列表侧 `getList()` 有 catch，故行为不一致）。本轮只测试不修改，用例亦刻意不构造概览失败分支；是否收口由后续决定。
 
 ## [1.0.13] - 2026-10-16
 
