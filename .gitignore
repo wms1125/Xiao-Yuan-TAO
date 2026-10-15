@@ -8,6 +8,10 @@ node_modules/
 .vite/
 *.local
 
+# ===== 覆盖率报告（jacoco / v8）=====
+coverage/
+jacoco.exec
+
 # ===== 随包内置运行时（体积大，不入版本库）=====
 jdk-17/
 mysql-8.0.40/

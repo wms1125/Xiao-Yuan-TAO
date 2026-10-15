@@ -2,7 +2,41 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~012`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~013`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.10] - 2026-10-15
+
+工程流水线加固：此前的测试只有"跑得通/全绿"这一个结论，**覆盖到什么程度无从度量**，流水线也没有任何会拦人的门禁；同时前端生产接口前缀为 `/prod-api` 却**没有任何反向代理配置**，真按生产方式部署会直接 404。本次让流水线"会拦人"、让测试有数字、让部署有据可依。
+
+### 新增
+- **后端覆盖率门禁（jacoco 0.8.12）**：根 `pom.xml` 增 `<jacoco.version>`，`ruoyi-system/pom.xml` 加 `jacoco-maven-plugin`——`prepare-agent` 插桩、`report` 绑定 `test`、`check` 绑定 `verify`。统计口径限定 `com/ruoyi/campus/**`，**排除 `domain/**`（纯 POJO）与 `mapper/**`（MyBatis 接口代理）**，阈值 **行 ≥35% / 分支 ≥18%**。
+- **前端覆盖率门禁（`@vitest/coverage-v8@4.1.11`）**：`vitest.config.js` 增 v8 provider 与阈值，`package.json` 增 `test:coverage` 脚本。口径为 `src/api/campus/**` + `src/utils/**`（排除代码生成器运行期工具），阈值 **行 ≥25% / 语句 ≥24% / 分支 ≥23% / 函数 ≥32%**。
+- **Controller 层与异常兜底测试 52 个新用例**（4 个测试类）：把 Controller 层与 DTO 层的覆盖率从 **0 拉到 100%**，重点覆盖"身份与归属一律取自登录态、前端伪造的 `sellerId`/`handler` 被丢弃、越权与订单不存在同样被拒、物流通道未配置时降级提示"等判定分支。后端单测总数 **23 → 75**。
+- **生产部署配置 `deploy/nginx.conf`**：`/prod-api/` 反代到后端（`proxy_pass` 末尾 `/` 剥离前缀）、`/profile/` 上传目录、dist 静态托管 + SPA 兜底、`gzip_static` 复用构建期 `.gz`、HTTPS 与安全响应头、`/actuator/health` 与接口文档限内网。配套步骤写入 `campus-tao/启动说明.md` 第十一章（构建制品、目录约定、密钥环境变量、上线前改回验证码、上线冒烟命令）。
+- **CI 依赖漏洞扫描 job**：前端 `npm audit --omit=dev`（官方 registry，要求 0 告警）+ 后端 `osv-scanner` 扫 `sbom/backend-bom.json`。
+
+### 变更
+- **`verify.bat` 对齐门禁**：第 3 步 `mvn -B test` → `mvn -B verify`（覆盖率不达标即失败），第 4 步 `npm run test:unit` → `npm run test:coverage`；步骤标签与说明同步更新（脚本已归一化为 CRLF）。
+- **`.github/workflows/ci.yml` 补齐**：后端由"`clean package -DskipTests` + `test`"两步合并为单条 `mvn -B verify`；前端切 `test:coverage`；两侧均上传覆盖率报告产物（`if: always()`）；新增「依赖漏洞扫描」job（共 3 个 job）。
+- **离线仓库同步**：`org/jacoco` 补入 `.tools/m2-repo`，并清理全仓 `_remote.repositories` / `*.lastUpdated` 标记文件共 6 个，保证 `-o` 离线模式下 `mvn verify` 可完整执行。
+- `.gitignore` 增 `coverage/`、`jacoco.exec`。
+- 后端 `info.app.version` 更新为 `1.0.10`。
+
+### 修复
+- **生产部署路径缺失**：此前交付包只有前端 `/prod-api` 前缀的代码事实，没有任何反代配置或部署说明，按生产方式直接部署会 404。已补齐配置文件与部署步骤（含"上线前必须把验证码改回 `true`"的安全提醒）。
+
+### 验证
+- **覆盖率（后端）**：原口径（含 POJO/mapper）仅行 **8.57%**、分支 **4.53%**——指标被无逻辑价值的字节码稀释而失真；改为限定业务逻辑类后实测 **行 36.05% / 分支 19.09%**，其中 Controller 层与 DTO 层均 **100%**。
+- **覆盖率（前端）**：实测 **语句 24.25% / 分支 23.61% / 函数 32.65% / 行 25.24%**，44/44 全绿。
+- **门禁有效性（负向验证）**：阈值临时抬至 99% 时，后端报 `Rule violated for bundle ruoyi-system: lines covered ratio is 0.36, but expected minimum is 0.99` 并 **BUILD FAILURE**，前端同样失败；验证后恢复真实阈值。**只做正向验证的门禁等于没有验证。**
+- **后端单元测试**：`Tests run: 75, Failures: 0, Errors: 0, Skipped: 0`，BUILD SUCCESS；新增用例复用 `spring-boot-starter-test` 自带 Mockito，**未新增任何第三方依赖**（后端 SBOM 组件数不变）。
+- **交付前离线校验**：`verify.bat`（默认 `-o` 离线、内置 Maven 与离线仓库）5 步 **ALL PASS**，退出码 **0**。
+- **依赖面复核**：`npm audit` 全量与 `--omit=dev` 均 **0 项**；前端包总数 **243 → 252**（新增 9 个、移除 0 个，全部为覆盖率链路 devDependency），生产依赖树仍 **167** 个包，UNKNOWN 许可 0、copyleft 0；`frontend-dependencies.csv` 已用 `tools/sbom-frontend.py` 重新生成并做差集比对。
+- **后端服务**：重启后 `/actuator/health` = **UP**、`/actuator/info` 版本 = **1.0.10**。
+
+> 阈值说明（如实记录）：阈值为**棘轮基线**——以实测值向下取整设定，**只允许上调、不允许下调**，并非"企业级应有水平"。未直接设 60% 的原因是当前缺口集中在 `service/**` 与 `notify/**`（依赖 Spring 容器与数据库，属集成测试范畴，需 Testcontainers/H2 方案），强行设高只会逼出"为凑覆盖率而写无断言测试"的劣化。
+>
+> 未纳入本轮（如实记录）：**lint 阶段**（项目此前无任何 lint 配置，直接接入会让 RuoYi 上游数百处既有风格问题一次性变成 CI 红灯，属"要么全量整改、要么形同虚设"的两难，已列为 P1，需先做基线格式化）；**CI 真正跑起来**（仓库当前为本地库、无远程，工作流从未被执行，需用户提供远程仓库后确认）；**Flyway/Liquibase**（会改变现有初始化策略，对已交付基线库有回归风险，待确认）。
 
 ## [1.0.9] - 2026-10-15
 

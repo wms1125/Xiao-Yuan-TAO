@@ -1,8 +1,10 @@
 name: CI
 
 # 说明：
-# - 后端 job 覆盖「可编译 + 单元测试」，仓库未提供 mvnw，使用 setup-java 内置的 Maven。
-# - 前端 job 覆盖「单元测试（vitest）+ 可构建」，用 npm ci 保证依赖与 package-lock.json 一致。
+# - 后端 job 覆盖「可编译 + 单元测试 + 覆盖率门禁」：一条 `mvn verify` 即完成
+#   package → test → jacoco report/check（行 ≥35%、分支 ≥18%，阈值为棘轮基线）。
+# - 前端 job 覆盖「单测 + 覆盖率门禁 + 可构建」：npm ci 保证依赖与 package-lock.json 一致。
+# - 安全 job 覆盖依赖漏洞：前端 npm audit（生产依赖树要求 0 告警）+ 后端 osv-scanner 扫 pom.xml。
 # - 端到端回归（e2e_business.py）未纳入 CI：它需要可达的 MySQL 8 与已初始化的库，
 #   本地请用仓库根的 verify.bat 或手工执行；如需上 CI，可另加 services: mysql 的 job。
 # - 仓库当前为本地库（无远程），推送后本工作流即自动生效。
@@ -16,7 +18,7 @@ on:
 
 jobs:
   backend:
-    name: 后端构建与单元测试
+    name: 后端构建 · 单元测试 · 覆盖率门禁
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -34,11 +36,10 @@ jobs:
             campus-tao/RuoYi-Vue-master/pom.xml
             campus-tao/RuoYi-Vue-master/*/pom.xml
 
-      - name: 打包（-DskipTests，先确保源码可编译）
-        run: mvn -B -DskipTests clean package
-
-      - name: 单元测试
-        run: mvn -B test
+      # verify = clean package + test + jacoco:report + jacoco:check
+      # 覆盖率不达标时该步骤直接失败，构建产物不会上传。
+      - name: 构建 · 测试 · 覆盖率门禁（mvn -B verify）
+        run: mvn -B verify
 
       - name: 上传后端构建产物
         uses: actions/upload-artifact@v4
@@ -47,8 +48,18 @@ jobs:
           path: campus-tao/RuoYi-Vue-master/ruoyi-admin/target/ruoyi-admin.jar
           if-no-files-found: error
 
+      - name: 上传后端测试与覆盖率报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jacoco-report
+          path: |
+            campus-tao/RuoYi-Vue-master/ruoyi-system/target/site/jacoco/
+            campus-tao/RuoYi-Vue-master/ruoyi-system/target/surefire-reports/
+          if-no-files-found: warn
+
   frontend:
-    name: 前端单测与构建
+    name: 前端单测 · 覆盖率门禁 · 生产构建
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -66,8 +77,43 @@ jobs:
       - name: 安装依赖（严格按 lock 文件）
         run: npm ci
 
-      - name: 单元测试（vitest）
-        run: npm run test:unit
+      # vitest run --coverage：v8 provider，阈值为棘轮基线（行 ≥25%）
+      - name: 单元测试 + 覆盖率门禁（vitest + v8）
+        run: npm run test:coverage
 
       - name: 生产构建
         run: npm run build:prod
+
+      - name: 上传前端覆盖率报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: campus-tao-ui/coverage/
+          if-no-files-found: warn
+
+  security:
+    name: 依赖漏洞扫描（前端 npm audit · 后端 osv-scanner）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 必须使用官方 registry：国内镜像是只读副本，未实现 /-/npm/v1/security/* 接口会返回 404。
+      - name: 前端依赖审计（生产依赖树要求 0 告警）
+        working-directory: campus-tao-ui
+        run: |
+          npm ci --ignore-scripts
+          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
+
+      # 直接扫随包交付的 CycloneDX 物料清单（backend-bom.json），
+      # 避免在 CI 中重新解析 Maven 依赖树，结果与人工扫描口径一致。
+      - name: 后端依赖漏洞扫描（osv-scanner）
+        uses: google/osv-scanner-action/osv-scanner-action@v1.9.0
+        with:
+          scan-args: |-
+            --sbom=campus-tao/sbom/backend-bom.json

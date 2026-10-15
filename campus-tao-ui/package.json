@@ -10,7 +10,8 @@
     "build:prod": "vite build",
     "build:stage": "vite build --mode staging",
     "preview": "vite preview",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "repository": {
     "type": "git",
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "5.2.4",
+    "@vitest/coverage-v8": "^4.1.11",
     "sass": "1.80.6",
     "unplugin-auto-import": "21.1.0",
     "unplugin-vue-setup-extend-plus": "1.0.1",

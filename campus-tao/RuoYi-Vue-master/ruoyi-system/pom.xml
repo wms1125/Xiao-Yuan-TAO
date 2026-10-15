@@ -50,4 +50,77 @@
 
     </dependencies>
 
+    <build>
+        <plugins>
+            <!--
+              覆盖率门禁（校园淘模块）：
+              - prepare-agent：仅在跑测试时对 com.ruoyi.campus 下的类插桩；
+              - report：绑定 test 阶段，产出 target/site/jacoco 报告（HTML + CSV）；
+              - check：绑定 verify 阶段，行覆盖率低于阈值即构建失败。
+              阈值为"棘轮基线"：2026-10-15 实测 行 36.05% / 分支 19.09%，向下取整设为
+              行 35% / 分支 18%；后续只允许上调，不允许下调（补测试后同步抬高阈值）。
+              Controller 层与 DTO 层当前已 100% 覆盖，缺口集中在 service/notify 层。
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <configuration>
+                    <!--
+                      统计口径：只统计"业务逻辑类"。
+                      排除 domain/**（纯 POJO，getter/setter 无逻辑价值）与 mapper/**（MyBatis 接口代理，无字节码）。
+                    -->
+                    <includes>
+                        <include>com/ruoyi/campus/**</include>
+                    </includes>
+                    <excludes>
+                        <exclude>com/ruoyi/campus/domain/**</exclude>
+                        <exclude>com/ruoyi/campus/mapper/**</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.35</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.18</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>

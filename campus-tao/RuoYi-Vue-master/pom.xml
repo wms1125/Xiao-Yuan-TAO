@@ -35,6 +35,8 @@
         <jwt.version>0.9.1</jwt.version>
         <jaxb-api.version>2.3.1</jaxb-api.version>
         <springdoc.version>3.1.0</springdoc.version>
+        <!-- 覆盖率：jacoco（校园淘模块统计，详见 ruoyi-system/pom.xml） -->
+        <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
     <!-- 依赖声明 -->

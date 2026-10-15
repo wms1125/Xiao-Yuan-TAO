@@ -7,8 +7,8 @@ echo ============================================================
 echo   校园淘 交付前校验（CI 的本地等价脚本）
 echo     1) 预检：发行 jar 是否被占用
 echo     2) 后端 mvn -B -DskipTests clean package
-echo     3) 后端 mvn -B test
-echo     4) 前端 npm run test:unit（vitest）
+echo     3) 后端 mvn -B verify（单元测试 + jacoco 覆盖率门禁）
+echo     4) 前端 npm run test:coverage（vitest + v8 覆盖率门禁）
 echo     5) 前端 npm run build:prod
 echo   全部通过则退出码为 0，任一失败为 1。
 echo ============================================================
@@ -69,13 +69,13 @@ if /i "%LOCKED%"=="locked" (
     echo [信息] Maven=%MVN%
     echo.
     pushd campus-tao\RuoYi-Vue-master
-    echo ---- [2/4] 后端打包 ----
+    echo ---- [2/5] 后端打包 ----
     call "%MVN%" %MVN_ARGS% -B -DskipTests clean package
     if errorlevel 1 (set "FAIL=1" & echo [失败] 后端打包) else (echo [通过] 后端打包)
     echo.
-    echo ---- [3/4] 后端单元测试（无 MySQL 时 JDBC 用例自动跳过）----
-    call "%MVN%" %MVN_ARGS% -B test
-    if errorlevel 1 (set "FAIL=1" & echo [失败] 后端单元测试) else (echo [通过] 后端单元测试)
+    echo ---- [3/5] 后端单元测试 + 覆盖率门禁（mvn verify；无 MySQL 时 JDBC 用例自动跳过）----
+    call "%MVN%" %MVN_ARGS% -B verify
+    if errorlevel 1 (set "FAIL=1" & echo [失败] 后端单元测试/覆盖率门禁) else (echo [通过] 后端单元测试/覆盖率门禁)
     popd
   )
 )
@@ -88,9 +88,9 @@ if not exist "node_modules" (
   if errorlevel 1 set "FAIL=1"
 )
 echo.
-echo ---- [4/5] 前端单元测试（vitest）----
-call npm run test:unit
-if errorlevel 1 (set "FAIL=1" & echo [失败] 前端单元测试) else (echo [通过] 前端单元测试)
+echo ---- [4/5] 前端单元测试 + 覆盖率门禁（vitest + v8）----
+call npm run test:coverage
+if errorlevel 1 (set "FAIL=1" & echo [失败] 前端单元测试/覆盖率门禁) else (echo [通过] 前端单元测试/覆盖率门禁)
 echo.
 echo ---- [5/5] 前端生产构建 ----
 call npm run build:prod

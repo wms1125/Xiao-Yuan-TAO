@@ -51,15 +51,15 @@
 
 ## 三、前端
 
-- 包总数：**243**（含嵌套重复版本）。
+- 包总数：**252**（含嵌套重复版本）。
 - 许可分布：
 
 | 许可 | 包数 |
 |---|---|
-| MIT | 208 |
+| MIT | 214 |
 | ISC | 17 |
+| BSD-3-Clause | 9 |
 | Apache-2.0 | 6 |
-| BSD-3-Clause | 6 |
 | BlueOak-1.0.0 | 4 |
 | BSD-2-Clause | 1 |
 | 0BSD | 1 |
@@ -68,9 +68,13 @@
 
 - 结论：**全部为宽松许可，无未知许可、无 copyleft 组件**，前端依赖不构成许可风险。
 - 包总数变更轨迹：**461**（v1.0.5）→ **398**（v1.0.6，`unplugin-auto-import` 0.18 → 21 依赖树精简）
-  → **243**（v1.0.9，移除 `vite-plugin-svg-icons` 整条传递链），许可结构不变。
+  → **243**（v1.0.9，移除 `vite-plugin-svg-icons` 整条传递链）
+  → **252**（v1.0.10，新增 devDependency `@vitest/coverage-v8` 引入 9 个新组件），许可结构不变。
+- v1.0.10 新增组件全部来自覆盖率链路（`@vitest/coverage-v8`、`ast-v8-to-istanbul`、`istanbul-lib-coverage`、
+  `istanbul-lib-report`、`istanbul-reports`、`@bcoe/v8-coverage`、`magicast` 等），**均为 devDependency**，
+  不影响生产依赖树（生产依赖条目仍为 **167**）。
 
-## 四、依赖漏洞（CVE）扫描结果（v1.0.9）
+## 四、依赖漏洞（CVE）扫描结果（v1.0.10）
 
 扫描工具：`npm audit`（前端，基于 npm registry 通告）与 `osv-scanner` v2.7.0 `scan source -S backend-bom.cdx.json`（后端，基于 OSV/GHSA 数据库，需联网）。
 
@@ -99,6 +103,7 @@
 | v1.0.6 治理后（`npm audit`） | 5 | 5 high（全在构建期 devDependencies） |
 | v1.0.6 治理后（`npm audit --omit=dev`，**生产依赖树**） | **0** | — |
 | **v1.0.9 治理后（`npm audit` 全量）** | **0** | — |
+| **v1.0.10 复核（新增 `@vitest/coverage-v8` 后）** | **0** | —（全量与 `--omit=dev` 均为 0） |
 
 v1.0.6 治理动作：
 - 运行时依赖升级：`axios` 1.13.2→1.20.0、`vue` 3.5.26→3.5.44、`js-cookie` 3.0.5→3.0.8、`echarts` 5.6.0→6.1.0。
