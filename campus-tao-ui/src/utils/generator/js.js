@@ -4,7 +4,7 @@ import { trigger } from './config'
 const units = {
   KB: '1024',
   MB: '1024 / 1024',
-  GB: '1024 / 1024 / 1024',
+  GB: '1024 / 1024 / 1024'
 }
 /**
  * @name: 生成js需要的数据
@@ -23,15 +23,7 @@ export function makeUpJs(conf, type) {
   const uploadVarList = []
 
   conf.fields.forEach((el) => {
-    buildAttributes(
-      el,
-      dataList,
-      ruleList,
-      optionsList,
-      methodList,
-      propsList,
-      uploadVarList
-    )
+    buildAttributes(el, dataList, ruleList, optionsList, methodList, propsList, uploadVarList)
   })
 
   const script = buildexport(
@@ -44,7 +36,7 @@ export function makeUpJs(conf, type) {
     propsList.join('\n'),
     methodList.join('\n')
   )
-  
+
   return script
 }
 /**
@@ -52,15 +44,7 @@ export function makeUpJs(conf, type) {
  * @description: 生成参数，包括表单数据表单验证数据，多选选项数据，上传数据等
  * @return {*}
  */
-function buildAttributes(
-  el,
-  dataList,
-  ruleList,
-  optionsList,
-  methodList,
-  propsList,
-  uploadVarList
-){
+function buildAttributes(el, dataList, ruleList, optionsList, methodList, propsList, uploadVarList) {
   buildData(el, dataList)
   buildRules(el, ruleList)
 
@@ -93,15 +77,7 @@ function buildAttributes(
 
   if (el.children) {
     el.children.forEach((el2) => {
-      buildAttributes(
-        el2,
-        dataList,
-        ruleList,
-        optionsList,
-        methodList,
-        propsList,
-        uploadVarList
-      )
+      buildAttributes(el2, dataList, ruleList, optionsList, methodList, propsList, uploadVarList)
     })
   }
 }
@@ -135,23 +111,15 @@ function buildRules(conf, ruleList) {
   if (trigger[conf.tag]) {
     if (conf.required) {
       const type = Array.isArray(conf.defaultValue) ? "type: 'array'," : ''
-      let message = Array.isArray(conf.defaultValue)
-        ? `请至少选择一个${conf.vModel}`
-        : conf.placeholder
+      let message = Array.isArray(conf.defaultValue) ? `请至少选择一个${conf.vModel}` : conf.placeholder
       if (message === undefined) message = `${conf.label}不能为空`
-      rules.push(
-        `{ required: true, ${type} message: '${message}', trigger: '${
-          trigger[conf.tag]
-        }' }`
-      )
+      rules.push(`{ required: true, ${type} message: '${message}', trigger: '${trigger[conf.tag]}' }`)
     }
     if (conf.regList && Array.isArray(conf.regList)) {
       conf.regList.forEach((item) => {
         if (item.pattern) {
           rules.push(
-            `{ pattern: new RegExp(${item.pattern}), message: '${
-              item.message
-            }', trigger: '${trigger[conf.tag]}' }`
+            `{ pattern: new RegExp(${item.pattern}), message: '${item.message}', trigger: '${trigger[conf.tag]}' }`
           )
         }
       })
@@ -200,8 +168,7 @@ function buildProps(conf, propsList) {
   if (conf.dataType === 'dynamic') {
     conf.valueKey !== 'value' && (conf.props.props.value = conf.valueKey)
     conf.labelKey !== 'label' && (conf.props.props.label = conf.labelKey)
-    conf.childrenKey !== 'children' &&
-      (conf.props.props.children = conf.childrenKey)
+    conf.childrenKey !== 'children' && (conf.props.props.children = conf.childrenKey)
   }
   const str = `
   // props设置
@@ -264,16 +231,7 @@ function buildSubmitUpload(conf) {
  * @description: 组装js代码方法
  * @return {*}
  */
-function buildexport(
-  conf,
-  type,
-  data,
-  rules,
-  selectOptions,
-  uploadVar,
-  props,
-  methods
-) {
+function buildexport(conf, type, data, rules, selectOptions, uploadVar, props, methods) {
   let str = `
     const { proxy } = getCurrentInstance()
     const ${conf.formRef} = ref()
@@ -296,8 +254,8 @@ function buildexport(
 
     ${methods}
   `
-  
-  if(type === 'dialog') {
+
+  if (type === 'dialog') {
     str += `
       // 弹窗设置
       const dialogVisible = defineModel()

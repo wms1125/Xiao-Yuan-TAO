@@ -64,4 +64,3 @@ export default {
    */
   footerContent: '校园淘 · 校园二手交易平台 —— 让每一件旧物，在校园里重新被需要'
 }
-

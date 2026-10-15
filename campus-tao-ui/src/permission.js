@@ -15,7 +15,7 @@ NProgress.configure({ showSpinner: false })
 const whiteList = ['/login', '/register']
 
 const isWhiteList = (path) => {
-  return whiteList.some(pattern => isPathMatch(pattern, path))
+  return whiteList.some((pattern) => isPathMatch(pattern, path))
 }
 
 router.beforeEach(async (to, from) => {
@@ -46,7 +46,7 @@ router.beforeEach(async (to, from) => {
         isRelogin.show = false
         // 根据roles权限生成可访问的路由
         const accessRoutes = await usePermissionStore().generateRoutes()
-        accessRoutes.forEach(route => {
+        accessRoutes.forEach((route) => {
           if (!isHttp(route.path)) {
             router.addRoute(route)
           }

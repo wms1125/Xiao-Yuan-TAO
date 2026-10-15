@@ -22,10 +22,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       reportsDirectory: './coverage',
-      include: [
-        'src/api/campus/**/*.js',
-        'src/utils/**/*.js'
-      ],
+      include: ['src/api/campus/**/*.js', 'src/utils/**/*.js'],
       exclude: ['**/node_modules/**', 'src/utils/generator/**'],
       thresholds: {
         // 2026-10-15 实测 语句 24.25% / 分支 23.61% / 函数 32.65% / 行 25.24%，向下取整作为棘轮基线

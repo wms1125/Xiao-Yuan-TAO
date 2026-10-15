@@ -17,7 +17,15 @@
       <div class="lock-hint">系统已锁定，请输入密码解锁</div>
 
       <div class="input-wrap" :class="{ shake: isShaking }">
-        <input ref="passwordInput" v-model="password" type="password" placeholder="请输入登录密码" class="lock-input" @keydown.enter="handleUnlock" autocomplete="off" />
+        <input
+          ref="passwordInput"
+          v-model="password"
+          type="password"
+          placeholder="请输入登录密码"
+          class="lock-input"
+          @keydown.enter="handleUnlock"
+          autocomplete="off"
+        />
         <button class="unlock-btn" @click="handleUnlock" :disabled="loading">
           <span v-if="!loading">→</span>
           <span v-else class="loading-dot">···</span>
@@ -64,7 +72,7 @@ const onAvatarError = (e) => {
 const startClock = () => {
   const update = () => {
     const now = new Date()
-    const pad = n => String(n).padStart(2, '0')
+    const pad = (n) => String(n).padStart(2, '0')
     currentTime.value = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
     const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
     currentDate.value = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${days[now.getDay()]}`
@@ -98,7 +106,9 @@ const handleUnlock = async () => {
 const showError = (msg) => {
   errorMsg.value = msg
   isShaking.value = true
-  setTimeout(() => { isShaking.value = false }, 600)
+  setTimeout(() => {
+    isShaking.value = false
+  }, 600)
 }
 
 const goLogin = () => {
@@ -130,7 +140,7 @@ const initParticles = () => {
 
   const draw = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    particles.forEach(p => {
+    particles.forEach((p) => {
       ctx.beginPath()
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
       ctx.fillStyle = `rgba(255,255,255,${p.alpha})`
@@ -142,7 +152,8 @@ const initParticles = () => {
     })
     for (let i = 0; i < particles.length; i++) {
       for (let j = i + 1; j < particles.length; j++) {
-        const a = particles[i], b = particles[j]
+        const a = particles[i],
+          b = particles[j]
         const dist = Math.hypot(a.x - b.x, a.y - b.y)
         if (dist < 120) {
           ctx.beginPath()
@@ -199,7 +210,7 @@ onBeforeUnmount(() => {
   font-weight: 200;
   color: #fff;
   letter-spacing: 4px;
-  text-shadow: 0 0 40px rgba(255,255,255,0.3);
+  text-shadow: 0 0 40px rgba(255, 255, 255, 0.3);
   margin-bottom: 8px;
   font-variant-numeric: tabular-nums;
 }
@@ -208,7 +219,7 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 1;
   font-size: 15px;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255, 255, 255, 0.6);
   margin-bottom: 48px;
   letter-spacing: 2px;
 }
@@ -226,7 +237,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
 }
 
 .avatar-wrap {
@@ -238,7 +249,7 @@ onBeforeUnmount(() => {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  border: 3px solid rgba(255,255,255,0.3);
+  border: 3px solid rgba(255, 255, 255, 0.3);
   object-fit: cover;
   display: block;
 }
@@ -247,7 +258,7 @@ onBeforeUnmount(() => {
   position: absolute;
   bottom: -4px;
   right: -4px;
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   width: 26px;
   height: 26px;
@@ -267,7 +278,7 @@ onBeforeUnmount(() => {
 }
 
 .lock-hint {
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 13px;
   margin-bottom: 28px;
 }
@@ -276,16 +287,16 @@ onBeforeUnmount(() => {
   width: 100%;
   display: flex;
   align-items: center;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 50px;
   padding: 4px 4px 4px 20px;
   transition: border-color 0.3s;
 }
 
 .input-wrap:focus-within {
-  border-color: rgba(255,255,255,0.6);
-  background: rgba(255,255,255,0.13);
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.13);
 }
 
 .input-wrap.shake {
@@ -293,11 +304,22 @@ onBeforeUnmount(() => {
 }
 
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-8px); }
-  40% { transform: translateX(8px); }
-  60% { transform: translateX(-6px); }
-  80% { transform: translateX(6px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-8px);
+  }
+  40% {
+    transform: translateX(8px);
+  }
+  60% {
+    transform: translateX(-6px);
+  }
+  80% {
+    transform: translateX(6px);
+  }
 }
 
 .lock-input {
@@ -311,7 +333,7 @@ onBeforeUnmount(() => {
 }
 
 .lock-input::placeholder {
-  color: rgba(255,255,255,0.35);
+  color: rgba(255, 255, 255, 0.35);
 }
 
 .unlock-btn {
@@ -323,7 +345,9 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: 18px;
   cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
+  transition:
+    transform 0.2s,
+    opacity 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -353,8 +377,14 @@ onBeforeUnmount(() => {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .lock-footer {
@@ -362,13 +392,13 @@ onBeforeUnmount(() => {
 }
 
 .lock-footer a {
-  color: rgba(255,255,255,0.4);
+  color: rgba(255, 255, 255, 0.4);
   font-size: 13px;
   text-decoration: none;
   transition: color 0.2s;
 }
 
 .lock-footer a:hover {
-  color: rgba(255,255,255,0.8);
+  color: rgba(255, 255, 255, 0.8);
 }
 </style>

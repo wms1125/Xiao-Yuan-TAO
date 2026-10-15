@@ -7,7 +7,9 @@
           <p class="campus-head__desc">维护校园二手商品的分类目录，决定商品发布时可选的一级/二级分类</p>
         </div>
         <div class="campus-head__extra">
-          <el-button type="primary" icon="Plus" @click="handleAdd" v-hasPermi="['campus:category:add']">新增分类</el-button>
+          <el-button type="primary" icon="Plus" @click="handleAdd" v-hasPermi="['campus:category:add']"
+            >新增分类</el-button
+          >
         </div>
       </div>
 
@@ -15,7 +17,13 @@
       <div class="campus-toolbar" v-show="showSearch">
         <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="72px">
           <el-form-item label="分类名称" prop="name">
-            <el-input v-model="queryParams.name" placeholder="请输入分类名称" clearable style="width:220px" @keyup.enter="handleQuery" />
+            <el-input
+              v-model="queryParams.name"
+              placeholder="请输入分类名称"
+              clearable
+              style="width: 220px"
+              @keyup.enter="handleQuery"
+            />
           </el-form-item>
           <el-form-item>
             <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
@@ -33,7 +41,9 @@
 
         <el-table v-loading="loading" :data="categoryList">
           <el-table-column label="分类编号" align="center" prop="id" width="110">
-            <template #default="scope"><span class="campus-num">{{ scope.row.id }}</span></template>
+            <template #default="scope"
+              ><span class="campus-num">{{ scope.row.id }}</span></template
+            >
           </el-table-column>
           <el-table-column label="分类名称" min-width="200">
             <template #default="scope">
@@ -47,15 +57,33 @@
             </template>
           </el-table-column>
           <el-table-column label="排序" align="center" prop="sort" width="100">
-            <template #default="scope"><span class="campus-num">{{ scope.row.sort }}</span></template>
+            <template #default="scope"
+              ><span class="campus-num">{{ scope.row.sort }}</span></template
+            >
           </el-table-column>
           <el-table-column label="创建时间" align="center" width="170">
-            <template #default="scope"><span class="campus-num">{{ parseTime(scope.row.createTime) }}</span></template>
+            <template #default="scope"
+              ><span class="campus-num">{{ parseTime(scope.row.createTime) }}</span></template
+            >
           </el-table-column>
           <el-table-column label="操作" align="center" width="180" fixed="right">
             <template #default="scope">
-              <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['campus:category:edit']">修改</el-button>
-              <el-button link type="danger" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['campus:category:remove']">删除</el-button>
+              <el-button
+                link
+                type="primary"
+                icon="Edit"
+                @click="handleUpdate(scope.row)"
+                v-hasPermi="['campus:category:edit']"
+                >修改</el-button
+              >
+              <el-button
+                link
+                type="danger"
+                icon="Delete"
+                @click="handleDelete(scope.row)"
+                v-hasPermi="['campus:category:remove']"
+                >删除</el-button
+              >
             </template>
           </el-table-column>
           <template #empty>
@@ -66,7 +94,13 @@
           </template>
         </el-table>
 
-        <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
+        <pagination
+          v-show="total > 0"
+          :total="total"
+          v-model:page="queryParams.pageNum"
+          v-model:limit="queryParams.pageSize"
+          @pagination="getList"
+        />
       </div>
     </div>
 
@@ -77,12 +111,12 @@
           <el-input v-model="form.name" placeholder="例如：教材书籍、数码电子" />
         </el-form-item>
         <el-form-item label="上级分类" prop="parentId">
-          <el-select v-model="form.parentId" placeholder="不选则为顶级分类" clearable style="width:100%">
+          <el-select v-model="form.parentId" placeholder="不选则为顶级分类" clearable style="width: 100%">
             <el-option v-for="c in topLevelOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="显示排序" prop="sort">
-          <el-input-number v-model="form.sort" :min="0" :step="1" style="width:100%" />
+          <el-input-number v-model="form.sort" :min="0" :step="1" style="width: 100%" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -130,17 +164,19 @@ const rules = {
 }
 
 // 顶级分类可作为二级分类的上级
-const topLevelOptions = computed(() => categoryList.value.filter(row => !row.parentId))
+const topLevelOptions = computed(() => categoryList.value.filter((row) => !row.parentId))
 
 function getList() {
   loading.value = true
-  listCategory(queryParams).then(res => {
-    categoryList.value = res.rows || []
-    total.value = res.total || 0
-    loading.value = false
-  }).catch(() => {
-    loading.value = false
-  })
+  listCategory(queryParams)
+    .then((res) => {
+      categoryList.value = res.rows || []
+      total.value = res.total || 0
+      loading.value = false
+    })
+    .catch(() => {
+      loading.value = false
+    })
 }
 
 function handleQuery() {
@@ -169,7 +205,7 @@ function handleAdd() {
 
 function handleUpdate(row) {
   reset()
-  getCategory(row.id).then(res => {
+  getCategory(row.id).then((res) => {
     Object.assign(form, res.data)
     open.value = true
     title.value = '修改分类'
@@ -182,7 +218,7 @@ function cancel() {
 }
 
 function submitForm() {
-  categoryRef.value.validate(valid => {
+  categoryRef.value.validate((valid) => {
     if (!valid) return
     const request = form.id != null ? updateCategory(form) : addCategory(form)
     request.then(() => {
@@ -194,12 +230,14 @@ function submitForm() {
 }
 
 function handleDelete(row) {
-  ElMessageBox.confirm('确认删除分类「' + row.name + '」？', '删除确认', { type: 'warning' }).then(() => {
-    delCategory(row.id).then(() => {
-      ElMessage.success('删除成功')
-      getList()
+  ElMessageBox.confirm('确认删除分类「' + row.name + '」？', '删除确认', { type: 'warning' })
+    .then(() => {
+      delCategory(row.id).then(() => {
+        ElMessage.success('删除成功')
+        getList()
+      })
     })
-  }).catch(() => {})
+    .catch(() => {})
 }
 
 onMounted(() => {
@@ -211,7 +249,7 @@ onMounted(() => {
 .category-name {
   color: var(--c-ink);
   font-weight: 500;
-  letter-spacing: .02em;
+  letter-spacing: 0.02em;
 }
 
 .campus-card .pagination-container {

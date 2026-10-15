@@ -1,0 +1,20 @@
+### 依赖与构建产物
+node_modules/
+dist/
+coverage/
+
+### 随包交付的资源与二进制文件
+public/
+src/assets/icons/
+*.svg
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.woff
+*.woff2
+
+### 锁文件与自动生成文件（由工具产出，不参与人工格式化）
+package-lock.json
+.eslintrc-auto-import.json

@@ -29,7 +29,12 @@ function collectSvgFiles(dir, files = []) {
  * 例：user.svg -> icon-user；子目录 a/b.svg -> icon-a-b
  */
 function symbolIdOf(file, iconDir) {
-  const segments = path.relative(iconDir, file).split(path.sep).join('/').replace(/\.svg$/, '').split('/')
+  const segments = path
+    .relative(iconDir, file)
+    .split(path.sep)
+    .join('/')
+    .replace(/\.svg$/, '')
+    .split('/')
   const name = segments.pop()
   const dirName = segments.join('-')
   return dirName ? `icon-${dirName}-${name}` : `icon-${name}`

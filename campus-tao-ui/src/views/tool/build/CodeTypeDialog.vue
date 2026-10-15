@@ -32,16 +32,20 @@ const formData = ref({
 })
 const codeTypeForm = ref()
 const rules = {
-  fileName: [{
-    required: true,
-    message: '请输入文件名',
-    trigger: 'blur'
-  }],
-  type: [{
-    required: true,
-    message: '生成类型不能为空',
-    trigger: 'change'
-  }]
+  fileName: [
+    {
+      required: true,
+      message: '请输入文件名',
+      trigger: 'blur'
+    }
+  ],
+  type: [
+    {
+      required: true,
+      message: '生成类型不能为空',
+      trigger: 'change'
+    }
+  ]
 }
 const typeOptions = ref([
   {
@@ -62,7 +66,7 @@ function onClose() {
   open.value = false
 }
 function handelConfirm() {
-  codeTypeForm.value.validate(valid => {
+  codeTypeForm.value.validate((valid) => {
     if (!valid) return
     emit('confirm', { ...formData.value })
     onClose()

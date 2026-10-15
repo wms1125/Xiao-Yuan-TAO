@@ -15,20 +15,26 @@
       <div class="campus-toolbar">
         <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="72px">
           <el-form-item label="渠道" prop="channel">
-            <el-select v-model="queryParams.channel" placeholder="全部渠道" clearable style="width:140px">
+            <el-select v-model="queryParams.channel" placeholder="全部渠道" clearable style="width: 140px">
               <el-option label="短信" value="sms" />
               <el-option label="邮件" value="email" />
             </el-select>
           </el-form-item>
           <el-form-item label="结果" prop="status">
-            <el-select v-model="queryParams.status" placeholder="全部结果" clearable style="width:160px">
+            <el-select v-model="queryParams.status" placeholder="全部结果" clearable style="width: 160px">
               <el-option label="发送成功" :value="1" />
               <el-option label="发送失败" :value="0" />
               <el-option label="未启用（已降级）" :value="2" />
             </el-select>
           </el-form-item>
           <el-form-item label="业务号" prop="bizNo">
-            <el-input v-model="queryParams.bizNo" placeholder="订单号 / 售后单号" clearable style="width:220px" @keyup.enter="handleQuery" />
+            <el-input
+              v-model="queryParams.bizNo"
+              placeholder="订单号 / 售后单号"
+              clearable
+              style="width: 220px"
+              @keyup.enter="handleQuery"
+            />
           </el-form-item>
           <el-form-item>
             <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
@@ -69,7 +75,9 @@
 
         <el-table v-loading="loading" :data="logList">
           <el-table-column label="时间" align="center" width="165">
-            <template #default="scope"><span class="campus-num">{{ parseTime(scope.row.createTime) }}</span></template>
+            <template #default="scope"
+              ><span class="campus-num">{{ parseTime(scope.row.createTime) }}</span></template
+            >
           </el-table-column>
           <el-table-column label="渠道" align="center" width="90">
             <template #default="scope">
@@ -98,7 +106,9 @@
           </el-table-column>
           <el-table-column label="说明" min-width="180" show-overflow-tooltip>
             <template #default="scope">
-              <span :class="{ 'trace-fail': scope.row.status === 0 }">{{ scope.row.errorMsg || scope.row.response || '—' }}</span>
+              <span :class="{ 'trace-fail': scope.row.status === 0 }">{{
+                scope.row.errorMsg || scope.row.response || '—'
+              }}</span>
             </template>
           </el-table-column>
           <template #empty>
@@ -151,17 +161,19 @@ function statusType(status) {
 }
 
 function countByStatus(status) {
-  return logList.value.filter(row => row.status === status).length
+  return logList.value.filter((row) => row.status === status).length
 }
 
 function getList() {
   loading.value = true
-  listNotifyLog(queryParams).then(res => {
-    logList.value = res.data || []
-    loading.value = false
-  }).catch(() => {
-    loading.value = false
-  })
+  listNotifyLog(queryParams)
+    .then((res) => {
+      logList.value = res.data || []
+      loading.value = false
+    })
+    .catch(() => {
+      loading.value = false
+    })
 }
 
 function handleQuery() {

@@ -1,13 +1,20 @@
 <template>
-  <el-dialog v-model="visible" :title="`「${noticeTitle}」已读用户`" width="760px" top="6vh" append-to-body @close="handleClose">
-    <el-form ref="queryRef" :model="queryParams" size="small" :inline="true" style="margin-bottom: 4px;">
+  <el-dialog
+    v-model="visible"
+    :title="`「${noticeTitle}」已读用户`"
+    width="760px"
+    top="6vh"
+    append-to-body
+    @close="handleClose"
+  >
+    <el-form ref="queryRef" :model="queryParams" size="small" :inline="true" style="margin-bottom: 4px">
       <el-form-item prop="searchValue">
         <el-input
           v-model="queryParams.searchValue"
           placeholder="登录名称 / 用户名称"
           clearable
           :prefix-icon="Search"
-          style="width: 220px;"
+          style="width: 220px"
           @keyup.enter="handleQuery"
           @clear="handleQuery"
         />
@@ -16,7 +23,7 @@
         <el-button type="primary" icon="Search" size="small" @click="handleQuery">搜索</el-button>
         <el-button icon="Refresh" size="small" @click="resetQuery">重置</el-button>
       </el-form-item>
-      <el-form-item style="float: right; margin-right: 0;">
+      <el-form-item style="float: right; margin-right: 0">
         <span class="read-stat">
           共 <strong>{{ total }}</strong> 人已读
         </span>
@@ -40,20 +47,20 @@
       v-model:page="queryParams.pageNum"
       v-model:limit="queryParams.pageSize"
       @pagination="getList"
-      style="padding: 6px 0px;"
+      style="padding: 6px 0px"
     />
   </el-dialog>
 </template>
 
 <script setup name="ReadUsers">
-import { Search } from "@element-plus/icons-vue"
-import { listNoticeReadUsers } from "@/api/system/notice"
+import { Search } from '@element-plus/icons-vue'
+import { listNoticeReadUsers } from '@/api/system/notice'
 
 const { proxy } = getCurrentInstance()
 
 const visible = ref(false)
 const loading = ref(false)
-const noticeTitle = ref("")
+const noticeTitle = ref('')
 const total = ref(0)
 const userList = ref([])
 
@@ -75,12 +82,14 @@ function open(row) {
 
 function getList() {
   loading.value = true
-  listNoticeReadUsers(queryParams).then(res => {
-    userList.value = res.rows
-    total.value = res.total
-  }).finally(() => {
-    loading.value = false
-  })
+  listNoticeReadUsers(queryParams)
+    .then((res) => {
+      userList.value = res.rows
+      total.value = res.total
+    })
+    .finally(() => {
+      loading.value = false
+    })
 }
 
 function handleQuery() {
@@ -89,7 +98,7 @@ function handleQuery() {
 }
 
 function resetQuery() {
-  proxy.resetForm("queryRef")
+  proxy.resetForm('queryRef')
   handleQuery()
 }
 

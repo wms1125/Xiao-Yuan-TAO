@@ -17,11 +17,14 @@ const pwdChrType = ref(cache.session.get('pwrChrtype') || '0')
 
 // 各类型对应的正则、错误提示
 const PWD_RULES = {
-  '0': { pattern: /^[^<>"'|\\]+$/, message: '密码不能包含非法字符：< > " \' \\ |' },
-  '1': { pattern: /^[0-9]+$/, message: '密码只能为数字（0-9）' },
-  '2': { pattern: /^[a-zA-Z]+$/, message: '密码只能为英文字母（a-z、A-Z）' },
-  '3': { pattern: /^(?=.*[a-zA-Z])(?=.*[0-9])[a-zA-Z0-9]+$/, message: '密码必须同时包含字母和数字' },
-  '4': { pattern: /^(?=.*[A-Za-z])(?=.*\d)(?=.*[~!@#$%^&*()\-=_+])[A-Za-z\d~!@#$%^&*()\-=_+]+$/, message: '密码必须同时包含字母、数字和特殊字符（~!@#$%^&*()-=_+）' }
+  0: { pattern: /^[^<>"'|\\]+$/, message: '密码不能包含非法字符：< > " \' \\ |' },
+  1: { pattern: /^[0-9]+$/, message: '密码只能为数字（0-9）' },
+  2: { pattern: /^[a-zA-Z]+$/, message: '密码只能为英文字母（a-z、A-Z）' },
+  3: { pattern: /^(?=.*[a-zA-Z])(?=.*[0-9])[a-zA-Z0-9]+$/, message: '密码必须同时包含字母和数字' },
+  4: {
+    pattern: /^(?=.*[A-Za-z])(?=.*\d)(?=.*[~!@#$%^&*()\-=_+])[A-Za-z\d~!@#$%^&*()\-=_+]+$/,
+    message: '密码必须同时包含字母、数字和特殊字符（~!@#$%^&*()-=_+）'
+  }
 }
 
 export function usePasswordRule() {

@@ -44,7 +44,9 @@
                   <div v-else class="campus-thumb thumb-placeholder">无图</div>
                   <div class="recent-product__main">
                     <span class="recent-product__title">{{ p.title }}</span>
-                    <span class="recent-product__meta">{{ p.sellerName || '匿名卖家' }} · {{ conditionText(p.conditionLevel) }}</span>
+                    <span class="recent-product__meta"
+                      >{{ p.sellerName || '匿名卖家' }} · {{ conditionText(p.conditionLevel) }}</span
+                    >
                   </div>
                   <span class="campus-price">¥{{ money(p.price) }}</span>
                 </div>
@@ -106,7 +108,9 @@
             <div class="about-item">
               <div class="about-item__idx">03</div>
               <div class="about-item__title">资金安全设计</div>
-              <p class="about-item__desc">沙箱账户余额采用原子更新，下单预占库存带乐观锁保护，规避超卖与并发扣减问题。</p>
+              <p class="about-item__desc">
+                沙箱账户余额采用原子更新，下单预占库存带乐观锁保护，规避超卖与并发扣减问题。
+              </p>
             </div>
           </div>
         </div>
@@ -190,11 +194,11 @@ function conditionText(level) {
 }
 
 function countOrder(status) {
-  return orderList.value.filter(row => row.status === status).length
+  return orderList.value.filter((row) => row.status === status).length
 }
 
 function countAftersale(status) {
-  return aftersaleList.value.filter(row => row.status === status).length
+  return aftersaleList.value.filter((row) => row.status === status).length
 }
 
 function go(path) {
@@ -203,15 +207,33 @@ function go(path) {
 
 onMounted(() => {
   // 各区块独立容错，任一接口异常不影响整体渲染
-  listProduct({ pageNum: 1, pageSize: 5, status: 1 }).then(res => {
-    recentProducts.value = res.rows || []
-    totalProduct.value = res.total || 0
-  }).catch(() => {})
+  listProduct({ pageNum: 1, pageSize: 5, status: 1 })
+    .then((res) => {
+      recentProducts.value = res.rows || []
+      totalProduct.value = res.total || 0
+    })
+    .catch(() => {})
 
-  listCart().then(res => { cartList.value = res.data || [] }).catch(() => {})
-  listOrder({}).then(res => { orderList.value = res.data || [] }).catch(() => {})
-  getAccount().then(res => { account.value = res.data || {} }).catch(() => {})
-  listAftersale({ status: 0 }).then(res => { aftersaleList.value = res.data || [] }).catch(() => {})
+  listCart()
+    .then((res) => {
+      cartList.value = res.data || []
+    })
+    .catch(() => {})
+  listOrder({})
+    .then((res) => {
+      orderList.value = res.data || []
+    })
+    .catch(() => {})
+  getAccount()
+    .then((res) => {
+      account.value = res.data || {}
+    })
+    .catch(() => {})
+  listAftersale({ status: 0 })
+    .then((res) => {
+      aftersaleList.value = res.data || []
+    })
+    .catch(() => {})
 })
 </script>
 
@@ -228,18 +250,18 @@ onMounted(() => {
   overflow: hidden;
   color: #ffffff;
   background:
-    radial-gradient(95% 120% at 0% 0%, rgba(63, 157, 134, .55) 0%, rgba(63, 157, 134, 0) 54%),
+    radial-gradient(95% 120% at 0% 0%, rgba(63, 157, 134, 0.55) 0%, rgba(63, 157, 134, 0) 54%),
     linear-gradient(150deg, #12705a 0%, #0a4237 62%, #073029 100%);
   box-shadow: var(--c-shadow-2);
 }
 
 .home-hero::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 46px 46px;
   mask-image: radial-gradient(85% 100% at 88% 50%, #000 8%, transparent 68%);
   pointer-events: none;
@@ -255,14 +277,14 @@ onMounted(() => {
   font-family: var(--c-font-serif);
   font-size: 24px;
   font-weight: 600;
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
 }
 
 .home-hero__slogan {
   margin: 10px 0 24px;
   font-size: 13.5px;
-  letter-spacing: .16em;
-  color: rgba(255, 255, 255, .66);
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.66);
 }
 
 .home-hero__actions {
@@ -272,8 +294,8 @@ onMounted(() => {
 }
 
 .home-hero__actions :deep(.el-button) {
-  background: rgba(255, 255, 255, .12);
-  border-color: rgba(255, 255, 255, .28);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
   color: #ffffff;
 }
 
@@ -285,8 +307,8 @@ onMounted(() => {
 }
 
 .home-hero__actions :deep(.el-button:hover) {
-  background: rgba(255, 255, 255, .92);
-  border-color: rgba(255, 255, 255, .92);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.92);
   color: #0a4237;
 }
 
@@ -299,8 +321,8 @@ onMounted(() => {
 
 .hero-side__label {
   font-size: 12px;
-  letter-spacing: .3em;
-  color: rgba(255, 255, 255, .62);
+  letter-spacing: 0.3em;
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .hero-side__value {
@@ -315,8 +337,8 @@ onMounted(() => {
 .hero-side__hint {
   margin-top: 8px;
   font-size: 12px;
-  letter-spacing: .06em;
-  color: rgba(255, 255, 255, .58);
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.58);
 }
 
 /* 最近上架 */
@@ -332,7 +354,7 @@ onMounted(() => {
   gap: 12px;
   padding: 10px 4px;
   border-bottom: 1px solid var(--c-line-soft);
-  transition: background .18s ease;
+  transition: background 0.18s ease;
 }
 
 .recent-product:last-child {
@@ -362,7 +384,7 @@ onMounted(() => {
 .recent-product__meta {
   font-size: 12px;
   color: var(--c-ink-4);
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .thumb-placeholder {
@@ -371,7 +393,7 @@ onMounted(() => {
   justify-content: center;
   font-size: 11px;
   color: var(--c-ink-4);
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
 }
 
 /* 订单动态 */
@@ -404,7 +426,7 @@ onMounted(() => {
 .recent-order__no {
   font-size: 12.5px;
   color: var(--c-ink);
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .recent-order__time {
@@ -429,7 +451,7 @@ onMounted(() => {
 .about-item__idx {
   font-family: var(--c-font-serif);
   font-size: 12px;
-  letter-spacing: .12em;
+  letter-spacing: 0.12em;
   color: var(--c-accent);
 }
 
@@ -438,7 +460,7 @@ onMounted(() => {
   font-family: var(--c-font-serif);
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
   color: var(--c-ink);
 }
 
@@ -447,7 +469,7 @@ onMounted(() => {
   font-size: 13px;
   line-height: 1.9;
   color: var(--c-ink-3);
-  letter-spacing: .02em;
+  letter-spacing: 0.02em;
 }
 
 @media (max-width: 768px) {

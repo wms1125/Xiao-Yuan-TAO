@@ -1,5 +1,13 @@
 <template>
-  <el-drawer v-model="visible" title="公告详情" direction="rtl" size="50%" append-to-body :before-close="handleClose" class="notice-detail-drawer">
+  <el-drawer
+    v-model="visible"
+    title="公告详情"
+    direction="rtl"
+    size="50%"
+    append-to-body
+    :before-close="handleClose"
+    class="notice-detail-drawer"
+  >
     <div v-loading="loading" class="notice-detail-drawer__body">
       <div v-if="!detail" class="notice-empty">
         <el-icon><Document /></el-icon>
@@ -91,13 +99,16 @@ function open(payload) {
   }
   loading.value = true
   detail.value = null
-  getNotice(id).then(res => {
-    detail.value = res.data
-  }).catch(() => {
-    detail.value = null
-  }).finally(() => {
-    loading.value = false
-  })
+  getNotice(id)
+    .then((res) => {
+      detail.value = res.data
+    })
+    .catch(() => {
+      detail.value = null
+    })
+    .finally(() => {
+      loading.value = false
+    })
 }
 
 function handleClose() {
@@ -120,8 +131,14 @@ defineExpose({
 }
 
 @keyframes notice-fade-up {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .notice-type-tag {
@@ -190,8 +207,12 @@ defineExpose({
   margin-right: 4px;
 }
 
-.status-ok  { background: #38a169; }
-.status-off { background: #e53e3e; }
+.status-ok {
+  background: #38a169;
+}
+.status-off {
+  background: #e53e3e;
+}
 
 .notice-divider {
   display: flex;
@@ -230,7 +251,9 @@ defineExpose({
   word-break: break-word;
 }
 
-.notice-content :deep(p) { margin: 0 0 1em; }
+.notice-content :deep(p) {
+  margin: 0 0 1em;
+}
 
 .notice-content :deep(h1),
 .notice-content :deep(h2),
@@ -240,15 +263,23 @@ defineExpose({
   margin: 1.4em 0 0.6em;
 }
 
-.notice-content :deep(h1) { font-size: 18px; }
-.notice-content :deep(h2) { font-size: 16px; }
-.notice-content :deep(h3) { font-size: 14px; }
+.notice-content :deep(h1) {
+  font-size: 18px;
+}
+.notice-content :deep(h2) {
+  font-size: 16px;
+}
+.notice-content :deep(h3) {
+  font-size: 14px;
+}
 
 .notice-content :deep(a) {
   color: #3182ce;
   text-decoration: underline;
 }
-.notice-content :deep(a:hover) { color: #2b6cb0; }
+.notice-content :deep(a:hover) {
+  color: #2b6cb0;
+}
 
 .notice-content :deep(img) {
   max-width: 100%;
@@ -261,7 +292,9 @@ defineExpose({
   padding-left: 20px;
   margin: 0 0 1em;
 }
-.notice-content :deep(li) { margin-bottom: 4px; }
+.notice-content :deep(li) {
+  margin-bottom: 4px;
+}
 
 .notice-content :deep(blockquote) {
   border-left: 3px solid var(--notice-blockquote-border, #cbd5e0);
@@ -298,7 +331,9 @@ defineExpose({
   display: inline-flex;
   margin-bottom: 10px;
 }
-.notice-empty--inner { padding: 32px 0; }
+.notice-empty--inner {
+  padding: 32px 0;
+}
 
 .notice-detail-drawer__body {
   height: 100%;

@@ -1,6 +1,11 @@
 <template>
   <div class="navbar" :class="'nav' + settingsStore.navType">
-    <hamburger id="hamburger-container" :is-active="appStore.sidebar.opened" class="hamburger-container" @toggleClick="toggleSideBar" />
+    <hamburger
+      id="hamburger-container"
+      :is-active="appStore.sidebar.opened"
+      class="hamburger-container"
+      @toggleClick="toggleSideBar"
+    />
     <breadcrumb v-if="settingsStore.navType == 1" id="breadcrumb-container" class="breadcrumb-container" />
     <top-nav v-if="settingsStore.navType == 2" id="topmenu-container" class="topmenu-container" />
     <template v-if="settingsStore.navType == 3">
@@ -49,10 +54,10 @@
               <el-dropdown-item>个人中心</el-dropdown-item>
             </router-link>
             <el-dropdown-item command="setLayout" v-if="settingsStore.showSettings">
-                <span>布局设置</span>
+              <span>布局设置</span>
             </el-dropdown-item>
             <el-dropdown-item command="lockScreen">
-                <span>锁定屏幕</span>
+              <span>锁定屏幕</span>
             </el-dropdown-item>
             <el-dropdown-item divided command="logout">
               <span>退出登录</span>
@@ -95,13 +100,13 @@ function toggleSideBar() {
 
 function handleCommand(command) {
   switch (command) {
-    case "setLayout":
+    case 'setLayout':
       setLayout()
       break
-    case "lockScreen":
+    case 'lockScreen':
       lockScreen()
       break
-    case "logout":
+    case 'logout':
       logout()
       break
     default:
@@ -114,11 +119,13 @@ function logout() {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning'
-  }).then(() => {
-    userStore.logOut().then(() => {
-      location.href = '/index'
+  })
+    .then(() => {
+      userStore.logOut().then(() => {
+        location.href = '/index'
+      })
     })
-  }).catch(() => { })
+    .catch(() => {})
 }
 
 const emits = defineEmits(['setLayout'])
@@ -137,7 +144,7 @@ async function toggleTheme(event) {
   const y = event?.clientY || window.innerHeight / 2
   const wasDark = settingsStore.isDark
 
-  const isReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  const isReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const isSupported = document.startViewTransition && !isReducedMotion
 
   if (!isSupported) {
@@ -158,22 +165,23 @@ async function toggleTheme(event) {
     document.documentElement.animate(
       {
         clipPath: !wasDark ? [...clipPath].reverse() : clipPath
-      }, {
+      },
+      {
         duration: 650,
-        easing: "cubic-bezier(0.4, 0, 0.2, 1)",
-        fill: "forwards",
-        pseudoElement: !wasDark ? "::view-transition-old(root)" : "::view-transition-new(root)"
+        easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+        fill: 'forwards',
+        pseudoElement: !wasDark ? '::view-transition-old(root)' : '::view-transition-new(root)'
       }
     )
     await transition.finished
   } catch (error) {
-    console.warn("View transition failed, falling back to immediate toggle:", error)
+    console.warn('View transition failed, falling back to immediate toggle:', error)
     settingsStore.toggleTheme()
   }
 }
 </script>
 
-<style lang='scss' scoped>
+<style lang="scss" scoped>
 .navbar.nav3 {
   .hamburger-container {
     display: none !important;
@@ -259,7 +267,7 @@ async function toggleTheme(event) {
 
         svg {
           transition: transform 0.3s;
-          
+
           &:hover {
             transform: scale(1.15);
           }
@@ -284,7 +292,7 @@ async function toggleTheme(event) {
           border-radius: 50%;
         }
 
-        .user-nickname{
+        .user-nickname {
           position: relative;
           left: 0px;
           bottom: 10px;

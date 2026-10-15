@@ -7,7 +7,9 @@
           <p class="campus-head__desc">已发货或已完成的订单可申请售后，审核通过后自动退款并回补库存</p>
         </div>
         <div class="campus-head__extra">
-          <el-button type="primary" icon="Plus" @click="openApply" v-hasPermi="['campus:aftersale:add']">申请售后</el-button>
+          <el-button type="primary" icon="Plus" @click="openApply" v-hasPermi="['campus:aftersale:add']"
+            >申请售后</el-button
+          >
         </div>
       </div>
 
@@ -15,10 +17,16 @@
       <div class="campus-toolbar" v-show="showSearch">
         <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="72px">
           <el-form-item label="订单号" prop="orderNo">
-            <el-input v-model="queryParams.orderNo" placeholder="请输入订单号" clearable style="width:240px" @keyup.enter="handleQuery" />
+            <el-input
+              v-model="queryParams.orderNo"
+              placeholder="请输入订单号"
+              clearable
+              style="width: 240px"
+              @keyup.enter="handleQuery"
+            />
           </el-form-item>
           <el-form-item label="售后状态" prop="status">
-            <el-select v-model="queryParams.status" placeholder="全部状态" clearable style="width:160px">
+            <el-select v-model="queryParams.status" placeholder="全部状态" clearable style="width: 160px">
               <el-option label="待审核" :value="0" />
               <el-option label="已驳回" :value="2" />
               <el-option label="已退款" :value="3" />
@@ -59,10 +67,14 @@
 
         <el-table v-loading="loading" :data="aftersaleList">
           <el-table-column label="售后单号" prop="aftersaleNo" width="200">
-            <template #default="scope"><span class="campus-num">{{ scope.row.aftersaleNo }}</span></template>
+            <template #default="scope"
+              ><span class="campus-num">{{ scope.row.aftersaleNo }}</span></template
+            >
           </el-table-column>
           <el-table-column label="关联订单" width="200">
-            <template #default="scope"><span class="campus-num">{{ scope.row.orderNo }}</span></template>
+            <template #default="scope"
+              ><span class="campus-num">{{ scope.row.orderNo }}</span></template
+            >
           </el-table-column>
           <el-table-column label="类型" align="center" width="110">
             <template #default="scope">
@@ -70,7 +82,9 @@
             </template>
           </el-table-column>
           <el-table-column label="退款金额" align="center" width="120">
-            <template #default="scope"><span class="campus-price">¥{{ money(scope.row.refundAmount) }}</span></template>
+            <template #default="scope"
+              ><span class="campus-price">¥{{ money(scope.row.refundAmount) }}</span></template
+            >
           </el-table-column>
           <el-table-column label="状态" align="center" width="110">
             <template #default="scope">
@@ -80,11 +94,20 @@
           <el-table-column label="申请原因" prop="reason" min-width="180" show-overflow-tooltip />
           <el-table-column label="申请人" align="center" prop="userName" width="120" />
           <el-table-column label="申请时间" align="center" width="165">
-            <template #default="scope"><span class="campus-num">{{ parseTime(scope.row.createTime) }}</span></template>
+            <template #default="scope"
+              ><span class="campus-num">{{ parseTime(scope.row.createTime) }}</span></template
+            >
           </el-table-column>
           <el-table-column label="操作" align="center" width="120" fixed="right">
             <template #default="scope">
-              <el-button v-if="scope.row.status === 0" link type="primary" @click="openAudit(scope.row)" v-hasPermi="['campus:aftersale:edit']">审核</el-button>
+              <el-button
+                v-if="scope.row.status === 0"
+                link
+                type="primary"
+                @click="openAudit(scope.row)"
+                v-hasPermi="['campus:aftersale:edit']"
+                >审核</el-button
+              >
               <span v-else class="campus-badge">{{ scope.row.handler || '已处理' }}</span>
             </template>
           </el-table-column>
@@ -229,17 +252,19 @@ function money(value) {
 }
 
 function countByStatus(status) {
-  return aftersaleList.value.filter(row => row.status === status).length
+  return aftersaleList.value.filter((row) => row.status === status).length
 }
 
 function getList() {
   loading.value = true
-  listAftersale(queryParams).then(res => {
-    aftersaleList.value = res.data || []
-    loading.value = false
-  }).catch(() => {
-    loading.value = false
-  })
+  listAftersale(queryParams)
+    .then((res) => {
+      aftersaleList.value = res.data || []
+      loading.value = false
+    })
+    .catch(() => {
+      loading.value = false
+    })
 }
 
 function handleQuery() {
@@ -259,16 +284,19 @@ function openApply() {
 }
 
 function submitApply() {
-  applyRef.value.validate(valid => {
+  applyRef.value.validate((valid) => {
     if (!valid) return
     submitting.value = true
-    applyAftersale({ ...applyForm }).then(res => {
-      ElMessage.success('申请已提交，售后单号 ' + res.data)
-      applyOpen.value = false
-      getList()
-    }).catch(() => {}).finally(() => {
-      submitting.value = false
-    })
+    applyAftersale({ ...applyForm })
+      .then((res) => {
+        ElMessage.success('申请已提交，售后单号 ' + res.data)
+        applyOpen.value = false
+        getList()
+      })
+      .catch(() => {})
+      .finally(() => {
+        submitting.value = false
+      })
   })
 }
 
@@ -281,20 +309,23 @@ function openAudit(row) {
 }
 
 function submitAudit() {
-  auditRef.value.validate(valid => {
+  auditRef.value.validate((valid) => {
     if (!valid) return
     submitting.value = true
     auditAftersale({
       aftersaleNo: auditForm.aftersaleNo,
       pass: auditForm.pass,
       remark: auditForm.remark
-    }).then(() => {
-      ElMessage.success('审核完成')
-      auditOpen.value = false
-      getList()
-    }).catch(() => {}).finally(() => {
-      submitting.value = false
     })
+      .then(() => {
+        ElMessage.success('审核完成')
+        auditOpen.value = false
+        getList()
+      })
+      .catch(() => {})
+      .finally(() => {
+        submitting.value = false
+      })
   })
 }
 
@@ -317,7 +348,7 @@ onMounted(() => {
 .audit-summary__no {
   font-size: 13px;
   color: var(--c-ink-2);
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .campus-card .pagination-container {

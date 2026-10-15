@@ -58,7 +58,12 @@
           <el-table-column label="订单" min-width="300">
             <template #default="scope">
               <div class="order-cell">
-                <el-image v-if="firstImage(scope.row.items)" :src="firstImage(scope.row.items)" class="campus-thumb" fit="cover" />
+                <el-image
+                  v-if="firstImage(scope.row.items)"
+                  :src="firstImage(scope.row.items)"
+                  class="campus-thumb"
+                  fit="cover"
+                />
                 <div v-else class="campus-thumb thumb-placeholder">无图</div>
                 <div class="order-cell__main">
                   <span class="order-cell__title">{{ mainTitle(scope.row.items) }}</span>
@@ -83,15 +88,45 @@
             </template>
           </el-table-column>
           <el-table-column label="下单时间" align="center" width="165">
-            <template #default="scope"><span class="campus-num">{{ parseTime(scope.row.createTime) }}</span></template>
+            <template #default="scope"
+              ><span class="campus-num">{{ parseTime(scope.row.createTime) }}</span></template
+            >
           </el-table-column>
           <el-table-column label="操作" align="center" width="260" fixed="right">
             <template #default="scope">
               <el-button link type="primary" @click="handleDetail(scope.row)">详情</el-button>
-              <el-button v-if="scope.row.status === 0" link type="success" @click="handlePay(scope.row)" v-hasPermi="['campus:order:edit']">支付</el-button>
-              <el-button v-if="scope.row.status === 0 || scope.row.status === 1" link type="danger" @click="handleCancel(scope.row)" v-hasPermi="['campus:order:edit']">取消</el-button>
-              <el-button v-if="scope.row.status === 1" link type="primary" @click="handleShip(scope.row)" v-hasRole="['admin']">发货</el-button>
-              <el-button v-if="scope.row.status === 2" link type="success" @click="handleFinish(scope.row)" v-hasPermi="['campus:order:edit']">确认收货</el-button>
+              <el-button
+                v-if="scope.row.status === 0"
+                link
+                type="success"
+                @click="handlePay(scope.row)"
+                v-hasPermi="['campus:order:edit']"
+                >支付</el-button
+              >
+              <el-button
+                v-if="scope.row.status === 0 || scope.row.status === 1"
+                link
+                type="danger"
+                @click="handleCancel(scope.row)"
+                v-hasPermi="['campus:order:edit']"
+                >取消</el-button
+              >
+              <el-button
+                v-if="scope.row.status === 1"
+                link
+                type="primary"
+                @click="handleShip(scope.row)"
+                v-hasRole="['admin']"
+                >发货</el-button
+              >
+              <el-button
+                v-if="scope.row.status === 2"
+                link
+                type="success"
+                @click="handleFinish(scope.row)"
+                v-hasPermi="['campus:order:edit']"
+                >确认收货</el-button
+              >
             </template>
           </el-table-column>
           <template #empty>
@@ -118,11 +153,15 @@
         <el-table :data="detail.items || []" size="small">
           <el-table-column label="商品" prop="productTitle" min-width="200" />
           <el-table-column label="单价" align="center" width="100">
-            <template #default="scope"><span class="campus-price">¥{{ money(scope.row.price) }}</span></template>
+            <template #default="scope"
+              ><span class="campus-price">¥{{ money(scope.row.price) }}</span></template
+            >
           </el-table-column>
           <el-table-column label="数量" align="center" prop="quantity" width="80" />
           <el-table-column label="小计" align="center" width="110">
-            <template #default="scope"><span class="campus-price">¥{{ money(scope.row.subtotal) }}</span></template>
+            <template #default="scope"
+              ><span class="campus-price">¥{{ money(scope.row.subtotal) }}</span></template
+            >
           </el-table-column>
         </el-table>
 
@@ -161,11 +200,16 @@
               :loading="traceLoading"
               v-hasRole="['admin']"
               @click="handleSyncTrace"
-            >同步轨迹</el-button>
+              >同步轨迹</el-button
+            >
           </div>
           <div v-if="!detail.logisticsNo" class="detail-trace__empty">暂无物流单号，卖家发货后可查询轨迹</div>
-          <div v-else-if="!logisticsStatus" class="detail-trace__empty">物流轨迹查询通道未配置，已降级为仅记录物流单号</div>
-          <div v-else-if="!traceList.length" class="detail-trace__empty">暂无轨迹节点，可点击「同步轨迹」向承运商拉取</div>
+          <div v-else-if="!logisticsStatus" class="detail-trace__empty">
+            物流轨迹查询通道未配置，已降级为仅记录物流单号
+          </div>
+          <div v-else-if="!traceList.length" class="detail-trace__empty">
+            暂无轨迹节点，可点击「同步轨迹」向承运商拉取
+          </div>
           <el-timeline v-else class="detail-trace__list">
             <el-timeline-item
               v-for="trace in traceList"
@@ -194,7 +238,16 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { parseTime } from '@/utils/ruoyi'
-import { listOrder, getOrder, payOrder, cancelOrder, shipOrder, finishOrder, getLogisticsTrace, syncLogisticsTrace } from '@/api/campus/order'
+import {
+  listOrder,
+  getOrder,
+  payOrder,
+  cancelOrder,
+  shipOrder,
+  finishOrder,
+  getLogisticsTrace,
+  syncLogisticsTrace
+} from '@/api/campus/order'
 
 const orderList = ref([])
 const loading = ref(true)
@@ -268,17 +321,19 @@ function firstImage(items) {
 }
 
 function countByStatus(status) {
-  return orderList.value.filter(row => row.status === status).length
+  return orderList.value.filter((row) => row.status === status).length
 }
 
 function getList() {
   loading.value = true
-  listOrder(queryParams).then(res => {
-    orderList.value = res.data || []
-    loading.value = false
-  }).catch(() => {
-    loading.value = false
-  })
+  listOrder(queryParams)
+    .then((res) => {
+      orderList.value = res.data || []
+      loading.value = false
+    })
+    .catch(() => {
+      loading.value = false
+    })
 }
 
 function handleStatusFilter(status) {
@@ -287,7 +342,7 @@ function handleStatusFilter(status) {
 }
 
 function handleDetail(row) {
-  getOrder(row.orderNo).then(res => {
+  getOrder(row.orderNo).then((res) => {
     detail.value = res.data
     detailOpen.value = true
     loadTrace(row.orderNo)
@@ -298,41 +353,51 @@ function handleDetail(row) {
 function loadTrace(orderNo) {
   traceList.value = []
   if (!orderNo) return
-  getLogisticsTrace(orderNo).then(res => {
-    const data = res.data || {}
-    logisticsStatus.value = !!data.providerEnabled
-    traceList.value = data.traces || []
-  }).catch(() => {})
+  getLogisticsTrace(orderNo)
+    .then((res) => {
+      const data = res.data || {}
+      logisticsStatus.value = !!data.providerEnabled
+      traceList.value = data.traces || []
+    })
+    .catch(() => {})
 }
 
 function handleSyncTrace() {
   if (!detail.value) return
   traceLoading.value = true
-  syncLogisticsTrace(detail.value.orderNo).then(res => {
-    ElMessage.success(res.msg || '同步完成')
-    loadTrace(detail.value.orderNo)
-    traceLoading.value = false
-  }).catch(() => {
-    traceLoading.value = false
-  })
+  syncLogisticsTrace(detail.value.orderNo)
+    .then((res) => {
+      ElMessage.success(res.msg || '同步完成')
+      loadTrace(detail.value.orderNo)
+      traceLoading.value = false
+    })
+    .catch(() => {
+      traceLoading.value = false
+    })
 }
 
 function handlePay(row) {
-  ElMessageBox.confirm('确认支付订单「' + row.orderNo + '」？将从沙箱余额中扣款。', '支付确认', { type: 'warning' }).then(() => {
-    payOrder(row.orderNo).then(() => {
-      ElMessage.success('支付成功')
-      getList()
+  ElMessageBox.confirm('确认支付订单「' + row.orderNo + '」？将从沙箱余额中扣款。', '支付确认', { type: 'warning' })
+    .then(() => {
+      payOrder(row.orderNo).then(() => {
+        ElMessage.success('支付成功')
+        getList()
+      })
     })
-  }).catch(() => {})
+    .catch(() => {})
 }
 
 function handleCancel(row) {
-  ElMessageBox.confirm('确认取消订单「' + row.orderNo + '」？已付款订单将退回沙箱余额。', '取消确认', { type: 'warning' }).then(() => {
-    cancelOrder(row.orderNo).then(() => {
-      ElMessage.success('已取消')
-      getList()
+  ElMessageBox.confirm('确认取消订单「' + row.orderNo + '」？已付款订单将退回沙箱余额。', '取消确认', {
+    type: 'warning'
+  })
+    .then(() => {
+      cancelOrder(row.orderNo).then(() => {
+        ElMessage.success('已取消')
+        getList()
+      })
     })
-  }).catch(() => {})
+    .catch(() => {})
 }
 
 function handleShip(row) {
@@ -340,23 +405,27 @@ function handleShip(row) {
     confirmButtonText: '确认发货',
     cancelButtonText: '取消',
     inputPlaceholder: '如 SF1234567890',
-    inputValidator: value => !value || value.length <= 64 || '物流单号不超过 64 个字符',
+    inputValidator: (value) => !value || value.length <= 64 || '物流单号不超过 64 个字符',
     type: 'warning'
-  }).then(({ value }) => {
-    shipOrder(row.orderNo, value || '').then(() => {
-      ElMessage.success('已发货')
-      getList()
+  })
+    .then(({ value }) => {
+      shipOrder(row.orderNo, value || '').then(() => {
+        ElMessage.success('已发货')
+        getList()
+      })
     })
-  }).catch(() => {})
+    .catch(() => {})
 }
 
 function handleFinish(row) {
-  ElMessageBox.confirm('确认已收到商品「' + row.orderNo + '」？', '确认收货', { type: 'warning' }).then(() => {
-    finishOrder(row.orderNo).then(() => {
-      ElMessage.success('已确认收货')
-      getList()
+  ElMessageBox.confirm('确认已收到商品「' + row.orderNo + '」？', '确认收货', { type: 'warning' })
+    .then(() => {
+      finishOrder(row.orderNo).then(() => {
+        ElMessage.success('已确认收货')
+        getList()
+      })
     })
-  }).catch(() => {})
+    .catch(() => {})
 }
 
 onMounted(() => {
@@ -380,9 +449,9 @@ onMounted(() => {
   color: var(--c-ink-2);
   font-size: 13px;
   font-family: inherit;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
   cursor: pointer;
-  transition: all .18s ease;
+  transition: all 0.18s ease;
 }
 
 .status-chip:hover {
@@ -409,7 +478,7 @@ onMounted(() => {
   justify-content: center;
   font-size: 11px;
   color: var(--c-ink-4);
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
 }
 
 .order-cell__main {
@@ -430,7 +499,7 @@ onMounted(() => {
 .order-cell__meta {
   font-size: 12px;
   color: var(--c-ink-4);
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 /* 详情弹窗 */
@@ -447,7 +516,7 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--c-ink);
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .detail-order-time {
@@ -500,7 +569,7 @@ onMounted(() => {
 
 .timeline-item__label {
   width: 76px;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
 }
 
 .timeline-item__time {
@@ -525,14 +594,14 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   color: var(--c-ink);
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
 }
 
 .detail-trace__empty {
   padding: 10px 0;
   font-size: 12.5px;
   color: var(--c-ink-4);
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .detail-trace__list {
@@ -550,7 +619,7 @@ onMounted(() => {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--c-primary);
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
   flex-shrink: 0;
 }
 

@@ -34,7 +34,15 @@
       <div class="campus-card">
         <div class="campus-card__head">
           <span class="campus-card__title">商品清单</span>
-          <el-button type="danger" plain icon="Delete" :disabled="!selectedRows.length" @click="handleDeleteSelected" v-hasPermi="['campus:cart:remove']">删除选中</el-button>
+          <el-button
+            type="danger"
+            plain
+            icon="Delete"
+            :disabled="!selectedRows.length"
+            @click="handleDeleteSelected"
+            v-hasPermi="['campus:cart:remove']"
+            >删除选中</el-button
+          >
         </div>
 
         <el-table
@@ -48,7 +56,12 @@
           <el-table-column label="商品" min-width="280">
             <template #default="scope">
               <div class="cart-cell">
-                <el-image v-if="scope.row.image" :src="scope.row.image" class="campus-thumb campus-thumb--lg" fit="cover" />
+                <el-image
+                  v-if="scope.row.image"
+                  :src="scope.row.image"
+                  class="campus-thumb campus-thumb--lg"
+                  fit="cover"
+                />
                 <div v-else class="campus-thumb campus-thumb--lg thumb-placeholder">无图</div>
                 <div class="cart-cell__main">
                   <span class="cart-cell__title">{{ scope.row.title || '商品 #' + scope.row.productId }}</span>
@@ -84,7 +97,14 @@
           </el-table-column>
           <el-table-column label="操作" align="center" width="100">
             <template #default="scope">
-              <el-button link type="danger" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['campus:cart:remove']">移除</el-button>
+              <el-button
+                link
+                type="danger"
+                icon="Delete"
+                @click="handleDelete(scope.row)"
+                v-hasPermi="['campus:cart:remove']"
+                >移除</el-button
+              >
             </template>
           </el-table-column>
           <template #empty>
@@ -100,7 +120,14 @@
           <span class="campus-summary__meta">已选 {{ selectedCount }} 件商品</span>
           <span class="campus-summary__meta">合计</span>
           <span class="campus-summary__total">¥{{ selectedAmount }}</span>
-          <el-button type="primary" size="large" :disabled="!selectedRows.length" @click="openCheckout" v-hasPermi="['campus:order:add']">去结算</el-button>
+          <el-button
+            type="primary"
+            size="large"
+            :disabled="!selectedRows.length"
+            @click="openCheckout"
+            v-hasPermi="['campus:order:add']"
+            >去结算</el-button
+          >
         </div>
       </div>
     </div>
@@ -118,7 +145,12 @@
           <el-input v-model="checkoutForm.address" placeholder="例如：3 号宿舍楼 502 室" />
         </el-form-item>
         <el-form-item label="备注" prop="remark">
-          <el-input v-model="checkoutForm.remark" type="textarea" :rows="2" placeholder="选填，可约定当面交易的时间地点" />
+          <el-input
+            v-model="checkoutForm.remark"
+            type="textarea"
+            :rows="2"
+            placeholder="选填，可约定当面交易的时间地点"
+          />
         </el-form-item>
       </el-form>
 
@@ -190,39 +222,46 @@ function firstImage(images) {
 
 // 购物车表只返回商品 ID，这里逐条补齐标题、价格、图片与库存
 function enrichCart(rows) {
-  return Promise.all(rows.map(row => {
-    return getProduct(row.productId).then(res => {
-      const p = res.data || {}
-      return {
-        ...row,
-        title: p.title,
-        price: p.price,
-        image: firstImage(p.images),
-        stock: p.stock,
-        status: p.status
-      }
-    }).catch(() => ({ ...row, title: '商品 #' + row.productId, price: 0 }))
-  }))
+  return Promise.all(
+    rows.map((row) => {
+      return getProduct(row.productId)
+        .then((res) => {
+          const p = res.data || {}
+          return {
+            ...row,
+            title: p.title,
+            price: p.price,
+            image: firstImage(p.images),
+            stock: p.stock,
+            status: p.status
+          }
+        })
+        .catch(() => ({ ...row, title: '商品 #' + row.productId, price: 0 }))
+    })
+  )
 }
 
 function getList() {
   loading.value = true
-  const keepSelected = selectedRows.value.map(row => row.id)
-  listCart().then(res => {
-    return enrichCart(res.data || [])
-  }).then(rows => {
-    cartList.value = rows
-    loading.value = false
-    nextTick(() => {
-      rows.forEach(row => {
-        if (keepSelected.includes(row.id) || row.checked === 1) {
-          cartTableRef.value && cartTableRef.value.toggleRowSelection(row, true)
-        }
+  const keepSelected = selectedRows.value.map((row) => row.id)
+  listCart()
+    .then((res) => {
+      return enrichCart(res.data || [])
+    })
+    .then((rows) => {
+      cartList.value = rows
+      loading.value = false
+      nextTick(() => {
+        rows.forEach((row) => {
+          if (keepSelected.includes(row.id) || row.checked === 1) {
+            cartTableRef.value && cartTableRef.value.toggleRowSelection(row, true)
+          }
+        })
       })
     })
-  }).catch(() => {
-    loading.value = false
-  })
+    .catch(() => {
+      loading.value = false
+    })
 }
 
 function handleSelectionChange(selection) {
@@ -239,24 +278,28 @@ function handleQuantityChange(row) {
 }
 
 function handleDelete(row) {
-  ElMessageBox.confirm('确认将该商品移出购物车？', '移除确认', { type: 'warning' }).then(() => {
-    delCart(row.id).then(() => {
-      ElMessage.success('已移除')
-      getList()
+  ElMessageBox.confirm('确认将该商品移出购物车？', '移除确认', { type: 'warning' })
+    .then(() => {
+      delCart(row.id).then(() => {
+        ElMessage.success('已移除')
+        getList()
+      })
     })
-  }).catch(() => {})
+    .catch(() => {})
 }
 
 function handleDeleteSelected() {
-  const ids = selectedRows.value.map(row => row.id)
+  const ids = selectedRows.value.map((row) => row.id)
   if (!ids.length) return
-  ElMessageBox.confirm('确认删除选中的 ' + ids.length + ' 项商品？', '删除确认', { type: 'warning' }).then(() => {
-    delCart(ids.join(',')).then(() => {
-      ElMessage.success('删除成功')
-      selectedRows.value = []
-      getList()
+  ElMessageBox.confirm('确认删除选中的 ' + ids.length + ' 项商品？', '删除确认', { type: 'warning' })
+    .then(() => {
+      delCart(ids.join(',')).then(() => {
+        ElMessage.success('删除成功')
+        selectedRows.value = []
+        getList()
+      })
     })
-  }).catch(() => {})
+    .catch(() => {})
 }
 
 function openCheckout() {
@@ -268,20 +311,23 @@ function openCheckout() {
 }
 
 function submitOrder() {
-  checkoutRef.value.validate(valid => {
+  checkoutRef.value.validate((valid) => {
     if (!valid) return
     submitting.value = true
     createOrder({
-      cartIds: selectedRows.value.map(row => row.id),
+      cartIds: selectedRows.value.map((row) => row.id),
       ...checkoutForm
-    }).then(res => {
-      checkoutOpen.value = false
-      selectedRows.value = []
-      ElMessage.success('下单成功，订单号 ' + res.data)
-      router.push('/campus/order')
-    }).catch(() => {}).finally(() => {
-      submitting.value = false
     })
+      .then((res) => {
+        checkoutOpen.value = false
+        selectedRows.value = []
+        ElMessage.success('下单成功，订单号 ' + res.data)
+        router.push('/campus/order')
+      })
+      .catch(() => {})
+      .finally(() => {
+        submitting.value = false
+      })
   })
 }
 
@@ -303,7 +349,7 @@ onMounted(() => {
   justify-content: center;
   font-size: 11px;
   color: var(--c-ink-4);
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
 }
 
 .cart-cell__main {
@@ -322,7 +368,7 @@ onMounted(() => {
 .cart-cell__meta {
   font-size: 12.5px;
   color: var(--c-ink-4);
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .campus-card .pagination-container {
@@ -338,6 +384,6 @@ onMounted(() => {
   border-top: 1px solid var(--c-line-soft);
   font-size: 13px;
   color: var(--c-ink-3);
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
 }
 </style>

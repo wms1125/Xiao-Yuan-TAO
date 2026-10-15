@@ -1,14 +1,7 @@
 <template>
   <div class="header-search">
     <svg-icon class-name="search-icon" icon-class="search" @click.stop="click" />
-    <el-dialog
-      v-model="show"
-      width="600"
-      @close="close"
-      @opened="onDialogOpened"
-      :show-close="false"
-      append-to-body
-    >
+    <el-dialog v-model="show" width="600" @close="close" @opened="onDialogOpened" :show-close="false" append-to-body>
       <el-input
         v-model="search"
         ref="headerSearchSelectRef"
@@ -29,7 +22,6 @@
 
       <div class="result-wrap">
         <el-scrollbar>
-
           <template v-if="options.length > 0">
             <div
               class="search-item"
@@ -54,23 +46,19 @@
 
           <div class="empty-state" v-else-if="search && options.length === 0">
             <el-icon class="empty-icon"><Search /></el-icon>
-            <p class="empty-text">未找到 "<strong>{{ search }}</strong>" 相关菜单</p>
+            <p class="empty-text">
+              未找到 "<strong>{{ search }}</strong
+              >" 相关菜单
+            </p>
             <p class="empty-tip">试试其他关键词或路径</p>
           </div>
-
         </el-scrollbar>
       </div>
 
       <div class="search-footer">
-        <span class="shortcut-item">
-          <kbd>↑</kbd><kbd>↓</kbd> 切换
-        </span>
-        <span class="shortcut-item">
-          <kbd>↵</kbd> 选择
-        </span>
-        <span class="shortcut-item">
-          <kbd>Esc</kbd> 关闭
-        </span>
+        <span class="shortcut-item"> <kbd>↑</kbd><kbd>↓</kbd> 切换 </span>
+        <span class="shortcut-item"> <kbd>↵</kbd> 选择 </span>
+        <span class="shortcut-item"> <kbd>Esc</kbd> 关闭 </span>
       </div>
     </el-dialog>
   </div>
@@ -120,8 +108,8 @@ function change(val) {
   const query = val.query
   if (isHttp(p)) {
     // http(s):// 路径新窗口打开
-    const pindex = p.indexOf("http")
-    window.open(p.substr(pindex, p.length), "_blank")
+    const pindex = p.indexOf('http')
+    window.open(p.substr(pindex, p.length), '_blank')
   } else {
     if (query) {
       router.push({ path: p, query: JSON.parse(query) })
@@ -142,20 +130,25 @@ function initFuse(list) {
     threshold: 0.2,
     distance: 100,
     minMatchCharLength: 1,
-    keys: [{
-      name: 'title',
-      weight: 0.7
-    }, {
-      name: 'path',
-      weight: 0.3
-    }]
+    keys: [
+      {
+        name: 'title',
+        weight: 0.7
+      },
+      {
+        name: 'path',
+        weight: 0.3
+      }
+    ]
   })
 }
 
 function generateRoutes(routes, basePath = '', prefixTitle = []) {
   let res = []
   for (const r of routes) {
-    if (r.hidden) { continue }
+    if (r.hidden) {
+      continue
+    }
     const p = r.path.length > 0 && r.path[0] === '/' ? r.path : '/' + r.path
     const data = {
       path: !isHttp(r.path) ? getNormalPath(basePath + p) : r.path,
@@ -165,7 +158,7 @@ function generateRoutes(routes, basePath = '', prefixTitle = []) {
     if (r.meta && r.meta.title) {
       data.title = [...data.title, r.meta.title]
       data.icon = r.meta.icon
-      if (r.redirect !== "noRedirect") {
+      if (r.redirect !== 'noRedirect') {
         res.push(data)
       }
     }
@@ -186,13 +179,11 @@ function querySearch(query) {
   activeIndex.value = -1
   if (query !== '') {
     const q = query.toLowerCase()
-    const pathMatches = searchPool.value.filter(item =>
-      item.path.toLowerCase().includes(q)
-    )
-    const fuseMatches = fuse.value.search(query).map(item => item.item)
+    const pathMatches = searchPool.value.filter((item) => item.path.toLowerCase().includes(q))
+    const fuseMatches = fuse.value.search(query).map((item) => item.item)
     const merged = [...pathMatches]
-    fuseMatches.forEach(item => {
-      if (!merged.find(m => m.path === item.path)) {
+    fuseMatches.forEach((item) => {
+      if (!merged.find((m) => m.path === item.path)) {
         merged.push(item)
       }
     })
@@ -205,15 +196,15 @@ function querySearch(query) {
 function activeStyle(index) {
   if (index !== activeIndex.value) return {}
   return {
-    "background-color": theme.value,
-    "color": "#fff"
+    'background-color': theme.value,
+    color: '#fff'
   }
 }
 
 function navigateResult(direction) {
-  if (direction === "up") {
+  if (direction === 'up') {
     activeIndex.value = activeIndex.value <= 0 ? options.value.length - 1 : activeIndex.value - 1
-  } else if (direction === "down") {
+  } else if (direction === 'down') {
     activeIndex.value = activeIndex.value >= options.value.length - 1 ? 0 : activeIndex.value + 1
   }
 }
@@ -245,7 +236,7 @@ watch(searchPool, (list) => {
 })
 </script>
 
-<style lang='scss' scoped>
+<style lang="scss" scoped>
 :deep(.el-dialog__header) {
   padding: 6px !important;
 }

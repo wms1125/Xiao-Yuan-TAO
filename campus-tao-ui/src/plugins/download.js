@@ -10,12 +10,12 @@ let downloadLoadingInstance
 
 export default {
   name(name, isDelete = true) {
-    var url = baseURL + "/common/download?fileName=" + encodeURIComponent(name) + "&delete=" + isDelete
+    var url = baseURL + '/common/download?fileName=' + encodeURIComponent(name) + '&delete=' + isDelete
     axios({
       method: 'get',
       url: url,
       responseType: 'blob',
-      headers: { 'Authorization': 'Bearer ' + getToken() }
+      headers: { Authorization: 'Bearer ' + getToken() }
     }).then((res) => {
       const isBlob = blobValidate(res.data)
       if (isBlob) {
@@ -27,12 +27,12 @@ export default {
     })
   },
   resource(resource) {
-    var url = baseURL + "/common/download/resource?resource=" + encodeURIComponent(resource)
+    var url = baseURL + '/common/download/resource?resource=' + encodeURIComponent(resource)
     axios({
       method: 'get',
       url: url,
       responseType: 'blob',
-      headers: { 'Authorization': 'Bearer ' + getToken() }
+      headers: { Authorization: 'Bearer ' + getToken() }
     }).then((res) => {
       const isBlob = blobValidate(res.data)
       if (isBlob) {
@@ -45,26 +45,28 @@ export default {
   },
   zip(url, name) {
     var url = baseURL + url
-    downloadLoadingInstance = ElLoading.service({ text: "正在下载数据，请稍候", background: "rgba(0, 0, 0, 0.7)", })
+    downloadLoadingInstance = ElLoading.service({ text: '正在下载数据，请稍候', background: 'rgba(0, 0, 0, 0.7)' })
     axios({
       method: 'get',
       url: url,
       responseType: 'blob',
-      headers: { 'Authorization': 'Bearer ' + getToken() }
-    }).then((res) => {
-      const isBlob = blobValidate(res.data)
-      if (isBlob) {
-        const blob = new Blob([res.data], { type: 'application/zip' })
-        this.saveAs(blob, name)
-      } else {
-        this.printErrMsg(res.data)
-      }
-      downloadLoadingInstance.close()
-    }).catch((r) => {
-      console.error(r)
-      ElMessage.error('下载文件出现错误，请联系管理员！')
-      downloadLoadingInstance.close()
+      headers: { Authorization: 'Bearer ' + getToken() }
     })
+      .then((res) => {
+        const isBlob = blobValidate(res.data)
+        if (isBlob) {
+          const blob = new Blob([res.data], { type: 'application/zip' })
+          this.saveAs(blob, name)
+        } else {
+          this.printErrMsg(res.data)
+        }
+        downloadLoadingInstance.close()
+      })
+      .catch((r) => {
+        console.error(r)
+        ElMessage.error('下载文件出现错误，请联系管理员！')
+        downloadLoadingInstance.close()
+      })
   },
   saveAs(text, name, opts) {
     saveAs(text, name, opts)
@@ -76,4 +78,3 @@ export default {
     ElMessage.error(errMsg)
   }
 }
-

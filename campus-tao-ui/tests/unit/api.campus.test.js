@@ -4,10 +4,33 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/utils/request', () => ({ default: vi.fn(() => Promise.resolve({})) }))
 
 import request from '@/utils/request'
-import { listOrder, getOrder, createOrder, payOrder, shipOrder, finishOrder, getLogisticsStatus, getLogisticsTrace, syncLogisticsTrace } from '@/api/campus/order'
-import { listProduct, getProduct, addProduct, updateProduct, delProduct, changeProductStatus } from '@/api/campus/product'
+import {
+  listOrder,
+  getOrder,
+  createOrder,
+  payOrder,
+  shipOrder,
+  finishOrder,
+  getLogisticsStatus,
+  getLogisticsTrace,
+  syncLogisticsTrace
+} from '@/api/campus/order'
+import {
+  listProduct,
+  getProduct,
+  addProduct,
+  updateProduct,
+  delProduct,
+  changeProductStatus
+} from '@/api/campus/product'
 import { listCart, addCart, updateCartQty, checkCart, delCart } from '@/api/campus/cart'
-import { listCampusNotice, getCampusNoticeTop, getCampusNoticeUnreadCount, readCampusNotice, readAllCampusNotice } from '@/api/campus/notice'
+import {
+  listCampusNotice,
+  getCampusNoticeTop,
+  getCampusNoticeUnreadCount,
+  readCampusNotice,
+  readAllCampusNotice
+} from '@/api/campus/notice'
 import { listNotifyLog } from '@/api/campus/notifylog'
 
 const lastCall = () => request.mock.calls[request.mock.calls.length - 1][0]

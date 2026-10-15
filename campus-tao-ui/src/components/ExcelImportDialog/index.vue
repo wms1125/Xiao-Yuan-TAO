@@ -1,6 +1,19 @@
 <template>
   <el-dialog :title="title" v-model="visible" :width="width" append-to-body @close="handleClose">
-    <el-upload ref="uploadRef" :limit="1" accept=".xlsx, .xls" :headers="headers" :action="uploadUrl" :disabled="isUploading" :on-progress="handleProgress" :on-change="handleFileChange" :on-remove="handleFileRemove" :on-success="handleSuccess" :auto-upload="false" drag>
+    <el-upload
+      ref="uploadRef"
+      :limit="1"
+      accept=".xlsx, .xls"
+      :headers="headers"
+      :action="uploadUrl"
+      :disabled="isUploading"
+      :on-progress="handleProgress"
+      :on-change="handleFileChange"
+      :on-remove="handleFileRemove"
+      :on-success="handleSuccess"
+      :auto-upload="false"
+      drag
+    >
       <el-icon class="el-icon--upload"><upload-filled /></el-icon>
       <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
       <template #tip>
@@ -9,7 +22,14 @@
             <el-checkbox v-model="updateSupport"> {{ updateSupportLabel }} </el-checkbox>
           </div>
           <span>仅允许导入xls、xlsx格式文件。</span>
-          <el-link v-if="templateUrl" type="primary" underline="never" style="font-size: 12px; vertical-align: baseline" @click="handleDownloadTemplate">下载模板</el-link>
+          <el-link
+            v-if="templateUrl"
+            type="primary"
+            underline="never"
+            style="font-size: 12px; vertical-align: baseline"
+            @click="handleDownloadTemplate"
+            >下载模板</el-link
+          >
         </div>
       </template>
     </el-upload>
@@ -119,15 +139,23 @@ function handleSuccess(response) {
   isUploading.value = false
   selectedFile.value = null
   uploadRef.value?.clearFiles()
-  proxy.$alert("<div style='overflow:auto;overflow-x:hidden;max-height:70vh;padding:10px 20px 0;'>" + response.msg + '</div>', '导入结果', { dangerouslyUseHTMLString: true })
+  proxy.$alert(
+    "<div style='overflow:auto;overflow-x:hidden;max-height:70vh;padding:10px 20px 0;'>" + response.msg + '</div>',
+    '导入结果',
+    { dangerouslyUseHTMLString: true }
+  )
   emit('success')
 }
 
 // 提交上传
 function handleSubmit() {
   const file = selectedFile.value
-  if (!file || file.length === 0 || !file.name.toLowerCase().endsWith('.xls') && !file.name.toLowerCase().endsWith('.xlsx')) {
-    proxy.$modal.msgError("请选择后缀为 “xls”或“xlsx”的文件。")
+  if (
+    !file ||
+    file.length === 0 ||
+    (!file.name.toLowerCase().endsWith('.xls') && !file.name.toLowerCase().endsWith('.xlsx'))
+  ) {
+    proxy.$modal.msgError('请选择后缀为 “xls”或“xlsx”的文件。')
     return
   }
   uploadRef.value.submit()

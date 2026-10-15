@@ -25,9 +25,13 @@
           </div>
           <div class="account-hero__side-item">
             <span class="account-hero__side-label">最近更新</span>
-            <span class="account-hero__side-value campus-num">{{ account.updateTime ? parseTime(account.updateTime) : '—' }}</span>
+            <span class="account-hero__side-value campus-num">{{
+              account.updateTime ? parseTime(account.updateTime) : '—'
+            }}</span>
           </div>
-          <el-button class="account-hero__btn" type="primary" @click="openRecharge" v-hasPermi="['campus:account:edit']">充值</el-button>
+          <el-button class="account-hero__btn" type="primary" @click="openRecharge" v-hasPermi="['campus:account:edit']"
+            >充值</el-button
+          >
         </div>
       </div>
 
@@ -56,12 +60,7 @@
             </div>
             <div class="campus-card__body">
               <div class="quick-amounts">
-                <button
-                  v-for="amount in quickAmounts"
-                  :key="amount"
-                  class="quick-amount"
-                  @click="openRecharge(amount)"
-                >
+                <button v-for="amount in quickAmounts" :key="amount" class="quick-amount" @click="openRecharge(amount)">
                   <span class="quick-amount__value">¥{{ amount }}</span>
                   <span class="quick-amount__hint">一键充值</span>
                 </button>
@@ -76,7 +75,7 @@
     <el-dialog v-model="rechargeOpen" title="充值沙箱余额" width="440px" append-to-body>
       <el-form :model="rechargeForm" :rules="rechargeRules" ref="rechargeRef" label-width="80px">
         <el-form-item label="充值金额" prop="amount">
-          <el-input-number v-model="rechargeForm.amount" :min="0.01" :precision="2" :step="10" style="width:100%" />
+          <el-input-number v-model="rechargeForm.amount" :min="0.01" :precision="2" :step="10" style="width: 100%" />
         </el-form-item>
       </el-form>
       <div class="campus-note campus-note--accent">
@@ -120,12 +119,14 @@ function money(value) {
 
 function getAccountInfo() {
   loading.value = true
-  getAccount().then(res => {
-    account.value = res.data || {}
-    loading.value = false
-  }).catch(() => {
-    loading.value = false
-  })
+  getAccount()
+    .then((res) => {
+      account.value = res.data || {}
+      loading.value = false
+    })
+    .catch(() => {
+      loading.value = false
+    })
 }
 
 function openRecharge(amount) {
@@ -134,16 +135,19 @@ function openRecharge(amount) {
 }
 
 function submitRecharge() {
-  rechargeRef.value.validate(valid => {
+  rechargeRef.value.validate((valid) => {
     if (!valid) return
     submitting.value = true
-    recharge({ amount: rechargeForm.amount }).then(() => {
-      ElMessage.success('充值成功')
-      rechargeOpen.value = false
-      getAccountInfo()
-    }).catch(() => {}).finally(() => {
-      submitting.value = false
-    })
+    recharge({ amount: rechargeForm.amount })
+      .then(() => {
+        ElMessage.success('充值成功')
+        rechargeOpen.value = false
+        getAccountInfo()
+      })
+      .catch(() => {})
+      .finally(() => {
+        submitting.value = false
+      })
   })
 }
 
@@ -165,18 +169,18 @@ onMounted(() => {
   overflow: hidden;
   color: #ffffff;
   background:
-    radial-gradient(90% 120% at 0% 0%, rgba(63, 157, 134, .55) 0%, rgba(63, 157, 134, 0) 52%),
+    radial-gradient(90% 120% at 0% 0%, rgba(63, 157, 134, 0.55) 0%, rgba(63, 157, 134, 0) 52%),
     linear-gradient(150deg, #12705a 0%, #0a4237 62%, #073029 100%);
   box-shadow: var(--c-shadow-2);
 }
 
 .account-hero::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 44px 44px;
   mask-image: radial-gradient(90% 100% at 85% 50%, #000 10%, transparent 70%);
   pointer-events: none;
@@ -189,8 +193,8 @@ onMounted(() => {
 
 .account-hero__label {
   font-size: 12.5px;
-  letter-spacing: .3em;
-  color: rgba(255, 255, 255, .66);
+  letter-spacing: 0.3em;
+  color: rgba(255, 255, 255, 0.66);
 }
 
 .account-hero__value {
@@ -200,14 +204,14 @@ onMounted(() => {
   font-weight: 700;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .02em;
+  letter-spacing: 0.02em;
 }
 
 .account-hero__owner {
   margin-top: 12px;
   font-size: 13px;
-  letter-spacing: .1em;
-  color: rgba(255, 255, 255, .72);
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .account-hero__side {
@@ -230,8 +234,8 @@ onMounted(() => {
 
 .account-hero__side-label {
   font-size: 11.5px;
-  letter-spacing: .16em;
-  color: rgba(255, 255, 255, .6);
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .account-hero__side-value {
@@ -250,8 +254,8 @@ onMounted(() => {
 }
 
 .account-hero__btn:hover {
-  background: rgba(255, 255, 255, .88) !important;
-  border-color: rgba(255, 255, 255, .88) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(255, 255, 255, 0.88) !important;
   color: #0a4237 !important;
 }
 
@@ -262,7 +266,7 @@ onMounted(() => {
   font-size: 13px;
   line-height: 2.1;
   color: var(--c-ink-2);
-  letter-spacing: .02em;
+  letter-spacing: 0.02em;
 }
 
 .account-notes li::marker {
@@ -288,7 +292,7 @@ onMounted(() => {
   cursor: pointer;
   font-family: inherit;
   text-align: left;
-  transition: all .18s ease;
+  transition: all 0.18s ease;
 }
 
 .quick-amount:hover {
@@ -306,7 +310,7 @@ onMounted(() => {
 
 .quick-amount__hint {
   font-size: 11.5px;
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
   color: var(--c-ink-4);
 }
 

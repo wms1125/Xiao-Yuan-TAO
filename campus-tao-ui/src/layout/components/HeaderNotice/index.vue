@@ -1,6 +1,13 @@
 <template>
   <div>
-    <el-popover ref="noticePopover" placement="bottom-end" :width="320" trigger="manual" v-model:visible="noticeVisible" popper-class="notice-popover">
+    <el-popover
+      ref="noticePopover"
+      placement="bottom-end"
+      :width="320"
+      trigger="manual"
+      v-model:visible="noticeVisible"
+      popper-class="notice-popover"
+    >
       <!-- 弹出内容 -->
       <div class="notice-header">
         <span class="notice-title">消息通知</span>
@@ -10,11 +17,17 @@
         <el-icon class="is-loading"><Loading /></el-icon> 加载中...
       </div>
       <div v-else-if="noticeList.length === 0" class="notice-empty">
-        <el-icon style="font-size:24px;display:block;margin-bottom:6px;"><Postcard /></el-icon>
+        <el-icon style="font-size: 24px; display: block; margin-bottom: 6px"><Postcard /></el-icon>
         暂无消息
       </div>
       <div v-else>
-        <div v-for="item in noticeList" :key="item.key" class="notice-item" :class="{ 'is-read': item.isRead }" @click="openNotice(item)">
+        <div
+          v-for="item in noticeList"
+          :key="item.key"
+          class="notice-item"
+          :class="{ 'is-read': item.isRead }"
+          @click="openNotice(item)"
+        >
           <el-tag size="small" :type="item.tagType" class="notice-tag">{{ item.tagText }}</el-tag>
           <span class="notice-item-title">{{ item.title }}</span>
           <span class="notice-item-date">{{ item.date }}</span>
@@ -23,7 +36,11 @@
 
       <!-- 触发器 -->
       <template #reference>
-        <div class="right-menu-item hover-effect notice-trigger" @mouseenter="onNoticeEnter" @mouseleave="onNoticeLeave">
+        <div
+          class="right-menu-item hover-effect notice-trigger"
+          @mouseenter="onNoticeEnter"
+          @mouseleave="onNoticeLeave"
+        >
           <svg-icon icon-class="bell" />
           <span v-if="unreadCount > 0" class="notice-badge">{{ unreadCount }}</span>
         </div>
@@ -64,37 +81,39 @@ function loadNoticeTop() {
   Promise.all([
     listNoticeTop().catch(() => ({ data: [], unreadCount: 0 })),
     getCampusNoticeTop().catch(() => ({ data: { items: [], unreadCount: 0 } }))
-  ]).then(([sysRes, campusRes]) => {
-    const campusData = campusRes.data || {}
-    const campusItems = (campusData.items || []).map(n => {
-      const tag = CAMPUS_TAG[n.type] || CAMPUS_TAG.system
-      return {
-        key: 'c' + n.noticeId,
-        source: 'campus',
+  ])
+    .then(([sysRes, campusRes]) => {
+      const campusData = campusRes.data || {}
+      const campusItems = (campusData.items || []).map((n) => {
+        const tag = CAMPUS_TAG[n.type] || CAMPUS_TAG.system
+        return {
+          key: 'c' + n.noticeId,
+          source: 'campus',
+          noticeId: n.noticeId,
+          tagText: tag.text,
+          tagType: tag.type,
+          title: n.title,
+          content: n.content,
+          date: parseTime(n.createTime),
+          isRead: n.isRead === 1
+        }
+      })
+      const sysItems = (sysRes.data || []).map((n) => ({
+        key: 's' + n.noticeId,
+        source: 'system',
         noticeId: n.noticeId,
-        tagText: tag.text,
-        tagType: tag.type,
-        title: n.title,
-        content: n.content,
-        date: parseTime(n.createTime),
-        isRead: n.isRead === 1
-      }
+        tagText: n.noticeType === '1' ? '通知' : '公告',
+        tagType: n.noticeType === '1' ? 'warning' : 'success',
+        title: n.noticeTitle,
+        date: n.createTime,
+        isRead: !!n.isRead
+      }))
+      noticeList.value = [...campusItems, ...sysItems]
+      unreadCount.value = (sysRes.unreadCount || 0) + (campusData.unreadCount || 0)
     })
-    const sysItems = (sysRes.data || []).map(n => ({
-      key: 's' + n.noticeId,
-      source: 'system',
-      noticeId: n.noticeId,
-      tagText: n.noticeType === '1' ? '通知' : '公告',
-      tagType: n.noticeType === '1' ? 'warning' : 'success',
-      title: n.noticeTitle,
-      date: n.createTime,
-      isRead: !!n.isRead
-    }))
-    noticeList.value = [...campusItems, ...sysItems]
-    unreadCount.value = (sysRes.unreadCount || 0) + (campusData.unreadCount || 0)
-  }).finally(() => {
-    noticeLoading.value = false
-  })
+    .finally(() => {
+      noticeLoading.value = false
+    })
 }
 
 onMounted(() => loadNoticeTop())
@@ -109,7 +128,9 @@ function onNoticeEnter() {
       popper._noticeBound = true
       popper.addEventListener('mouseenter', () => clearTimeout(noticeLeaveTimer.value))
       popper.addEventListener('mouseleave', () => {
-        noticeLeaveTimer.value = setTimeout(() => { noticeVisible.value = false }, 100)
+        noticeLeaveTimer.value = setTimeout(() => {
+          noticeVisible.value = false
+        }, 100)
       })
     }
   })
@@ -117,7 +138,9 @@ function onNoticeEnter() {
 
 // 鼠标离开铃铛区域
 function onNoticeLeave() {
-  noticeLeaveTimer.value = setTimeout(() => { noticeVisible.value = false }, 150)
+  noticeLeaveTimer.value = setTimeout(() => {
+    noticeVisible.value = false
+  }, 150)
 }
 
 // 点击消息：标记已读并查看内容
@@ -128,25 +151,30 @@ function openNotice(item) {
     } else {
       markNoticeRead(item.noticeId).catch(() => {})
     }
-    const idx = noticeList.value.findIndex(n => n.key === item.key)
+    const idx = noticeList.value.findIndex((n) => n.key === item.key)
     if (idx !== -1) noticeList.value[idx] = { ...item, isRead: true }
     unreadCount.value = Math.max(0, unreadCount.value - 1)
   }
   if (item.source === 'system') {
-    proxy.$refs["noticeViewRef"].open(item.noticeId)
+    proxy.$refs['noticeViewRef'].open(item.noticeId)
   } else {
-    ElMessageBox.alert(item.content || item.title, item.title || '校园淘消息', { confirmButtonText: '知道了' }).catch(() => {})
+    ElMessageBox.alert(item.content || item.title, item.title || '校园淘消息', { confirmButtonText: '知道了' }).catch(
+      () => {}
+    )
   }
 }
 
 // 全部已读（系统公告 + 校园淘消息）
 function markAllRead() {
-  const sysIds = noticeList.value.filter(n => n.source === 'system').map(n => n.noticeId).join(',')
+  const sysIds = noticeList.value
+    .filter((n) => n.source === 'system')
+    .map((n) => n.noticeId)
+    .join(',')
   if (sysIds) {
     markNoticeReadAll(sysIds).catch(() => {})
   }
   readAllCampusNotice().catch(() => {})
-  noticeList.value = noticeList.value.map(n => ({ ...n, isRead: true }))
+  noticeList.value = noticeList.value.map((n) => ({ ...n, isRead: true }))
   unreadCount.value = 0
 }
 </script>
@@ -155,7 +183,11 @@ function markAllRead() {
 .notice-trigger {
   position: relative;
   transform: translateX(-6px);
-  .svg-icon { width: 1.2em; height: 1.2em; vertical-align: -0.2em; }
+  .svg-icon {
+    width: 1.2em;
+    height: 1.2em;
+    vertical-align: -0.2em;
+  }
   .notice-badge {
     position: absolute;
     top: 7px;
@@ -173,7 +205,9 @@ function markAllRead() {
     pointer-events: none;
   }
 }
-.notice-popover { padding: 0 !important; }
+.notice-popover {
+  padding: 0 !important;
+}
 .notice-popover .notice-header {
   display: flex;
   align-items: center;
@@ -191,7 +225,9 @@ function markAllRead() {
   font-weight: normal;
   cursor: pointer;
 }
-.notice-popover .notice-mark-all:hover { color: #2b7cc1; }
+.notice-popover .notice-mark-all:hover {
+  color: #2b7cc1;
+}
 .notice-popover .notice-loading,
 .notice-popover .notice-empty {
   padding: 24px;
@@ -209,12 +245,22 @@ function markAllRead() {
   cursor: pointer;
   transition: background 0.15s;
 }
-.notice-popover .notice-item:last-child { border-bottom: none; }
-.notice-popover .notice-item:hover { background: #f7f9fb; }
+.notice-popover .notice-item:last-child {
+  border-bottom: none;
+}
+.notice-popover .notice-item:hover {
+  background: #f7f9fb;
+}
 .notice-popover .notice-item.is-read .notice-tag,
 .notice-popover .notice-item.is-read .notice-item-title,
-.notice-popover .notice-item.is-read .notice-item-date { opacity: 0.45; filter: grayscale(1); color: #999; }
-.notice-popover .notice-tag { flex-shrink: 0; }
+.notice-popover .notice-item.is-read .notice-item-date {
+  opacity: 0.45;
+  filter: grayscale(1);
+  color: #999;
+}
+.notice-popover .notice-tag {
+  flex-shrink: 0;
+}
 .notice-popover .notice-item-title {
   flex: 1;
   font-size: 12px;

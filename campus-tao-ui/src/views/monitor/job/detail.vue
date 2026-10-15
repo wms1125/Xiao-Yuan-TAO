@@ -9,7 +9,9 @@
           </div>
           <el-row class="detail-row">
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">日志编号</span><span class="detail-value">{{ form.jobLogId }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">日志编号</span><span class="detail-value">{{ form.jobLogId }}</span>
+              </div>
             </el-col>
             <el-col :span="12">
               <div class="detail-item">
@@ -21,18 +23,26 @@
           </el-row>
           <el-row class="detail-row">
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">开始时间</span><span class="detail-value">{{ form.startTime }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">开始时间</span><span class="detail-value">{{ form.startTime }}</span>
+              </div>
             </el-col>
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">结束时间</span><span class="detail-value">{{ form.endTime }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">结束时间</span><span class="detail-value">{{ form.endTime }}</span>
+              </div>
             </el-col>
           </el-row>
           <el-row class="detail-row">
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">记录时间</span><span class="detail-value">{{ form.createTime }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">记录时间</span><span class="detail-value">{{ form.createTime }}</span>
+              </div>
             </el-col>
             <el-col :span="12" v-if="form.status == 0 && form.startTime && form.endTime">
-              <div class="detail-item"><span class="detail-label">执行耗时</span><span class="detail-value">{{ costTime }} 毫秒</span></div>
+              <div class="detail-item">
+                <span class="detail-label">执行耗时</span><span class="detail-value">{{ costTime }} 毫秒</span>
+              </div>
             </el-col>
           </el-row>
         </div>
@@ -43,7 +53,9 @@
           </div>
           <el-row class="detail-row">
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">任务名称</span><span class="detail-value">{{ form.jobName }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">任务名称</span><span class="detail-value">{{ form.jobName }}</span>
+              </div>
             </el-col>
             <el-col :span="12">
               <div class="detail-item">
@@ -54,7 +66,9 @@
           </el-row>
           <el-row class="detail-row">
             <el-col :span="24">
-              <div class="detail-item"><span class="detail-label">日志信息</span><span class="detail-value">{{ form.jobMessage }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">日志信息</span><span class="detail-value">{{ form.jobMessage }}</span>
+              </div>
             </el-col>
           </el-row>
         </div>
@@ -64,7 +78,9 @@
             <el-icon><Operation /></el-icon> 调用目标
           </div>
           <div class="code-body">
-            <div class="code-wrap"><pre class="code-pre">{{ form.invokeTarget || '（无）' }}</pre></div>
+            <div class="code-wrap">
+              <pre class="code-pre">{{ form.invokeTarget || '（无）' }}</pre>
+            </div>
           </div>
         </div>
         <!-- 异常信息 -->
@@ -72,7 +88,9 @@
           <div class="detail-card-title error-title">
             <el-icon><Warning /></el-icon> 异常信息
           </div>
-          <div class="error-body"><div class="error-msg">{{ form.exceptionInfo }}</div></div>
+          <div class="error-body">
+            <div class="error-msg">{{ form.exceptionInfo }}</div>
+          </div>
         </div>
       </template>
 
@@ -84,10 +102,14 @@
           </div>
           <el-row class="detail-row">
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">任务编号</span><span class="detail-value">{{ form.jobId }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">任务编号</span><span class="detail-value">{{ form.jobId }}</span>
+              </div>
             </el-col>
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">任务名称</span><span class="detail-value">{{ form.jobName }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">任务名称</span><span class="detail-value">{{ form.jobName }}</span>
+              </div>
             </el-col>
           </el-row>
           <el-row class="detail-row">
@@ -113,10 +135,16 @@
           </div>
           <el-row class="detail-row">
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">cron 表达式</span><span class="detail-value mono">{{ form.cronExpression }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">cron 表达式</span
+                ><span class="detail-value mono">{{ form.cronExpression }}</span>
+              </div>
             </el-col>
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">下次执行时间</span><span class="detail-value">{{ parseTime(form.nextValidTime) }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">下次执行时间</span
+                ><span class="detail-value">{{ parseTime(form.nextValidTime) }}</span>
+              </div>
             </el-col>
           </el-row>
           <el-row class="detail-row">
@@ -144,7 +172,9 @@
             <el-icon><Operation /></el-icon> 执行方法
           </div>
           <div class="code-body">
-            <div class="code-wrap"><pre class="code-pre">{{ form.invokeTarget || '（无）' }}</pre></div>
+            <div class="code-wrap">
+              <pre class="code-pre">{{ form.invokeTarget || '（无）' }}</pre>
+            </div>
           </div>
         </div>
         <!-- 元信息 -->
@@ -154,23 +184,33 @@
           </div>
           <el-row class="detail-row">
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">创建人</span><span class="detail-value">{{ form.createBy || '-' }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">创建人</span><span class="detail-value">{{ form.createBy || '-' }}</span>
+              </div>
             </el-col>
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">创建时间</span><span class="detail-value">{{ form.createTime }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">创建时间</span><span class="detail-value">{{ form.createTime }}</span>
+              </div>
             </el-col>
           </el-row>
           <el-row class="detail-row">
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">更新人</span><span class="detail-value">{{ form.updateBy || '-' }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">更新人</span><span class="detail-value">{{ form.updateBy || '-' }}</span>
+              </div>
             </el-col>
             <el-col :span="12">
-              <div class="detail-item"><span class="detail-label">更新时间</span><span class="detail-value">{{ form.updateTime || '-' }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">更新时间</span><span class="detail-value">{{ form.updateTime || '-' }}</span>
+              </div>
             </el-col>
           </el-row>
           <el-row class="detail-row" v-if="form.remark">
             <el-col :span="24">
-              <div class="detail-item"><span class="detail-label">备注</span><span class="detail-value">{{ form.remark }}</span></div>
+              <div class="detail-item">
+                <span class="detail-label">备注</span><span class="detail-value">{{ form.remark }}</span>
+              </div>
             </el-col>
           </el-row>
         </div>

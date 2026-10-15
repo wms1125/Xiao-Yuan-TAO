@@ -1,7 +1,17 @@
 <template>
-  <div class="tree-sidebar" :class="{ collapsed: collapsed, resizing: isResizing, 'no-initial-transition': isLoadingFromStorage}" :style="{ width: sidebarWidth + 'px' }">
+  <div
+    class="tree-sidebar"
+    :class="{ collapsed: collapsed, resizing: isResizing, 'no-initial-transition': isLoadingFromStorage }"
+    :style="{ width: sidebarWidth + 'px' }"
+  >
     <!-- 右侧拖动条 -->
-    <div v-if="!collapsed" class="resize-handle" @mousedown="startResize" @touchstart="startResize" :class="{ active: isResizing }" />
+    <div
+      v-if="!collapsed"
+      class="resize-handle"
+      @mousedown="startResize"
+      @touchstart="startResize"
+      :class="{ active: isResizing }"
+    />
     <div class="tree-header">
       <span class="tree-title" v-show="!collapsed">
         <el-icon><component :is="titleIcon" /></el-icon> {{ title }}
@@ -19,7 +29,7 @@
         <slot name="actions"></slot>
       </div>
     </div>
-    
+
     <!-- 侧边栏展开/收起按钮 -->
     <div class="collapse-button-container">
       <el-tooltip :content="collapsed ? '展开' : '收起'" placement="right">
@@ -39,10 +49,10 @@
     </div>
 
     <div class="tree-wrap" v-show="!collapsed">
-      <el-tree 
-        ref="treeRef" 
-        :data="treeData" 
-        :props="treeProps" 
+      <el-tree
+        ref="treeRef"
+        :data="treeData"
+        :props="treeProps"
         :expand-on-click-node="expandOnClickNode"
         :filter-node-method="filterNodeMethod"
         :default-expand-all="defaultExpandAll"
@@ -107,8 +117,8 @@ const props = defineProps({
   treeProps: {
     type: Object,
     default: () => ({
-      children: "children",
-      label: "label"
+      children: 'children',
+      label: 'label'
     })
   },
   // 节点唯一标识字段
@@ -314,7 +324,7 @@ const toggleExpandAll = () => {
 const expandAllNodes = () => {
   if (!treeRef.value) return
   const allNodes = getAllNodes(treeRef.value.root)
-  allNodes.forEach(node => {
+  allNodes.forEach((node) => {
     if (node.expanded !== undefined && !node.expanded) {
       node.expanded = true
     }
@@ -328,7 +338,7 @@ const getAllNodes = (rootNode) => {
     if (!node) return
     nodes.push(node)
     if (node.childNodes && node.childNodes.length) {
-      node.childNodes.forEach(child => traverse(child))
+      node.childNodes.forEach((child) => traverse(child))
     }
   }
   traverse(rootNode)
@@ -339,7 +349,7 @@ const getAllNodes = (rootNode) => {
 const collapseAllNodes = () => {
   if (!treeRef.value) return
   const allNodes = getAllNodes(treeRef.value.root)
-  allNodes.forEach(node => {
+  allNodes.forEach((node) => {
     if (node.expanded !== undefined && node.expanded) {
       node.expanded = false
     }
@@ -412,9 +422,9 @@ const getCheckedNodes = () => {
 }
 
 const clearSearch = () => {
-  searchKeyword.value = ""
+  searchKeyword.value = ''
   if (treeRef.value) {
-    treeRef.value.filter("")
+    treeRef.value.filter('')
   }
 }
 
@@ -428,7 +438,7 @@ const startResize = (e) => {
   isResizing.value = true
   startX.value = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX
   startWidth.value = sidebarWidth.value
-  
+
   if (e.type === 'mousedown') {
     document.addEventListener('mousemove', handleResizeMove)
     document.addEventListener('mouseup', stopResize)
@@ -558,20 +568,20 @@ onBeforeUnmount(() => {
   overflow: hidden;
   position: relative;
   transition: width 0.25s ease;
-  
+
   &.collapsed {
     width: 42px;
   }
-  
+
   &.resizing {
     transition: none;
     will-change: width;
-    
+
     * {
       pointer-events: none !important;
     }
   }
-  
+
   &.no-initial-transition {
     transition: none;
   }
@@ -587,11 +597,11 @@ onBeforeUnmount(() => {
   z-index: 20;
   background: transparent;
   transition: background 0.2s;
-  
+
   &:hover {
     background: rgba(64, 158, 255, 0.3);
   }
-  
+
   &.active {
     background: rgba(64, 158, 255, 0.5);
   }
@@ -612,13 +622,13 @@ onBeforeUnmount(() => {
   border-radius: 0 4px 4px 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
-  
+
   .tree-sidebar.collapsed & {
     right: 0;
     background: #f7f8fa;
     border-radius: 0 4px 4px 0;
   }
-  
+
   .tree-sidebar.resizing & {
     pointer-events: none;
   }
@@ -631,7 +641,7 @@ onBeforeUnmount(() => {
   padding: 4px;
   border-radius: 4px;
   transition: all 0.2s;
-  
+
   &:hover {
     color: #409eff;
     background: #ecf5ff;
@@ -695,7 +705,7 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow-y: auto;
   padding: 6px 6px 12px;
-  
+
   .tree-sidebar.resizing & {
     overflow: hidden;
   }
@@ -707,7 +717,7 @@ onBeforeUnmount(() => {
   &::-webkit-scrollbar-thumb {
     background: #dcdfe6;
     border-radius: 4px;
-    
+
     &:hover {
       background: #c0c4cc;
     }
