@@ -1,0 +1,9 @@
+# Windows 批处理必须使用 CRLF：cmd 在解析 call/括号块时依赖正确的行尾，
+# 若检出为 LF 会导致脚本被逐字拆碎、报 "'xxx' is not recognized"。
+*.bat text eol=crlf
+
+# Shell 脚本保持 LF
+*.sh text eol=lf
+
+# 其余按平台默认
+* text=auto

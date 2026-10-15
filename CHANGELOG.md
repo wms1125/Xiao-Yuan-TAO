@@ -6,9 +6,26 @@
 
 ## [未发布]
 - 第三方依赖清单（SBOM）与许可证说明。
-- 前端构建校验与自动化测试（`npm run build` / 前端单测尚未纳入交付验证）。
+- 前端单元测试（如 vitest）尚未纳入交付验证（生产构建校验已由 CI 与 `verify.bat` 覆盖）。
 - 交付包内置 Maven 与离线依赖仓库，实现完全无网环境重建。
 - 可观测性（健康检查、关键操作审计）与运营侧能力（订单超时自动取消、物流单号、站内通知等）。
+
+## [1.0.2] - 2026-10-15
+
+交付工程化：加入 CI 流水线与本地校验脚本，并修复一键脚本的 Windows 行尾缺陷。
+
+### 新增
+- `.github/workflows/ci.yml`：后端 job（JDK 17 + Maven 缓存 → `mvn -B -DskipTests clean package` → `mvn -B test` → 上传 jar 产物）与前端 job（Node 22 + npm 缓存 → `npm ci` → `npm run build:prod`）。仓库当前为本地库，推送后自动生效。端到端回归（`e2e_business.py`）**未纳入 CI**（需可达 MySQL 8 与已初始化的库），仍由本地执行。
+- `verify.bat`：CI 的本地等价脚本，交付前一键校验。含发行 jar 占用预检（后端运行期间 `maven-clean-plugin` 无法删除 jar，会给出明确提示而非 Maven 报错）、Maven 自动定位（`MVN_CMD` → `.tools\maven\` → `%TEMP%\cta-mvn` → `PATH`）、随包 JDK 自动作为 `JAVA_HOME`，末行输出 `ALL PASS`/`FAILED` 并以退出码 0/1 返回。
+- `.gitattributes`：`*.bat text eol=crlf`（防止行尾缺陷复发）。
+
+### 修复
+- **四个 `.bat` 行尾为 LF（交付级缺陷）**：`1-初始化数据库.bat`、`2-启动后端.bat`、`3-启动前端.bat` 与新增的 `verify.bat` 均为 LF 行尾，Windows cmd 在解析 `call` 与括号块时读偏，脚本被执行时被逐字拆碎（报 `'t' is not recognized` 一类错误）。已全部转为 CRLF，并加 `.gitattributes` 固化。
+
+### 验证
+- `verify.bat` 端到端实跑：退出码 **0**，`后端打包 ✓ / 后端单元测试 15/15 ✓ / 前端构建 ✓ / 校验结果：ALL PASS`。
+- `2-启动后端.bat` 实跑验证：后端 8080 正常起来并返回 200，确认 CRLF 修复后一键脚本可用。
+- 过程发现：`verify.bat` 首次运行即失败，原因并非构建问题，而是后端进程占用 `target\ruoyi-admin.jar` 使 `clean` 无法删除文件——据此新增了占用预检。
 
 ## [1.0.1] - 2026-10-15
 
