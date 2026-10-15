@@ -5,10 +5,24 @@
 开发过程留痕见 `campus-tao/ai-log/001~007`，里程碑文档见 `campus-tao/M1~M5`。
 
 ## [未发布]
-- 第三方依赖清单（SBOM）与许可证说明。
 - 前端单元测试（如 vitest）尚未纳入交付验证（生产构建校验已由 CI 与 `verify.bat` 覆盖）。
 - 交付包内置 Maven 与离线依赖仓库，实现完全无网环境重建。
+- 依赖漏洞（CVE）扫描（`npm audit` / OWASP Dependency-Check）尚未接入；当前 SBOM 仅覆盖许可合规。
 - 可观测性（健康检查、关键操作审计）与运营侧能力（订单超时自动取消、物流单号、站内通知等）。
+
+## [1.0.3] - 2026-10-15
+
+交付合规物料：生成第三方依赖清单（SBOM）与许可证说明。
+
+### 新增
+- `campus-tao/sbom/`：后端 `backend-bom.json`（CycloneDX 1.6，156 组件）、前端 `frontend-dependencies.csv`（461 包）、说明 `SBOM.md`。
+- `campus-tao/tools/sbom-frontend.py`：离线扫描 `node_modules` 生成前端依赖清单的脚本，与 SBOM 同批交付、可复现。
+
+### 说明
+- 后端许可分布以宽松许可为主（Apache-2.0 126、MIT 11），含 `GPL-2.0 with Classpath Exception`（MySQL Connector/J 等）与 LGPL-2.1/CDDL-1.1 少量组件——均以未修改二进制形式链接使用，不阻断分发；无 AGPL/SSPL 强传染组件。
+- 前端 461 包全部为宽松许可，未知许可 0、copyleft 组件 0。
+- 后端 BOM 覆盖度已与发行 jar 内 `BOOT-INF/lib` 的 141 个依赖 jar 逐一对照，无缺失。
+- 如实记录缺口：未做 CVE 扫描；前端未输出 CycloneDX 格式；上游 RuoYi 的 6 个自研模块 pom 未声明 `<licenses>`（未擅自代填）。
 
 ## [1.0.2] - 2026-10-15
 
