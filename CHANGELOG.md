@@ -43,6 +43,7 @@
 - **边界如实记录**：仅买家视角、仅证明「页面可达且渲染正常」不含交互动作取证（正确性仍由用例 + e2e 覆盖）、未覆盖响应式/移动端、未做多浏览器。详见目录内 `README.md`。
 
 ### 修复
+- **应用版本号漏更新**（`RuoYi-Vue-master/ruoyi-admin/src/main/resources/application.yml` 的 `campus-tao.version` 停在 `1.0.20`）：与 tag `v1.0.21`、本 CHANGELOG 标题不一致，也与 M5「`git describe --tags` 与 `application.yml` 版本一致」的说法相悖。**发布 v1.0.21 制品时才发现**——若不修，发行 jar 内嵌的 `info.app.version` 会是旧值。已对齐至 `1.0.21` 并重建发行 jar。
 - **两处装箱拆箱往返**（`CampusAftersaleServiceImpl` / `CampusReviewServiceImpl`）：`type == null ? 1 : type` 这类三元表达式混用 `int` 与 `Integer`，JLS 规定按二进制数值提升统一为 `int`，导致「拆箱 → 立即重新装箱」。改为 `Integer.valueOf(1)` 显式装箱。**这两处是 SpotBugs 接入后新发现的真实缺陷**，此前不可见。
 - **M5 文档与事实矛盾**：第 459 行原写「git tag 断档 v1.0.15 ~ v1.0.19」，而 tag 实际已全部存在。更正为「曾断档…已于 v1.0.20 补齐」。
 - **离线依赖仓库缺构件**（交付缺陷）：`.tools/m2-repo` 缺少 Spring Boot 4 拆分为独立模块的 `spring-boot-flyway` 与 `flyway-core` / `flyway-mysql`——它们只存在于开发机全局 `~/.m2`。**后果是 `verify.bat` 默认的 `-o` 离线构建在干净机器上会失败**，与"无网可完整构建"的交付承诺相悖。已补入离线仓库。
