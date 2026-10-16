@@ -39,6 +39,11 @@
         <jacoco.version>0.8.12</jacoco.version>
         <!-- 代码规范：spotless（后端 Java 卫生类检查，详见 build/plugins） -->
         <spotless.version>2.44.3</spotless.version>
+        <!-- 静态检查：checkstyle（校园淘自有代码语义/结构类检查，详见 ruoyi-system/pom.xml） -->
+        <checkstyle.version>10.21.4</checkstyle.version>
+        <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
+        <!-- 静态检查：spotbugs（字节码级缺陷分析，排除规则见 config/spotbugs/） -->
+        <spotbugs.plugin.version>4.9.3.0</spotbugs.plugin.version>
         <!-- 数据库版本化迁移：flyway（依赖在 ruoyi-admin/pom.xml，Maven 插件见 build/plugins） -->
         <flyway.version>12.4.0</flyway.version>
         <mysql.version>9.7.0</mysql.version>

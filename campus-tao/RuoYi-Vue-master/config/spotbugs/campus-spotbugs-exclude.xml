@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  校园淘 · 后端 SpotBugs 排除规则（仅作用于 com.ruoyi.campus.**）
+
+  排除项均为「已知设计取舍 / 与既有统计口径一致」，不是为了让构建通过而掩盖缺陷：
+  规则只允许增设，不允许为通过而删除（与覆盖率棘轮门禁同一原则）。
+-->
+<FindBugsFilter>
+
+    <!--
+      domain/** 为纯 POJO 数据载体（仅字段 + getter/setter，无业务逻辑）。
+      SpotBugs 是字节码级语义分析，对纯数据载体只会产出「暴露内部表示」这类结构性噪声，
+      不构成缺陷。此排除与 jacoco 覆盖率口径（排除 domain/**）保持一致，
+      避免同一批 POJO 在"覆盖率"与"静态检查"两处被两套不同标准评判。
+    -->
+    <Match>
+        <Package name="com.ruoyi.campus.domain"/>
+    </Match>
+
+    <!--
+      EI_EXPOSE_REP / EI_EXPOSE_REP2：getter/setter 直接返回或保存可变字段的引用。
+      本项目该类告警几乎全部落在 java.util.Date 上。这些对象只在请求/响应边界使用，
+      不跨线程共享，且 Date 直接暴露正是 Jackson 序列化与 MyBatis 映射的惯用写法。
+      全面改写为防御性拷贝属动机不明的重构，收益为负，故将该类噪声整体排除。
+    -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+</FindBugsFilter>

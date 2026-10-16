@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+        "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+        "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  校园淘 · 后端 Java 静态检查规则集（Checkstyle）
+
+  设计口径（与项目既有约定一致）：
+  1. 只作用于本项目自有代码 com/ruoyi/campus/**；若依脚手架（上游债务）不在本门禁口径内，
+     与前端「全仓 0 error + 自有目录 0 warning」的两档做法同构（见 M5 测试报告）。
+  2. 只启用「客观事实类」规则：命中即为确定的代码缺陷，不含任何排版/命名风格偏好。
+     排版类问题已由 Spotless（removeUnusedImports / trimTrailingWhitespace / endWithNewline）负责，
+     两者职责分离，避免同一问题被两套工具重复报告。
+  3. 规则只允许增设，不允许为了「让构建通过」而删除——与覆盖率门禁的棘轮基线同一原则。
+
+  如何修复：按报告中的 file:line 手工修正；本规则集刻意不提供自动改写（避免边构建边改源码）。
+-->
+<module name="Checker">
+    <property name="charset" value="UTF-8"/>
+    <property name="severity" value="error"/>
+    <!-- 违规必须逐条列出，不做条数截断，保证报告可持续核验 -->
+    <property name="fileExtensions" value="java"/>
+
+    <module name="TreeWalker">
+        <!-- 引用了不存在的名称（拼写错误 / 漏 import），编译期才会暴露的问题提前到静态检查 -->
+        <module name="UnusedImports">
+            <property name="processJavadoc" value="true"/>
+        </module>
+
+        <!-- 重复 import（同一类型被 import 两次） -->
+        <module name="RedundantImport"/>
+
+        <!-- 通配符 import：无法确定依赖边界，重构/冲突时不可见 -->
+        <module name="AvoidStarImport"/>
+
+        <!-- 声明了局部变量但从未使用，通常是重构残留，往往是逻辑漏洞的前兆 -->
+        <module name="UnusedLocalVariable"/>
+
+        <!-- 单行 if/for/while 省略花括号，后续插入语句时极易引入语义错误 -->
+        <module name="NeedBraces"/>
+
+        <!-- 空的 catch 块会吞掉异常，必须显式说明或转换为业务异常 -->
+        <module name="EmptyCatchBlock"/>
+
+        <!-- 空的 try/finally 块无意义 -->
+        <module name="EmptyBlock"/>
+    </module>
+</module>

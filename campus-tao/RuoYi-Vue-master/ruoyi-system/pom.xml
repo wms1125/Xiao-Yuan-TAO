@@ -57,9 +57,12 @@
               - prepare-agent：仅在跑测试时对 com.ruoyi.campus 下的类插桩；
               - report：绑定 test 阶段，产出 target/site/jacoco 报告（HTML + CSV）；
               - check：绑定 verify 阶段，行覆盖率低于阈值即构建失败。
-              阈值为"棘轮基线"：2026-10-16 补齐 service 层交易逻辑单测后实测
-              行 58.43% / 分支 43.79%（此前 36.05% / 19.09%），本次上调至
-              行 55% / 分支 40%（在实测值下方留出余量），后续只允许上调，不允许下调。
+              阈值为"棘轮基线"：以实测值向下取整设定，只允许上调，不允许下调。
+              历史：36.05% / 19.09% →（2026-10-16 补 service 层交易单测）55% / 40%
+                   →（2026-10-17 补商品/购物车 service 单测与支付网关用例）70% / 62%。
+              本次上调依据：jacoco.csv 独立实算 行 74.80%（1054/1409）、分支 67.32%（346/514），
+              阈值在实测值下方留出约 4~5 个百分点——余量只为吸收无关改动的正常抖动，
+              不再容纳"20 点级别的覆盖率塌方"。
               Controller 层与 DTO 层已 100% 覆盖；service 层交易链路（下单/支付/取消/
               超时取消/售后审核）本轮补齐，剩余缺口在 notify/logistics 等外部网关适配层。
             -->
@@ -108,17 +111,95 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.55</minimum>
+                                            <minimum>0.70</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.40</minimum>
+                                            <minimum>0.62</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
                             </rules>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+              静态检查门禁（校园淘模块）：Checkstyle。
+              与 Spotless 的分工：Spotless 管「排版卫生」（未用 import、行尾空白、文件末尾换行），
+              Checkstyle 管「客观缺陷」——通配符 import、重复 import、未使用局部变量、
+              省略花括号、空 catch 块等确定性错误，两者不重复报告同一类问题。
+              作用域刻意只限 com/ruoyi/campus/**（本项目自有代码）；若依脚手架属上游债务，
+              不在本门禁口径内——与前端「全仓 0 error + 自有目录 0 warning」两档口径同构。
+              规则集见 config/checkstyle/campus-checkstyle.xml，只允许增设规则，不允许为通过而删规则。
+              门禁绑定 verify 阶段：任一次 `mvn verify`（含 CI 的 `mvn -B verify`）都会执行，
+              不达标即构建失败；本插件刻意不提供自动改写，避免"边构建边改源码"掩盖问题。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${checkstyle.plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>${checkstyle.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <configLocation>${maven.multiModuleProjectDirectory}/config/checkstyle/campus-checkstyle.xml</configLocation>
+                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                    <includes>**/com/ruoyi/campus/**/*.java</includes>
+                    <sourceDirectories>
+                        <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
+                        <sourceDirectory>${project.build.testSourceDirectory}</sourceDirectory>
+                    </sourceDirectories>
+                    <consoleOutput>true</consoleOutput>
+                    <failsOnError>false</failsOnError>
+                    <violationSeverity>error</violationSeverity>
+                    <linkXRef>false</linkXRef>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>checkstyle-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+              静态检查门禁（校园淘模块）：SpotBugs（字节码级缺陷分析）。
+              与 Checkstyle 的分工：Checkstyle 读源码、查结构化问题（import/花括号/空块）；
+              SpotBugs 读字节码、查语义级缺陷（空指针路径、错误的相等比较、装箱拆箱往返、
+              资源未关闭等），两者互补，不重复报告同一问题。
+              作用域：onlyAnalyze 限定 com.ruoyi.campus.**，若依脚手架不纳入本门禁口径。
+              排除规则见 config/spotbugs/campus-spotbugs-exclude.xml（domain 纯 POJO 与
+              Date 暴露类噪声，理由逐条写在规则文件里）。
+              强度：effort=Max + threshold=Medium——只报中高置信度的确定缺陷，不报低置信度猜测。
+              门禁绑定 verify 阶段；产出 target/spotbugsXml.xml（CI 随报告一并归档）。
+            -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs.plugin.version}</version>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Medium</threshold>
+                    <onlyAnalyze>com.ruoyi.campus.-</onlyAnalyze>
+                    <excludeFilterFile>${maven.multiModuleProjectDirectory}/config/spotbugs/campus-spotbugs-exclude.xml</excludeFilterFile>
+                    <failOnError>true</failOnError>
+                    <xmlOutput>true</xmlOutput>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotbugs-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

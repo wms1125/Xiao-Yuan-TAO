@@ -53,9 +53,13 @@ public class SwaggerConfig
     {
         return new Info()
             // 设置标题
-            .title("标题：若依管理系统_接口文档")
+            .title("校园淘 · 接口契约")
             // 描述
-            .description("描述：用于管理集团旗下公司的人员信息,具体包括XXX,XXX模块...")
+            .description("描述：校园二手交易平台（校园淘）后端 HTTP 接口契约，"
+                + "覆盖商品、分类、购物车、订单、支付、售后、物流轨迹、评价、"
+                + "收货地址、收藏、站内信等校园业务模块。"
+                + "认证方式：请求头 Authorization: Bearer <token>；"
+                + "本规格由运行时接口 /v3/api-docs 导出并归档，作为前后端联调与回归的单一事实来源。")
             // 作者信息
             .contact(new Contact().name(ruoyiConfig.getName()))
             // 版本

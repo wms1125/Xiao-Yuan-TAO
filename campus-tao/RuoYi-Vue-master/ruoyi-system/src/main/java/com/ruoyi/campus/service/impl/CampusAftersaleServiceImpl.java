@@ -62,7 +62,7 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
         as.setOrderNo(orderNo);
         as.setUserId(userId);
         as.setUserName(userName);
-        as.setType(type == null ? 1 : type);
+        as.setType(type == null ? Integer.valueOf(1) : type);
         as.setReason(reason);
         as.setRefundAmount(order.getTotalAmount());
         as.setStatus(0);

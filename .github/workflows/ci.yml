@@ -1,9 +1,14 @@
 name: CI
 
 # 说明：
-# - 后端 job 覆盖「可编译 + 单元测试 + 覆盖率门禁 + 代码规范门禁」：一条 `mvn verify`
-#   即完成 package → test → jacoco report/check（行 ≥55%、分支 ≥40%，棘轮基线）
-#   → spotless:check（后端 Java 卫生类检查，详见根 pom 注释）。
+# - 后端 job 覆盖「可编译 + 单元测试 + 覆盖率门禁 + 代码规范门禁 + 静态分析门禁」：
+#   一条 `mvn verify` 即完成 package → test → jacoco report/check（行 ≥70%、分支 ≥62%，棘轮基线）
+#   → spotless:check（后端 Java 卫生类检查）
+#   → checkstyle:check（校园淘自有代码结构化缺陷：通配符/重复 import、未使用局部变量、
+#      省略花括号、空 catch 块；规则集 campus-tao/RuoYi-Vue-master/config/checkstyle/）
+#   → spotbugs:check（校园淘自有代码字节码级缺陷，effort=Max + threshold=Medium；
+#      排除规则 campus-tao/RuoYi-Vue-master/config/spotbugs/）。
+#   三者职责分离不重叠：spotless 管排版、checkstyle 管源码结构、spotbugs 管字节码语义。
 # - 前端 job 覆盖「静态检查 + 单测 + 覆盖率门禁 + 可构建」：npm ci 保证依赖与
 #   package-lock.json 一致；prettier --check 与 eslint 先行，任一步失败即中止。
 # - 静态检查口径：Prettier 只校验不改写；ESLint 要求 0 error（warn 不阻断）。
@@ -57,14 +62,16 @@ jobs:
           path: campus-tao/RuoYi-Vue-master/ruoyi-admin/target/ruoyi-admin.jar
           if-no-files-found: error
 
-      - name: 上传后端测试与覆盖率报告
+      - name: 上传后端测试 · 覆盖率 · 静态分析报告
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: backend-jacoco-report
+          name: backend-quality-reports
           path: |
             campus-tao/RuoYi-Vue-master/ruoyi-system/target/site/jacoco/
             campus-tao/RuoYi-Vue-master/ruoyi-system/target/surefire-reports/
+            campus-tao/RuoYi-Vue-master/ruoyi-system/target/checkstyle-result.xml
+            campus-tao/RuoYi-Vue-master/ruoyi-system/target/spotbugsXml.xml
           if-no-files-found: warn
 
   e2e:
@@ -164,6 +171,14 @@ jobs:
           mysql -h 127.0.0.1 -uroot -p123456 -N -e \
             "select concat('address_snapshot_ok=', count(*)) from information_schema.columns where table_schema='campus_tao' and table_name='campus_order' and column_name='address_snapshot'"
 
+      # 接口契约门禁：归档的 OpenAPI 规格必须与运行时一致。
+      # 这样"契约"才是可核验的单一事实来源，而不是"只有 /v3/api-docs 跑起来才有"：
+      # 一旦改了接口却忘记重新导出规格，本步骤会精确报出多/少了哪个 path×method 并阻断。
+      # 归档文件：campus-tao/docs/openapi/campus-tao-openapi.json（194 path / 218 操作）
+      # 本地等价命令：python campus-tao/tools/verify_openapi.py
+      - name: 校验归档 OpenAPI 规格与运行时一致（契约门禁）
+        run: python3 campus-tao/tools/verify_openapi.py
+
       # SQL 层集成测试（真实 mapper XML / 原子 UPDATE）× 真实 MySQL。
       # 这些用例在无库环境下靠 Assumptions 自动跳过，故 backend job（无 MySQL service）
       # 只会显示 skipped；真正执行它们的是这里——用 service 容器当数据库。
@@ -215,7 +230,7 @@ jobs:
       - name: 自有代码严格检查（eslint --max-warnings 0，仅校园淘目录）
         run: npm run lint:strict
 
-      # vitest run --coverage：v8 provider，阈值为棘轮基线（行 ≥40 / 分支 ≥45 / 语句 ≥45 / 函数 ≥55）
+      # vitest run --coverage：v8 provider，阈值为棘轮基线（行 ≥68 / 分支 ≥64 / 语句 ≥67 / 函数 ≥72）
       - name: 单元测试 + 覆盖率门禁（vitest + v8）
         run: npm run test:coverage
 

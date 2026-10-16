@@ -39,7 +39,7 @@ public class CampusReviewServiceImpl implements ICampusReviewService {
         r.setProductId(productId);
         r.setUserId(userId);
         r.setUserName(userName);
-        r.setRating(rating == null ? 5 : rating);
+        r.setRating(rating == null ? Integer.valueOf(5) : rating);
         r.setContent(content);
         r.setImages(images);
         reviewMapper.insertCampusReview(r);

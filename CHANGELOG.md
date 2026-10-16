@@ -2,7 +2,55 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~019`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~024`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.21] - 2026-10-17
+
+针对企业级评估（复评 87/100）点名的 7 项扣分逐条治理。其中**门禁阈值上调**与**后端静态分析接入**是"门禁形同虚设"的两处核心短板：阈值停留在实测值下方 20~30 个点、语义级静态分析完全缺位。
+
+### 变更（门禁阈值棘轮上调——涨上来的覆盖率必须写进门禁）
+- **后端 JaCoCo**（`ruoyi-system/pom.xml`）：行 `0.55 → 0.70`、分支 `0.40 → 0.62`。依据是 `jacoco.csv` 独立实算 **行 74.80%（1054/1409）/ 分支 67.32%（346/514）**，阈值在实测下方留 4~5 个点，只够吸收无关改动的正常抖动，不再容纳"20 点级别的覆盖率塌方"。
+- **前端 v8**（`vitest.config.js`）：`lines/functions/statements/branches` 由 `40/55/45/45` 上调为 `68/72/67/64`。依据是 `test:coverage` 实测 **行 73.27% / 语句 71.62% / 分支 68.10% / 函数 76.32%**。
+- 阈值注释与 `ci.yml` 说明同步重写为"历史演进链 + 本次实测依据"；此前注释停在 58.43/43.79 与 50.17/51.27，**配置与注释自相矛盾本身就是被点名的缺陷**。规则仍是**只允许上调，不允许下调**。
+- `ci.yml` 内前端 vitest 步骤注释一并修正（此前仍写 `行 ≥40 / 分支 ≥45 / 语句 ≥45 / 函数 ≥55`）。
+
+### 新增（后端静态分析门禁：Checkstyle + SpotBugs，此前只有 Spotless 管格式）
+- **Checkstyle**（`maven-checkstyle-plugin` 3.6.0 + `checkstyle` 10.21.4，规则集 `config/checkstyle/campus-checkstyle.xml`）：只启用**客观事实类**规则——通配符 `import`、重复 `import`、未使用局部变量、省略花括号（`NeedBraces`）、空 `catch` 块、空块。刻意**不含任何排版/命名风格偏好**，避免与 Spotless 重复报告同一问题。
+- **SpotBugs**（`spotbugs-maven-plugin` 4.9.3.0，`effort=Max` + `threshold=Medium`，排除规则 `config/spotbugs/campus-spotbugs-exclude.xml`）：字节码级语义缺陷分析。排除项逐条写明理由——`domain/**` 是纯 POJO（与 JaCoCo 排除口径一致），`EI_EXPOSE_REP/REP2` 是本项目 `java.util.Date` 在请求/响应边界的惯用写法，非缺陷。
+- 三者**作用域均限定 `com/ruoyi/campus/**`**（自有代码），脚手架属上游债务不计入本口径——与前端「全仓 0 error + 自有目录 0 warning」两档口径同构。
+- 均绑定 `verify` 阶段，随 `mvn verify` 与 CI 生效；**不提供自动改写**，避免"边构建边改源码"使门禁失去举证意义。
+- **负向验证（强制动作）**：注入通配符 import / 重复 import / 未使用局部变量 / 省略花括号 / 空 catch 后，规则逐条命中（9 处违规、`BUILD FAILURE`、退出码非 0）；移除后 `0 Checkstyle violations`。
+
+### 新增（性能基准：把"能扛量"从断言变成实测）
+- `campus-tao/perf/bench-db.sql`：用 `CREATE TABLE ... LIKE` 在**独立库 `campus_tao_perf`** 复刻表结构后造数（5 万商品 / 5 万订单 / 10 万订单项），**不触碰交付库**。小表上做 EXPLAIN 必然全表扫描、结论不可信，故必须先造出有统计意义的规模。
+- **实测暴露两处真实瓶颈**：① 「商品管理」（按 `seller_id` 过滤）**无任何可用索引，全表扫描 49,628 行**——随数据量线性劣化的缺陷；② 所有 `ORDER BY create_time DESC` 查询均为 `Using filesort`，商城列表**只要 20 条却先回表 24,814 行再排序**。
+- `campus-tao/perf/idx-candidate.sql`：4 条复合索引（过滤列 + `create_time`）在沙箱的前后对照实测——商品管理查询 **49,628 行 → 100 行（48×）**、耗时 10.50ms → 0.219ms；商城列表 4.3×；`filesort` 全部消除并转为 `Using index` 覆盖索引。
+- `campus-tao/perf/bench_http.py`（纯标准库，零第三方依赖，自研以守住"交付包无网可跑"约束）：6 条只读接口（路径取自归档 OpenAPI 规格）在 1/10/40 三档并发下，**40 并发达 3,961 QPS、p99 21.8ms、错误率 0.0%**，延迟随并发次线性增长。
+- 结论报告 `campus-tao/docs/perf-report-v1.0.21.md`，含连接池配置现状与一处配置后果分析：`maxWait=60000` 意味着池耗尽时请求最长阻塞 60s，故索引 DDL 值得优先落地。
+- 索引 DDL **刻意未自动作用于交付库**（结构变更应由版本化迁移管控），建议以 `V4__product_order_indexes.sql` + `U4` 落地。
+
+### 新增（接口契约：从"只有运行时"变为"归档可核验 + 设门禁"）
+- 归档规格 `campus-tao/docs/openapi/campus-tao-openapi.json`（由运行时 `/v3/api-docs` 导出，194 path / 218 操作），`SwaggerConfig` 的标题与描述由脚手架占位文案改为校园淘实际契约说明。
+- `campus-tao/tools/verify_openapi.py`（标准库实现）：比对归档与运行时的 **path×method 与 operationId**，并校验规格版本与 `application.yml` 一致。**刻意不比对整份 JSON 文本**——键序/空白差异会产生误报；骨架变了才是真契约变更。
+- CI 的 `e2e` job 新增「契约门禁」步骤：**改了接口却忘记重新导出规格，会精确报出多/少了哪个操作并阻断**。
+- **负向验证**：从归档中删掉一条 path → `FAIL` + 退出码非 0，且诊断精确指出缺失的操作。
+
+### 修复
+- **两处装箱拆箱往返**（`CampusAftersaleServiceImpl` / `CampusReviewServiceImpl`）：`type == null ? 1 : type` 这类三元表达式混用 `int` 与 `Integer`，JLS 规定按二进制数值提升统一为 `int`，导致「拆箱 → 立即重新装箱」。改为 `Integer.valueOf(1)` 显式装箱。**这两处是 SpotBugs 接入后新发现的真实缺陷**，此前不可见。
+- **M5 文档与事实矛盾**：第 459 行原写「git tag 断档 v1.0.15 ~ v1.0.19」，而 tag 实际已全部存在。更正为「曾断档…已于 v1.0.20 补齐」。
+- **离线依赖仓库缺构件**（交付缺陷）：`.tools/m2-repo` 缺少 Spring Boot 4 拆分为独立模块的 `spring-boot-flyway` 与 `flyway-core` / `flyway-mysql`——它们只存在于开发机全局 `~/.m2`。**后果是 `verify.bat` 默认的 `-o` 离线构建在干净机器上会失败**，与"无网可完整构建"的交付承诺相悖。已补入离线仓库。
+- M5 交付物清单同步：CI job 数（3 → 6）、前端测试文件数与用例数（改为以产物为准，不硬编码）、后端静态分析配置、性能基准、接口契约三行新增。
+
+### 验证
+- **后端离线全链路**：`mvn -B -o clean verify`（`-o` 强制离线，同时验证离线仓库完整性）→ **BUILD SUCCESS（43.0s）**，`Tests run: 280, Failures: 0, Errors: 0, Skipped: 0`（本地 MySQL 在线故 DB 相关用例未跳过）；覆盖率门禁（新阈值 70/62）通过；`0 Checkstyle violations`；SpotBugs `check` 通过。
+- **前端**：`npm run test:coverage` 在**新阈值（68/72/67/64）下通过**，`Test Files 12 passed`，行 73.27% / 语句 71.62% / 分支 68.10% / 函数 76.32%，退出码 0。
+- 离线仓库补件后重跑 `-o` 构建成功，证明**交付包仍满足"无网可完整构建"**。
+
+### 未纳入本轮（如实记录）
+- **候选索引 DDL 未落地交付库**（须走 Flyway V4 + U4，见上文）。
+- **性能未测写路径**（下单/支付属资金路径，正确性由并发一致性用例覆盖，但未做吞吐压测）与**长稳压测**（>1h）；HTTP 层数字基于演示库规模，不代表大数据量下的延迟。
+- **UI 浏览器截图证据仍停留在 v1.0.16**：v1.0.16~v1.0.20 新增页面（收藏/站内信/购物车结算联动/商品管理）尚未取得截图级证据，留待下一轮补齐。
+- **制品归档（GitHub Release）未做**：交付仍为"从源码构建"，尚未提供"取制品即用"的 jar + 校验和。
 
 ## [1.0.20] - 2026-10-17
 
