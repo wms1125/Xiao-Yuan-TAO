@@ -23,8 +23,11 @@ NEW="${2:?缺少迁移库名}"
 shift 2
 ALLOW_NEW=("$@")
 
-# V2 写入的菜单种子：3 个页面菜单(2011~2013) + 6 个按钮权限(2115~2120) = 9
-EXPECT_DELTA="${EXPECT_DELTA:-sys_menu=9 sys_role_menu=9}"
+# 迁移脚本写入的菜单种子：
+#   V2：3 个页面菜单(2011~2013) + 6 个按钮权限(2115~2120) = 9
+#   V3：3 个按钮权限(2121~2123) = 3
+#   合计 12。若仅写 9，V3 那 3 行会被误判为「非预期差异」。
+EXPECT_DELTA="${EXPECT_DELTA:-sys_menu=12 sys_role_menu=12}"
 # 运行期由应用写入的表（应用启动/调度会自然产生数据，与迁移无关）
 VOLATILE="${VOLATILE:-sys_job_log sys_logininfor sys_oper_log sys_notice_read qrtz_fired_triggers qrtz_scheduler_state qrtz_simple_triggers qrtz_triggers}"
 [ "${STRICT:-0}" = "1" ] && { EXPECT_DELTA=""; VOLATILE=""; }

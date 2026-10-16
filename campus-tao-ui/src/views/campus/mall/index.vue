@@ -238,6 +238,12 @@ function loadHistory() {
     .then((res) => {
       searchHistory.value = res.data || []
     })
+    // 失败必须兜底：否则 rejected promise 没有任何 handler 会被浏览器当作
+    // "Uncaught (in promise)" 抛到全局，既污染控制台、又可能打断聚焦后的渲染。
+    // 历史查询是搜索框聚焦这一主流程上的旁路，失败应静默降级为「空态」而非报错。
+    .catch(() => {
+      searchHistory.value = []
+    })
     .finally(() => {
       historyLoading.value = false
     })

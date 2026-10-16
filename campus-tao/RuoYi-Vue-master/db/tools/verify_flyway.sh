@@ -66,16 +66,16 @@ fi
 
 # ---------- 1. 空库迁移 ----------
 echo
-echo "[1/5] 空库执行迁移（V1 + V2）"
+echo "[1/5] 空库执行迁移（V1 + V2 + V3）"
 sql "DROP DATABASE IF EXISTS $TEST_DB; CREATE DATABASE $TEST_DB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
 out=$(flyway migrate)
-if echo "$out" | grep -q "Successfully applied 2 migrations"; then
-  ok "迁移成功：Successfully applied 2 migrations"
+if echo "$out" | grep -q "Successfully applied 3 migrations"; then
+  ok "迁移成功：Successfully applied 3 migrations"
 else
   bad "迁移未按预期完成"; echo "$out" | tail -8 | sed 's/^/      /'
 fi
 v=$(tsql "select group_concat(version order by installed_rank) from flyway_schema_history where success=1;")
-[ "$v" = "1,2" ] && ok "flyway_schema_history 记录 V1,V2" || bad "版本记录异常：$v"
+[ "$v" = "1,2,3" ] && ok "flyway_schema_history 记录 V1,V2,V3" || bad "版本记录异常：$v"
 t=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB';")
 [ "$t" = "47" ] && ok "迁移后表数 47（42 基线 + 4 新增 + 1 版本表）" || bad "迁移后表数异常：$t（期望 47）"
 
@@ -109,7 +109,7 @@ h=$(tsql "select count(*) from flyway_schema_history;")
 echo
 echo "[4/5] 回滚后再次迁移（验证可重放）"
 out=$(flyway migrate)
-if echo "$out" | grep -q "Successfully applied 2 migrations"; then
+if echo "$out" | grep -q "Successfully applied 3 migrations"; then
   ok "再次迁移成功"
 else
   bad "再次迁移未按预期完成"; echo "$out" | tail -8 | sed 's/^/      /'
