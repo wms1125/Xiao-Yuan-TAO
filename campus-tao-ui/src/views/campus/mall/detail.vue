@@ -72,6 +72,14 @@
                   @click="handleAddCart"
                   >加入购物车</el-button
                 >
+                <el-button
+                  size="large"
+                  :icon="favored ? 'StarFilled' : 'Star'"
+                  :type="favored ? 'warning' : 'default'"
+                  v-hasPermi="['campus:favorite:add']"
+                  @click="handleToggleFavorite"
+                  >{{ favored ? '已收藏' : '收藏' }}</el-button
+                >
                 <el-button size="large" @click="goCart">去购物车结算</el-button>
               </div>
               <div v-if="!canBuy" class="detail-actions__hint">
@@ -123,6 +131,7 @@ import { getProduct } from '@/api/campus/product'
 import { listCategory } from '@/api/campus/category'
 import { addCart } from '@/api/campus/cart'
 import { listReviewByProduct } from '@/api/campus/review'
+import { favoriteStatus, toggleFavorite } from '@/api/campus/favorite'
 import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
@@ -135,6 +144,8 @@ const categoryOptions = ref([])
 const loading = ref(true)
 const quantity = ref(1)
 const activeImage = ref('')
+/** 当前商品是否已被本人收藏 */
+const favored = ref(false)
 
 const productId = computed(() => route.query.productId)
 
@@ -231,6 +242,29 @@ function handleAddCart() {
   })
 }
 
+/** 取当前商品的收藏状态 */
+function loadFavored() {
+  if (!productId.value) return
+  favoriteStatus([Number(productId.value)])
+    .then((res) => {
+      const ids = (res.data && res.data.favored) || []
+      favored.value = ids.includes(Number(productId.value))
+    })
+    .catch(() => {
+      favored.value = false
+    })
+}
+
+/** 切换收藏，成功后按后端返回的 favored 前翻按钮 */
+async function handleToggleFavorite() {
+  try {
+    const res = await toggleFavorite(Number(productId.value))
+    favored.value = !!(res.data && res.data.favored)
+  } catch {
+    /* 失败提示由请求拦截器统一弹出 */
+  }
+}
+
 function goCart() {
   router.push({ path: '/campus/cart' })
 }
@@ -243,6 +277,7 @@ onMounted(() => {
   loadCategory()
   loadProduct()
   loadReviews()
+  loadFavored()
 })
 </script>
 

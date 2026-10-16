@@ -43,6 +43,20 @@ import {
   setDefaultAddress,
   delAddress
 } from '@/api/campus/address'
+import { listFavorite, countFavorite, favoriteStatus, toggleFavorite, removeFavorite } from '@/api/campus/favorite'
+import {
+  listConversation,
+  unreadMessageCount,
+  listOrderMessage,
+  sendMessage,
+  readOrderMessage
+} from '@/api/campus/message'
+import {
+  listSearchHistory,
+  recordSearchHistory,
+  delSearchHistory,
+  clearSearchHistory
+} from '@/api/campus/searchhistory'
 
 const lastCall = () => request.mock.calls[request.mock.calls.length - 1][0]
 
@@ -291,5 +305,114 @@ describe('校园淘 - 收货地址接口', () => {
   it('删除地址为 DELETE /campus/address/{addressId}', () => {
     delAddress(7)
     expect(lastCall()).toEqual({ url: '/campus/address/7', method: 'delete' })
+  })
+})
+
+describe('校园淘 - 商品收藏接口', () => {
+  it('列表为 GET /campus/favorite/list', () => {
+    listFavorite()
+    expect(lastCall()).toEqual({ url: '/campus/favorite/list', method: 'get' })
+  })
+
+  it('计数为 GET /campus/favorite/count', () => {
+    countFavorite()
+    expect(lastCall()).toEqual({ url: '/campus/favorite/count', method: 'get' })
+  })
+
+  it('批量状态为 POST /campus/favorite/status 且携带商品 ID 数组', () => {
+    favoriteStatus([7, 8])
+    expect(lastCall()).toEqual({
+      url: '/campus/favorite/status',
+      method: 'post',
+      data: [7, 8]
+    })
+  })
+
+  it('切换收藏为 POST /campus/favorite/toggle 且 productId 走 query', () => {
+    toggleFavorite(7)
+    expect(lastCall()).toEqual({
+      url: '/campus/favorite/toggle',
+      method: 'post',
+      params: { productId: 7 }
+    })
+  })
+
+  it('取消收藏为 POST /campus/favorite/remove 且 productId 走 query', () => {
+    removeFavorite(7)
+    expect(lastCall()).toEqual({
+      url: '/campus/favorite/remove',
+      method: 'post',
+      params: { productId: 7 }
+    })
+  })
+})
+
+describe('校园淘 - 站内信接口', () => {
+  it('会话列表为 GET /campus/message/list', () => {
+    listConversation()
+    expect(lastCall()).toEqual({ url: '/campus/message/list', method: 'get' })
+  })
+
+  it('未读数为 GET /campus/message/unread', () => {
+    unreadMessageCount()
+    expect(lastCall()).toEqual({ url: '/campus/message/unread', method: 'get' })
+  })
+
+  it('订单会话消息为 GET /campus/message/order/{orderNo}', () => {
+    listOrderMessage('CT202601010001')
+    expect(lastCall()).toEqual({ url: '/campus/message/order/CT202601010001', method: 'get' })
+  })
+
+  it('发送为 POST /campus/message/send 且携带订单号与内容', () => {
+    sendMessage({ orderNo: 'CT202601010001', toUserId: 3, content: '你好' })
+    expect(lastCall()).toEqual({
+      url: '/campus/message/send',
+      method: 'post',
+      data: { orderNo: 'CT202601010001', toUserId: 3, content: '你好' }
+    })
+  })
+
+  it('标记已读为 POST /campus/message/read/{orderNo}', () => {
+    readOrderMessage('CT202601010001')
+    expect(lastCall()).toEqual({ url: '/campus/message/read/CT202601010001', method: 'post' })
+  })
+})
+
+describe('校园淘 - 搜索历史接口', () => {
+  it('最近搜索为 GET /campus/searchhistory/list 且 limit 走 query', () => {
+    listSearchHistory(10)
+    expect(lastCall()).toEqual({
+      url: '/campus/searchhistory/list',
+      method: 'get',
+      params: { limit: 10 }
+    })
+  })
+
+  it('不传 limit 时 params 中为 undefined（后端回落默认 10）', () => {
+    listSearchHistory()
+    expect(lastCall()).toEqual({
+      url: '/campus/searchhistory/list',
+      method: 'get',
+      params: { limit: undefined }
+    })
+  })
+
+  it('记录为 POST /campus/searchhistory/record 且携带关键词', () => {
+    recordSearchHistory('自行车')
+    expect(lastCall()).toEqual({
+      url: '/campus/searchhistory/record',
+      method: 'post',
+      data: { keyword: '自行车' }
+    })
+  })
+
+  it('删除单条为 DELETE /campus/searchhistory/{historyId}', () => {
+    delSearchHistory(7)
+    expect(lastCall()).toEqual({ url: '/campus/searchhistory/7', method: 'delete' })
+  })
+
+  it('清空为 DELETE /campus/searchhistory/clear', () => {
+    clearSearchHistory()
+    expect(lastCall()).toEqual({ url: '/campus/searchhistory/clear', method: 'delete' })
   })
 })

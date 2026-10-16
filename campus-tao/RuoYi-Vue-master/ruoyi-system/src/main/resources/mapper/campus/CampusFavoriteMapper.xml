@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusFavoriteMapper">
+
+    <resultMap type="com.ruoyi.campus.domain.CampusFavorite" id="CampusFavoriteResult">
+        <id property="favoriteId" column="favorite_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="productId" column="product_id"/>
+        <result property="createTime" column="create_time"/>
+        <!-- 联表冗余字段 -->
+        <result property="productTitle" column="product_title"/>
+        <result property="productPrice" column="product_price"/>
+        <result property="productImages" column="product_images"/>
+        <result property="productStatus" column="product_status"/>
+        <result property="sellerName" column="seller_name"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        f.favorite_id, f.user_id, f.product_id, f.create_time
+    </sql>
+
+    <sql id="Join_Product_Column">
+        p.title as product_title, p.price as product_price, p.images as product_images,
+        p.status as product_status, p.seller_name
+    </sql>
+
+    <!--
+      收藏列表联表查询：商品被删除后收藏记录仍存在，故用 left join 而不是 inner join——
+      否则用户收藏过的商品一旦下架/删除，收藏记录会"凭空消失"，用户会以为收藏功能坏了。
+      商品已删除时 product_title 为 null，前端据此显示"商品已下架"。
+    -->
+    <select id="selectListByUser" resultMap="CampusFavoriteResult">
+        select <include refid="Base_Column_List"/>, <include refid="Join_Product_Column"/>
+        from campus_favorite f
+        left join campus_product p on p.id = f.product_id
+        where f.user_id = #{userId}
+        order by f.create_time desc, f.favorite_id desc
+    </select>
+
+    <select id="countByUserId" resultType="java.lang.Integer">
+        select count(*) from campus_favorite where user_id = #{userId}
+    </select>
+
+    <select id="countByUserAndProduct" resultType="java.lang.Integer">
+        select count(*) from campus_favorite where user_id = #{userId} and product_id = #{productId}
+    </select>
+
+    <!-- 批量取已收藏商品 ID：商品卡片列表渲染"收藏/已收藏"状态用，一次查询替代 N 次 -->
+    <select id="selectFavoredProductIds" resultType="java.lang.Long">
+        select product_id from campus_favorite
+        where user_id = #{userId} and product_id in
+        <foreach collection="productIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+    </select>
+
+    <insert id="insertCampusFavorite" parameterType="com.ruoyi.campus.domain.CampusFavorite"
+            useGeneratedKeys="true" keyProperty="favoriteId">
+        insert into campus_favorite (user_id, product_id)
+        values (#{userId}, #{productId})
+    </insert>
+
+    <!-- 带 user_id 条件：越权取消在 SQL 层即被拦住，返回 0 行而不报错 -->
+    <delete id="deleteByUserAndProduct">
+        delete from campus_favorite where user_id = #{userId} and product_id = #{productId}
+    </delete>
+
+    <delete id="deleteByFavoriteId">
+        delete from campus_favorite where favorite_id = #{favoriteId} and user_id = #{userId}
+    </delete>
+
+</mapper>

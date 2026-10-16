@@ -15,16 +15,34 @@
 import { defineComponent, h, inject, provide } from 'vue'
 import { vi } from 'vitest'
 
+/**
+ * 合并"模板传入的 class"与"替身自己的 class"。
+ *
+ * 为什么必须合并而不是二选一：
+ *   - 若先写 class 再展开 attrs，模板上的 class 会整体顶掉替身类名，
+ *     测试里按 `.xxx-stub` 选择器找不到元素；
+ *   - 若先展开 attrs 再写 class，替身类名又会顶掉模板上的 class，
+ *     页面上那些**带业务语义的 class**（如 `campus-product__fav--on` 表示"已收藏"）会消失，
+ *     测试也就无法断言它们。
+ * 两者都丢行为，故只能拼接。
+ */
+const mergeStubClass = (attrs, ownClass) => [ownClass, attrs.class].filter(Boolean).join(' ')
+
 // 渲染默认插槽的通用替身
 //
 // 注意 inheritAttrs: false —— 这里手动把 attrs 展开到根元素，若同时保留默认的属性继承，
 // Vue 会把同一批 attrs 再 merge 一次，@click 会被合并成函数数组从而触发两次。
+//
+// **class 必须写在 ...attrs 之后**：Vue 会把模板里的 class 也放进 attrs，
+// 若先写 class 再展开 attrs，模板上的 class 会整体顶掉替身自己的类名，
+// 导致测试里按 `.xxx-stub` 选择器找不到元素。
 const slotStub = (name) =>
   defineComponent({
     name,
     inheritAttrs: false,
     setup(_, { slots, attrs }) {
-      return () => h('div', { class: `${name}-stub`, ...attrs }, slots.default ? slots.default() : [])
+      return () =>
+        h('div', { ...attrs, class: mergeStubClass(attrs, `${name}-stub`) }, slots.default ? slots.default() : [])
     }
   })
 
@@ -47,7 +65,7 @@ export const ElTable = defineComponent({
     // 只在 setup 阶段取一次会永远拿到挂载时的空数组，列替身也就渲染不出任何行。
     provide('elTableRows', () => props.data)
     return () =>
-      h('div', { class: 'el-table-stub', ...attrs }, [
+      h('div', { ...attrs, class: mergeStubClass(attrs, 'el-table-stub') }, [
         slots.default ? slots.default() : [],
         slots.empty ? slots.empty() : []
       ])
@@ -130,13 +148,16 @@ export const ElInput = defineComponent({
     rows: Number
   },
   emits: ['update:modelValue'],
-  setup(props, { attrs }) {
+  setup(props, { attrs, emit }) {
     return () =>
       h('input', {
-        class: 'el-input-stub',
+        class: mergeStubClass(attrs, 'el-input-stub'),
         value: props.modelValue,
         placeholder: props.placeholder,
-        ...attrs
+        ...attrs,
+        // 必须如实回传 update:modelValue：否则 v-model 的双向绑定是断的，
+        // "输入内容后能发送"这类路径根本测不到——替身丢行为，测出来的绿是假的。
+        onInput: (e) => emit('update:modelValue', e.target.value)
       })
   }
 })
@@ -147,7 +168,8 @@ export const ElSelect = defineComponent({
   props: { modelValue: [String, Number], placeholder: String, clearable: Boolean },
   emits: ['update:modelValue'],
   setup(_, { slots, attrs }) {
-    return () => h('div', { class: 'el-select-stub', ...attrs }, slots.default ? slots.default() : [])
+    return () =>
+      h('div', { ...attrs, class: mergeStubClass(attrs, 'el-select-stub') }, slots.default ? slots.default() : [])
   }
 })
 
@@ -158,7 +180,8 @@ export const ElInputNumber = defineComponent({
   props: { modelValue: Number, min: Number, max: Number, size: String },
   emits: ['update:modelValue'],
   setup(props, { attrs }) {
-    return () => h('div', { class: 'el-input-number-stub', 'data-value': props.modelValue, ...attrs })
+    return () =>
+      h('div', { ...attrs, class: mergeStubClass(attrs, 'el-input-number-stub'), 'data-value': props.modelValue })
   }
 })
 
@@ -169,7 +192,7 @@ export const ElSwitch = defineComponent({
   props: { modelValue: [Number, String, Boolean], activeValue: null, inactiveValue: null, disabled: Boolean },
   emits: ['update:modelValue', 'change'],
   setup(props, { attrs }) {
-    return () => h('div', { class: 'el-switch-stub', 'data-value': props.modelValue, ...attrs })
+    return () => h('div', { ...attrs, class: mergeStubClass(attrs, 'el-switch-stub'), 'data-value': props.modelValue })
   }
 })
 
@@ -180,7 +203,42 @@ export const ElRate = defineComponent({
   props: { modelValue: Number, disabled: Boolean, size: String },
   emits: ['update:modelValue'],
   setup(props, { attrs }) {
-    return () => h('div', { class: 'el-rate-stub', 'data-rate': props.modelValue, ...attrs })
+    return () => h('div', { ...attrs, class: mergeStubClass(attrs, 'el-rate-stub'), 'data-rate': props.modelValue })
+  }
+})
+
+/** 图标容器：只渲染默认插槽（图标本身是 svg，jsdom 下无需渲染细节） */
+export const ElIcon = defineComponent({
+  name: 'el-icon',
+  inheritAttrs: false,
+  setup(_, { slots, attrs }) {
+    return () =>
+      h('span', { ...attrs, class: mergeStubClass(attrs, 'el-icon-stub') }, slots.default ? slots.default() : [])
+  }
+})
+
+/** 文字提示：必须渲染默认插槽，否则被包裹的收藏按钮根本不会出现在 DOM 里，
+ *  也就无法点击——这是"替身丢行为导致测不出东西"的典型。 */
+export const ElTooltip = defineComponent({
+  name: 'el-tooltip',
+  inheritAttrs: false,
+  setup(_, { slots }) {
+    return () => h('span', { class: 'el-tooltip-stub' }, slots.default ? slots.default() : [])
+  }
+})
+
+/** 未读角标：把 value 写进 data-value，便于断言未读数是否正确传递 */
+export const ElBadge = defineComponent({
+  name: 'el-badge',
+  inheritAttrs: false,
+  props: { value: { type: [Number, String], default: null } },
+  setup(props, { slots, attrs }) {
+    return () =>
+      h(
+        'span',
+        { ...attrs, class: mergeStubClass(attrs, 'el-badge-stub'), 'data-value': props.value },
+        slots.default ? slots.default() : []
+      )
   }
 })
 
@@ -191,7 +249,7 @@ export const Pagination = defineComponent({
   props: { total: Number, page: { type: Number, default: 1 }, limit: { type: Number, default: 20 } },
   emits: ['update:page', 'update:limit', 'pagination'],
   setup(_, { attrs }) {
-    return () => h('div', { class: 'pagination-stub', ...attrs })
+    return () => h('div', { ...attrs, class: mergeStubClass(attrs, 'pagination-stub') })
   }
 })
 
@@ -202,7 +260,7 @@ export const RightToolbar = defineComponent({
   props: { showSearch: Boolean },
   emits: ['update:showSearch', 'queryTable'],
   setup(_, { attrs }) {
-    return () => h('div', { class: 'right-toolbar-stub', ...attrs })
+    return () => h('div', { ...attrs, class: mergeStubClass(attrs, 'right-toolbar-stub') })
   }
 })
 
@@ -238,6 +296,9 @@ export function elementStubs() {
       'el-radio': ElRadio,
       'el-timeline': ElTimeline,
       'el-timeline-item': ElTimelineItem,
+      'el-icon': ElIcon,
+      'el-tooltip': ElTooltip,
+      'el-badge': ElBadge,
       pagination: Pagination,
       'right-toolbar': RightToolbar
     }

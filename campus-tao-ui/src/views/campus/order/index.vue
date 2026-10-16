@@ -135,6 +135,14 @@
                 v-hasPermi="['campus:review:add']"
                 >评价</el-button
               >
+              <el-button
+                link
+                type="info"
+                icon="ChatDotRound"
+                @click="handleContact(scope.row)"
+                v-hasPermi="['campus:message:add']"
+                >联系对方</el-button
+              >
             </template>
           </el-table-column>
           <template #empty>
@@ -282,6 +290,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { parseTime } from '@/utils/ruoyi'
 import {
@@ -296,6 +305,13 @@ import {
   syncLogisticsTrace
 } from '@/api/campus/order'
 import { addReview } from '@/api/campus/review'
+
+const router = useRouter()
+
+/** 跳到站内信并直接进入该订单的会话 */
+function handleContact(row) {
+  router.push({ path: '/campus/message', query: { orderNo: row.orderNo } })
+}
 
 const orderList = ref([])
 const loading = ref(true)

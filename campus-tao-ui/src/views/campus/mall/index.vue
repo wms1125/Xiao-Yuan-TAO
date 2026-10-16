@@ -15,13 +15,33 @@
       <div class="campus-toolbar">
         <el-form :inline="true" :model="queryParams" @submit.prevent>
           <el-form-item label="关键词">
-            <el-input
-              v-model="queryParams.title"
-              placeholder="商品标题"
-              clearable
-              style="width: 200px"
-              @keyup.enter="handleQuery"
-            />
+            <div class="mall-search">
+              <el-input
+                v-model="queryParams.title"
+                placeholder="商品标题"
+                clearable
+                style="width: 200px"
+                @keyup.enter="handleQuery"
+                @focus="toggleHistory"
+              />
+              <!-- 搜索历史下拉：聚焦时展示最近搜索，点击回填关键词 -->
+              <div v-if="historyVisible" v-loading="historyLoading" class="mall-history">
+                <div class="mall-history__head">
+                  <span>最近搜索</span>
+                  <el-button link type="primary" size="small" @click="handleClearHistory">清空</el-button>
+                </div>
+                <div v-if="!searchHistory.length" class="mall-history__empty">暂无搜索历史</div>
+                <div
+                  v-for="h in searchHistory"
+                  :key="h.historyId"
+                  class="mall-history__item"
+                  @click="handlePickHistory(h.keyword)"
+                >
+                  <span class="mall-history__keyword">{{ h.keyword }}</span>
+                  <el-icon class="mall-history__del" @click.stop="handleDelHistory(h)"><Close /></el-icon>
+                </div>
+              </div>
+            </div>
           </el-form-item>
           <el-form-item label="分类">
             <el-select v-model="queryParams.categoryId" placeholder="全部分类" clearable style="width: 160px">
@@ -47,6 +67,15 @@
             <div class="campus-product__cover">
               <img v-if="firstImage(item.images)" :src="firstImage(item.images)" alt="" />
               <span v-else>暂无图片</span>
+              <!-- 收藏按钮：stop 阻止冒泡，否则点收藏会顺带跳进详情页 -->
+              <el-tooltip :content="isFavored(item.id) ? '取消收藏' : '收藏'" placement="top">
+                <el-icon
+                  class="campus-product__fav"
+                  :class="{ 'campus-product__fav--on': isFavored(item.id) }"
+                  @click.stop="handleToggleFavorite(item)"
+                  ><StarFilled v-if="isFavored(item.id)" /><Star v-else
+                /></el-icon>
+              </el-tooltip>
             </div>
             <div class="campus-product__info">
               <div class="campus-product__title">{{ item.title }}</div>
@@ -82,8 +111,16 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { Star, StarFilled } from '@element-plus/icons-vue'
 import { listProduct } from '@/api/campus/product'
 import { listCategory } from '@/api/campus/category'
+import { favoriteStatus, toggleFavorite } from '@/api/campus/favorite'
+import {
+  clearSearchHistory,
+  delSearchHistory,
+  listSearchHistory,
+  recordSearchHistory
+} from '@/api/campus/searchhistory'
 
 const router = useRouter()
 
@@ -91,6 +128,14 @@ const productList = ref([])
 const categoryOptions = ref([])
 const loading = ref(true)
 const total = ref(0)
+
+/** 已收藏的商品 ID 集合：批量查询一次，避免逐商品 N+1 */
+const favoredIds = ref([])
+
+// ---- 搜索历史 ----
+const historyVisible = ref(false)
+const historyLoading = ref(false)
+const searchHistory = ref([])
 
 const conditionOptions = [
   { value: 1, label: '全新' },
@@ -132,10 +177,95 @@ function getList() {
       productList.value = res.rows || []
       total.value = res.total || 0
       loading.value = false
+      // 商品到位后再批量取收藏状态
+      loadFavored()
+      // 搜索即记录历史：失败不影响搜索本身（记录是旁路，不是主流程）
+      if (queryParams.title) {
+        recordSearchHistory(queryParams.title).catch(() => {})
+      }
     })
     .catch(() => {
       loading.value = false
     })
+}
+
+/** 批量取当前页商品的收藏状态 */
+function loadFavored() {
+  const ids = productList.value.map((p) => p.id)
+  if (!ids.length) {
+    favoredIds.value = []
+    return
+  }
+  favoriteStatus(ids)
+    .then((res) => {
+      favoredIds.value = (res.data && res.data.favored) || []
+    })
+    .catch(() => {
+      // 收藏状态拉取失败不阻塞商品浏览，只是按钮显示为未收藏
+      favoredIds.value = []
+    })
+}
+
+function isFavored(productId) {
+  return favoredIds.value.includes(productId)
+}
+
+/** 切换收藏：成功/失败都据后端返回的 favored 前翻按钮 */
+async function handleToggleFavorite(item) {
+  try {
+    const res = await toggleFavorite(item.id)
+    const favored = res.data && res.data.favored
+    if (favored) {
+      if (!favoredIds.value.includes(item.id)) favoredIds.value.push(item.id)
+    } else {
+      favoredIds.value = favoredIds.value.filter((id) => id !== item.id)
+    }
+  } catch {
+    /* 失败提示由请求拦截器统一弹出 */
+  }
+}
+
+// ---- 搜索历史 ----
+
+function toggleHistory() {
+  historyVisible.value = !historyVisible.value
+  if (historyVisible.value) loadHistory()
+}
+
+function loadHistory() {
+  historyLoading.value = true
+  listSearchHistory(10)
+    .then((res) => {
+      searchHistory.value = res.data || []
+    })
+    .finally(() => {
+      historyLoading.value = false
+    })
+}
+
+/** 点击历史词回填并直接搜索 */
+function handlePickHistory(keyword) {
+  queryParams.title = keyword
+  historyVisible.value = false
+  handleQuery()
+}
+
+async function handleDelHistory(h) {
+  try {
+    await delSearchHistory(h.historyId)
+    searchHistory.value = searchHistory.value.filter((x) => x.historyId !== h.historyId)
+  } catch {
+    /* 失败提示由请求拦截器统一弹出 */
+  }
+}
+
+async function handleClearHistory() {
+  try {
+    await clearSearchHistory()
+    searchHistory.value = []
+  } catch {
+    /* 失败提示由请求拦截器统一弹出 */
+  }
 }
 
 function loadCategory() {
@@ -181,5 +311,104 @@ onMounted(() => {
   font-size: 12px;
   color: var(--c-ink-4);
   letter-spacing: 0.04em;
+}
+
+/* 收藏按钮浮在商品封面右上角 */
+.campus-product {
+  position: relative;
+}
+
+.campus-product__cover {
+  position: relative;
+}
+
+.campus-product__fav {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 6px;
+  font-size: 18px;
+  color: var(--c-ink-4);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.campus-product__fav:hover {
+  color: var(--el-color-warning);
+  transform: scale(1.12);
+}
+
+.campus-product__fav--on {
+  color: var(--el-color-warning);
+}
+
+/* 搜索历史下拉 */
+.mall-search {
+  position: relative;
+  display: inline-block;
+}
+
+.mall-history {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  width: 260px;
+  padding: 8px 0;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  box-shadow: var(--el-box-shadow-light);
+}
+
+.mall-history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 6px;
+  font-size: 12px;
+  color: var(--c-ink-4);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.mall-history__empty {
+  padding: 14px 12px;
+  font-size: 12px;
+  color: var(--c-ink-4);
+  text-align: center;
+}
+
+.mall-history__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mall-history__item:hover {
+  background: var(--el-fill-color-light);
+}
+
+.mall-history__keyword {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mall-history__del {
+  flex-shrink: 0;
+  margin-left: 8px;
+  color: var(--c-ink-4);
+  cursor: pointer;
+}
+
+.mall-history__del:hover {
+  color: var(--el-color-danger);
 }
 </style>

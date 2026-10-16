@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusSearchHistoryMapper">
+
+    <resultMap type="com.ruoyi.campus.domain.CampusSearchHistory" id="CampusSearchHistoryResult">
+        <id property="historyId" column="history_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="keyword" column="keyword"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        history_id, user_id, keyword, create_time
+    </sql>
+
+    <select id="selectRecentByUser" resultMap="CampusSearchHistoryResult">
+        select <include refid="Base_Column_List"/>
+        from campus_search_history
+        where user_id = #{userId}
+        order by create_time desc, history_id desc
+        limit #{limit}
+    </select>
+
+    <select id="countByUserId" resultType="java.lang.Integer">
+        select count(*) from campus_search_history where user_id = #{userId}
+    </select>
+
+    <!-- 带 user_id：越权删除在 SQL 层被拦住 -->
+    <delete id="deleteById">
+        delete from campus_search_history where history_id = #{historyId} and user_id = #{userId}
+    </delete>
+
+    <delete id="deleteByUserAndKeyword">
+        delete from campus_search_history where user_id = #{userId} and keyword = #{keyword}
+    </delete>
+
+    <delete id="deleteAllByUser">
+        delete from campus_search_history where user_id = #{userId}
+    </delete>
+
+    <insert id="insertCampusSearchHistory" parameterType="com.ruoyi.campus.domain.CampusSearchHistory"
+            useGeneratedKeys="true" keyProperty="historyId">
+        insert into campus_search_history (user_id, keyword)
+        values (#{userId}, #{keyword})
+    </insert>
+
+</mapper>

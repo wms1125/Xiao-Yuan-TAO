@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusMessageMapper">
+
+    <resultMap type="com.ruoyi.campus.domain.CampusMessage" id="CampusMessageResult">
+        <id property="messageId" column="message_id"/>
+        <result property="orderNo" column="order_no"/>
+        <result property="fromUserId" column="from_user_id"/>
+        <result property="toUserId" column="to_user_id"/>
+        <result property="content" column="content"/>
+        <result property="isRead" column="is_read"/>
+        <result property="createTime" column="create_time"/>
+        <result property="fromUserName" column="from_user_name"/>
+        <result property="toUserName" column="to_user_name"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        m.message_id, m.order_no, m.from_user_id, m.to_user_id, m.content, m.is_read, m.create_time
+    </sql>
+
+    <!-- 昵称通过 sys_user 关联取出，避免前端逐条再查用户表 -->
+    <select id="selectByOrderNo" resultMap="CampusMessageResult">
+        select <include refid="Base_Column_List"/>,
+               fu.nick_name as from_user_name,
+               tu.nick_name as to_user_name
+        from campus_message m
+        left join sys_user fu on fu.user_id = m.from_user_id
+        left join sys_user tu on tu.user_id = m.to_user_id
+        where m.order_no = #{orderNo}
+        order by m.create_time asc, m.message_id asc
+    </select>
+
+    <!--
+      会话列表：我参与过的订单 = 我买过的订单 ∪ 我作为卖方参与的订单。
+      "我作为卖方"通过 campus_order_item → campus_product.seller_id 推导
+      （订单不按卖家拆单，一个订单可能跨多个卖家，故必须 distinct）。
+      商品被删除后该子查询取不到，属于可接受降级——至少买方视角始终完整。
+    -->
+    <select id="selectConversations" resultType="java.util.Map">
+        select t.order_no as orderNo,
+               t.last_content as lastContent,
+               t.last_time as lastTime,
+               t.unread as unread,
+               o.status as orderStatus,
+               o.total_amount as totalAmount,
+               o.user_id as buyerId,
+               bu.nick_name as buyerName,
+               (select count(*) from campus_order_item oi
+                 where oi.order_no = t.order_no) as itemCount
+        from (
+            select order_no,
+                   (select content from campus_message m2
+                     where m2.order_no = m.order_no
+                     order by m2.create_time desc, m2.message_id desc limit 1) as last_content,
+                   max(create_time) as last_time,
+                   sum(case when to_user_id = #{userId} and is_read = 0 then 1 else 0 end) as unread
+            from campus_message m
+            where from_user_id = #{userId} or to_user_id = #{userId}
+            group by order_no
+        ) t
+        left join campus_order o on o.order_no = t.order_no
+        left join sys_user bu on bu.user_id = o.user_id
+        order by t.last_time desc
+    </select>
+
+    <select id="countUnread" resultType="java.lang.Integer">
+        select count(*) from campus_message where to_user_id = #{userId} and is_read = 0
+    </select>
+
+    <select id="countUnreadByOrder" resultType="java.lang.Integer">
+        select count(*) from campus_message
+        where order_no = #{orderNo} and to_user_id = #{userId} and is_read = 0
+    </select>
+
+    <!-- 订单当事方：买方 + 该订单所有商品的卖方（去重） -->
+    <select id="selectPartyUserIds" resultType="java.lang.Long">
+        select user_id from campus_order where order_no = #{orderNo}
+        union
+        select distinct p.seller_id
+        from campus_order_item oi
+        join campus_product p on p.id = oi.product_id
+        where oi.order_no = #{orderNo} and p.seller_id is not null
+    </select>
+
+    <insert id="insertCampusMessage" parameterType="com.ruoyi.campus.domain.CampusMessage"
+            useGeneratedKeys="true" keyProperty="messageId">
+        insert into campus_message (order_no, from_user_id, to_user_id, content, is_read)
+        values (#{orderNo}, #{fromUserId}, #{toUserId}, #{content}, #{isRead})
+    </insert>
+
+    <!-- 带 to_user_id：只能把自己的未读消息标为已读，不可能影响他人 -->
+    <update id="markReadByOrder">
+        update campus_message set is_read = 1
+        where order_no = #{orderNo} and to_user_id = #{userId} and is_read = 0
+    </update>
+
+</mapper>

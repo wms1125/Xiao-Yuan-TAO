@@ -4,6 +4,40 @@
 
 开发过程留痕见 `campus-tao/ai-log/001~019`，里程碑文档见 `campus-tao/M1~M5`。
 
+## [1.0.19] - 2026-10-17
+
+《提升评分行动计划》P0-2：**收藏 / 站内信 / 搜索历史三张空表落地**。V2 迁移已建好这三张表与菜单 2011/2012、权限 2118~2120，但后端无实现、前端无页面——菜单点进去是空页（评估报告原话：「留一个点进去是空页的菜单，比没有菜单更伤可信度」）。本轮把数据底座变成可用功能。
+
+### 新增
+- **商品收藏（后端 5 文件）**：`domain/CampusFavorite`（含联表冗余的 `productTitle` / `productPrice` / `sellerName`）、`mapper/CampusFavoriteMapper` + XML、`service/ICampusFavoriteService` + `impl/CampusFavoriteServiceImpl`、`controller/CampusFavoriteController`（`list` / `count` / `status` / `toggle` / `remove`）。
+- **站内信（后端 5 文件）**：`domain/CampusMessage`、`mapper/CampusMessageMapper` + XML、`service/ICampusMessageService` + `impl/CampusMessageServiceImpl`、`controller/CampusMessageController`（`list` / `unread` / `order/{orderNo}` / `send` / `read/{orderNo}`）。
+- **搜索历史（后端 5 文件）**：`domain/CampusSearchHistory`、`mapper/CampusSearchHistoryMapper` + XML、`service/ICampusSearchHistoryService` + `impl/CampusSearchHistoryServiceImpl`、`controller/CampusSearchHistoryController`（`list` / `record` / `{historyId}` / `clear`）。
+- **前端**：`api/campus/favorite.js` / `message.js` / `searchhistory.js` 三个接口封装；`views/campus/favorite/index.vue`（概览 + 清单 + 取消收藏 + 清空）；`views/campus/message/index.vue`（会话列表 + 消息流 + 未读角标 + 发送框）；商城页商品卡片与详情页收藏按钮；商城页搜索框最近搜索下拉。
+- **订单页「联系对方」入口**：跳转站内信并直接进入该订单会话（`?orderNo=xxx`）。
+- **V3 迁移** `db/migration/V3__search_history_perms.sql` + 回滚 `db/rollback/U3__search_history_perms.sql`：补 `campus:searchhistory:list` / `add` / `remove` 三个权限（挂在校园商城 2008 之下）并授予普通角色。收藏与消息的权限 V2 已建，无需重复。
+
+### 变更
+- `vitest.config.js` 覆盖率白名单纳入 `src/views/campus/favorite/index.vue` 与 `src/views/campus/message/index.vue`。
+- 后端 `info.app.version` 更新为 `1.0.19`。
+
+### 修复
+- **站内信接收方由前端传入 → 改为服务端从订单推导并校验为当事方**：原设计若直接接受 `toUserId`，则把用户 ID 作为入参即可给任意用户发消息（典型的越权写）。现在：我是卖方 → 接收方固定为买方（忽略前端传值，防卖方冒充买方互发）；我是买方且订单只有一位卖家 → 接收方为该卖家；订单跨多位卖家（购物车不按卖家拆单，一个订单可能跨多个卖家）→ 买方必须显式指定，且**该值必须通过「是否为订单当事方」校验**。
+- **`ElInput` 测试替身不保真**：渲染了 `input` 却从不在 `input` 事件时回传 `update:modelValue`，导致 `v-model` 双向绑定是断的——"输入内容后能发送消息"这条路径根本测不到（替身丢行为，测出来的绿是假的）。已在 `tests/unit/support/element-stubs.js` 补 `onInput`。
+- **测试替身的 class 被 `attrs` 顶掉**：`h('div', { class: 'xxx-stub', ...attrs })` 中 Vue 会把模板上的 class 也放进 `attrs`，展开后模板 class 整体顶掉替身自己的类名，测试按 `.xxx-stub` 选择器找不到元素。改为**合并**而非覆盖（`mergeStubClass`），两类 class 同时保留。
+
+### 验证
+- 后端门禁 `mvn -B verify`：**BUILD SUCCESS，243 用例 / 0 失败 / 0 错误**（原 188，新增 55 例）。
+- 后端覆盖率（JaCoCo 报告实测）：**行 69.77%** / **分支 59.53%**（原 65.49% / 53.76%，双升）。
+- 前端门禁：`format:check` / `lint`（0 error，161 条既有 warn）/ `lint:strict`（0 problem）/ `test:coverage` / `build:prod` 全绿。
+- 前端覆盖率（v8 实测）：**167 用例 / 10 文件 / 0 失败**；全量 stmt **67.91%** / branch **64.30%** / func **73.36%** / line **69.34%**（原 62.68 / 60.58 / 69.51 / 64.06，全项上升）。收藏页行覆盖 97.14%、站内信页 97.61%。
+- 后端新增测试分布：FavoriteService 13 + MessageService 16 + SearchHistoryService 14 + Controller 三个共 25。
+
+### 未纳入本轮
+- **e2e 回归未跑**：验证环境中的 MySQL 与后端服务已停止（用户在验证过程中主动取消），端到端断言（收藏→列表→取消、买卖双方收发消息与已读递减、搜索记录与去重）待环境恢复后补跑。
+- 站内信未做实时推送（无 WebSocket），目前是"打开页面/会话时拉取"的轮询式交互；表结构已预留 `idx_to_read(to_user_id, is_read)` 索引支撑后续升级。
+- 消息未做分页（单订单会话量级可控，暂按全量返回）。
+- `campus_favorite` 收藏上限未设（与地址簿的 20 条上限不同——收藏是"看过的好东西"而非"常用配置"，暂不限制，但已预留改造点）。
+
 ## [1.0.18] - 2026-10-16
 
 《提升评分行动计划》P0-1：**抽取 `IPaymentGateway` 支付网关抽象层**。企业级评估报告（v1.0.17）给出的最高优先级缺口是"支付能力耦合在 `ICampusAccountService` 里，接微信支付必须改业务代码"。本轮把"支付方式"从订单/售后逻辑里彻底摘掉，业务代码只依赖接口、渠道靠配置切换。
