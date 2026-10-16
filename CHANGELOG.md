@@ -4,6 +4,47 @@
 
 开发过程留痕见 `campus-tao/ai-log/001~019`，里程碑文档见 `campus-tao/M1~M5`。
 
+## [1.0.18] - 2026-10-16
+
+《提升评分行动计划》P0-1：**抽取 `IPaymentGateway` 支付网关抽象层**。企业级评估报告（v1.0.17）给出的最高优先级缺口是"支付能力耦合在 `ICampusAccountService` 里，接微信支付必须改业务代码"。本轮把"支付方式"从订单/售后逻辑里彻底摘掉，业务代码只依赖接口、渠道靠配置切换。
+
+### 新增
+- **`payment` 包（10 个新文件，`ruoyi-system`）**：
+  - `IPaymentGateway`：`channel()` / `enabled()` / `pay()` / `refund()` / `parseNotify()`——接微信支付时新增一个实现类即可，业务代码一行不改；
+  - `PayCommand` / `RefundCommand`：扣款与退款指令（含 `orderNo` 与金额，金额必须为正数）；
+  - `PayResult`：**三态** `SUCCESS` / `INSUFFICIENT_BALANCE` / `FAILED`。把"余额不足"与"系统失败"分开，是为了让业务层区别处理——余额不足时订单保持待付款并提示充值；渠道失败必须抛异常触发回滚，而不是把订单静默留在待付款（那会让用户以为没付成、实际钱已扣）；
+  - `RefundResult`：成功 / 失败 + 退款单号；
+  - `PayNotify`：`signValid` 是**第一道闸门**，验签失败即整体拒绝；
+  - `PaymentChannelProperties`（`@ConfigurationProperties("campus.payment")`）：微信商户参数，`isConfigured()` 要求 appId / mchId / apiV3Key / serialNo / privateKeyPath 全部非空；
+  - `PaymentGatewayResolver`：按 `campus.payment.channel` 选渠道，**失败显式抛异常、绝不静默回落**——渠道名写错或渠道未启用都抛异常，避免"以为在用微信、实际走的沙箱"这类资金错配；
+  - `SandboxPaymentGateway`：原沙箱逻辑迁移为正式渠道实现；
+  - `WechatPayGateway`：微信支付骨架（`NOT_IMPLEMENTED` 显式失败，不留"看起来能跑"的假实现）；
+  - `impl/CampusPaymentServiceImpl`：业务门面，`handlePaidNotify` 实现**幂等 + 金额核对**。
+- **`controller/CampusPaymentController`**：`GET /campus/payment/channel`（查当前生效渠道）+ `@Anonymous POST /campus/payment/notify/{channel}`（渠道回调）。回调端点必须匿名可访问（第三方服务器带不了我们的登录态），安全性完全押在验签上，故**两层都拒**：`parseNotify` 验签失败即拒绝，`CampusPaymentServiceImpl` 再拦一次。
+- **配置块 `campus.payment`**（`application.yml`）：渠道与微信商户参数**全部走环境变量注入**，不写明文密钥。
+- **`CampusPaymentGatewayTest`**（22 例）：渠道路由 / 沙箱与微信实现 / 回调幂等与金额核对 / `enabledChannels` 语义。
+
+### 变更
+- **`CampusOrderServiceImpl`**：支付路径改走 `paymentService.pay(...)`，取消路径改走 `paymentService.refund(...)`；**构造器注入**替代字段注入（依赖是真实对象而非 mock）。
+- **`CampusAftersaleServiceImpl`**：审核通过的退款改走 `paymentService.refund(...)`，退款失败抛异常。
+- 后端 `info.app.version` 更新为 `1.0.18`。
+
+### 修复
+- **取消已付款订单时"先回库存、后退款"的顺序缺陷（本行新引入，由负向用例抓出）**：退款是不可逆的外部动作，若先回库存再退款，退款失败时只能靠 `@Transactional` 回滚来撤销库存增量——一旦将来 `returnStock` 被标注 `REQUIRES_NEW` 或事务被移除，就会留下"库存已回补、钱却没退"的不一致。改为**先退款、后回库存**（与售后审核路径的既有顺序一致），退款失败时天然无副作用需要撤销。两个负向用例（订单取消 / 售后审核）分别用 `UnnecessaryStubbing` 与 `NeverWantedButInvoked` 把这条顺序钉死。
+- **`availableChannels` 的语义会被前端误读**：原接口只暴露"已注册"渠道，微信未填商户参数时也会出现在列表里，前端若直接渲染会把"选了走不通"的渠道当成可用选项。新增 `enabledChannels()`（已注册**且** `enabled()`），接口同时返回 `registered` 与 `enabled` 两个字段，语义不再混淆。
+
+### 验证
+- 后端门禁 `mvn -B verify`：**BUILD SUCCESS，188 用例 / 0 失败 / 0 错误**（原 163 例，新增 25 例）。
+- 覆盖率（取自 JaCoCo 报告实测，非自述）：**行 65.49%**（门禁 ≥55%）、**分支 53.76%**（门禁 ≥40%），较上轮 64.85% / 50.81% 双升。
+- e2e 业务回归：**27 断言全 PASS / 0 FAIL**，`RESULT: ALL_PASS`（支付原子扣款、售后退款 + 回库存两条路径已走通新抽象层）。
+- 运行时负向验证（对运行中的后端发真实请求）：未登录查渠道 → 401；回调未知渠道 `notexist` → "支付渠道不存在或未启用"；**沙箱渠道回调无验签 → "回调验签失败，已拒绝处理"**（沙箱没有签名体系，但绝不等于"不校验就放行"）；微信渠道未配置 → "支付渠道不存在或未启用"。
+- YAML 重复键检查：`application.yml` / `application-druid.yml` 均无重复键。
+
+### 未纳入本轮
+- 微信支付 V3 的真实签名、验签、退款 API 对接（骨架已就位，商户参数到位后填实现即可）。
+- `channelTradeNo` 尚未落库——沙箱渠道的交易号目前不持久化，真实渠道接入时需在 `campus_order` 增加对应列并纳入对账。
+- 前端结算页尚未展示/选择支付渠道（后端接口已具备）。
+
 ## [1.0.17] - 2026-10-16
 
 《提升评分行动计划》阶段三：**买家侧旅程断点补全（第一项·收货地址）**。1.0.16 的 V2 迁移已建好 `campus_address` 表、菜单 2011 与权限 2115~2117，但没有任何服务层与页面——菜单点进去是空壳。本轮把数据底座变成可用功能，并补齐前端单测与门禁。

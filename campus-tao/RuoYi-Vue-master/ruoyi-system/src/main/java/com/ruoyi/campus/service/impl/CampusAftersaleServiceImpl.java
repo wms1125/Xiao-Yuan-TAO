@@ -8,7 +8,9 @@ import com.ruoyi.campus.mapper.CampusAftersaleMapper;
 import com.ruoyi.campus.mapper.CampusOrderItemMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
 import com.ruoyi.campus.mapper.CampusProductMapper;
-import com.ruoyi.campus.service.ICampusAccountService;
+import com.ruoyi.campus.payment.ICampusPaymentService;
+import com.ruoyi.campus.payment.RefundCommand;
+import com.ruoyi.campus.payment.RefundResult;
 import com.ruoyi.campus.service.ICampusAftersaleService;
 import com.ruoyi.campus.service.ICampusNoticeService;
 import com.ruoyi.common.exception.ServiceException;
@@ -35,7 +37,7 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
     @Autowired
     private CampusProductMapper productMapper;
     @Autowired
-    private ICampusAccountService accountService;
+    private ICampusPaymentService paymentService;
     @Autowired
     private ICampusNoticeService noticeService;
 
@@ -85,8 +87,14 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
             throw new ServiceException("关联订单不存在，无法审核");
         }
         if (pass) {
-            // 退款到沙箱余额 + 回库存
-            accountService.refund(as.getUserId(), as.getRefundAmount());
+            // 退款走支付网关；失败必须抛异常使整笔审核回滚，
+            // 否则会出现"售后单已通过、钱没退、库存已回"的三不一致状态
+            RefundResult refundResult = paymentService.refund(RefundCommand.of(
+                    as.getUserId(), as.getOrderNo(), null, as.getRefundAmount()));
+            if (!refundResult.isSuccess()) {
+                throw new ServiceException("退款失败：" + refundResult.getFailReason());
+            }
+            // 回库存
             List<CampusOrderItem> items = orderItemMapper.selectByOrderNo(as.getOrderNo());
             for (CampusOrderItem item : items) {
                 productMapper.increaseStock(item.getProductId(), item.getQuantity());

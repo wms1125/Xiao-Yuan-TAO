@@ -46,7 +46,11 @@ import com.ruoyi.campus.mapper.CampusCartMapper;
 import com.ruoyi.campus.mapper.CampusOrderItemMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
 import com.ruoyi.campus.mapper.CampusProductMapper;
-import com.ruoyi.campus.service.ICampusAccountService;
+import com.ruoyi.campus.payment.ICampusPaymentService;
+import com.ruoyi.campus.payment.PayCommand;
+import com.ruoyi.campus.payment.PayResult;
+import com.ruoyi.campus.payment.RefundCommand;
+import com.ruoyi.campus.payment.RefundResult;
 import com.ruoyi.campus.service.ICampusCartService;
 import com.ruoyi.campus.service.ICampusNoticeService;
 import com.ruoyi.campus.service.impl.CampusOrderServiceImpl;
@@ -77,7 +81,7 @@ class CampusOrderServiceTest {
     @Mock
     private CampusOrderItemMapper orderItemMapper;
     @Mock
-    private ICampusAccountService accountService;
+    private ICampusPaymentService paymentService;
     @Mock
     private ICampusCartService cartService;
     @Mock
@@ -237,7 +241,7 @@ class CampusOrderServiceTest {
         ServiceException ex = assertThrows(ServiceException.class, () -> orderService.payOrder(ORDER_NO, BUYER_ID));
 
         assertEquals("订单不存在", ex.getMessage());
-        verify(accountService, never()).pay(anyLong(), any());
+        verify(paymentService, never()).pay(any(PayCommand.class));
     }
 
     @Test
@@ -248,7 +252,7 @@ class CampusOrderServiceTest {
 
         assertTrue(orderService.payOrder(ORDER_NO, BUYER_ID));
 
-        verify(accountService, never()).pay(anyLong(), any());
+        verify(paymentService, never()).pay(any(PayCommand.class));
         verify(orderMapper, never()).updateCampusOrder(any());
     }
 
@@ -268,11 +272,17 @@ class CampusOrderServiceTest {
     void payOrderReturnsFalseWhenBalanceInsufficient() {
         CampusOrder order = order(ORDER_NO, BUYER_ID, 0, "60.00");
         when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
-        when(accountService.pay(BUYER_ID, new BigDecimal("60.00"))).thenReturn(false);
+        when(paymentService.pay(any(PayCommand.class))).thenReturn(PayResult.insufficientBalance("余额不足"));
 
         assertFalse(orderService.payOrder(ORDER_NO, BUYER_ID));
 
         verify(orderMapper, never()).updateCampusOrder(any());
+        ArgumentCaptor<PayCommand> cmdCaptor = ArgumentCaptor.forClass(PayCommand.class);
+        verify(paymentService).pay(cmdCaptor.capture());
+        PayCommand sent = cmdCaptor.getValue();
+        assertEquals(BUYER_ID, sent.getUserId());
+        assertEquals(ORDER_NO, sent.getOrderNo());
+        assertEquals(0, new BigDecimal("60.00").compareTo(sent.getAmount()));
     }
 
     @Test
@@ -280,7 +290,7 @@ class CampusOrderServiceTest {
     void payOrderSuccess() {
         CampusOrder order = order(ORDER_NO, BUYER_ID, 0, "60.00");
         when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
-        when(accountService.pay(BUYER_ID, new BigDecimal("60.00"))).thenReturn(true);
+        when(paymentService.pay(any(PayCommand.class))).thenReturn(PayResult.success("TRADE-001"));
 
         assertTrue(orderService.payOrder(ORDER_NO, BUYER_ID));
 
@@ -288,6 +298,22 @@ class CampusOrderServiceTest {
         CampusOrder saved = orderCaptor.getValue();
         assertEquals(Integer.valueOf(1), saved.getStatus());
         assertNotNull(saved.getPayTime());
+        ArgumentCaptor<PayCommand> cmdCaptor = ArgumentCaptor.forClass(PayCommand.class);
+        verify(paymentService).pay(cmdCaptor.capture());
+        assertEquals(ORDER_NO, cmdCaptor.getValue().getOrderNo());
+    }
+
+    @Test
+    @DisplayName("支付：渠道失败时抛异常，不把订单静默留在待付款（避免钱已扣却显示未支付）")
+    void payOrderThrowsWhenChannelFails() {
+        CampusOrder order = order(ORDER_NO, BUYER_ID, 0, "60.00");
+        when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
+        when(paymentService.pay(any(PayCommand.class))).thenReturn(PayResult.failed("渠道网关超时"));
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> orderService.payOrder(ORDER_NO, BUYER_ID));
+
+        assertTrue(ex.getMessage().contains("支付失败"));
+        verify(orderMapper, never()).updateCampusOrder(any());
     }
 
     // ---------------- 取消 ----------------
@@ -303,7 +329,7 @@ class CampusOrderServiceTest {
         assertTrue(orderService.cancelOrder(ORDER_NO, BUYER_ID));
 
         verify(productMapper).increaseStock(PRODUCT_ID, 2);
-        verify(accountService, never()).refund(anyLong(), any());
+        verify(paymentService, never()).refund(any(RefundCommand.class));
         assertEquals(Integer.valueOf(4), order.getStatus());
         assertNotNull(order.getCancelTime());
     }
@@ -315,12 +341,35 @@ class CampusOrderServiceTest {
         when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
         when(orderItemMapper.selectByOrderNo(ORDER_NO))
                 .thenReturn(Collections.singletonList(orderItem(PRODUCT_ID, 2)));
+        when(paymentService.refund(any(RefundCommand.class))).thenReturn(RefundResult.success("REF-001"));
 
         assertTrue(orderService.cancelOrder(ORDER_NO, BUYER_ID));
 
-        verify(accountService).refund(BUYER_ID, new BigDecimal("60.00"));
+        ArgumentCaptor<RefundCommand> cmdCaptor = ArgumentCaptor.forClass(RefundCommand.class);
+        verify(paymentService).refund(cmdCaptor.capture());
+        RefundCommand sent = cmdCaptor.getValue();
+        assertEquals(BUYER_ID, sent.getUserId());
+        assertEquals(ORDER_NO, sent.getOrderNo());
+        assertEquals(0, new BigDecimal("60.00").compareTo(sent.getAmount()));
         verify(productMapper).increaseStock(PRODUCT_ID, 2);
         assertEquals(Integer.valueOf(4), order.getStatus());
+    }
+
+    @Test
+    @DisplayName("取消：退款失败时抛异常中止，不回补库存（避免钱没退、库存已回）")
+    void cancelOrderAbortsWhenRefundFails() {
+        CampusOrder order = order(ORDER_NO, BUYER_ID, 1, "60.00");
+        when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
+        // 注意：此处**不** stub orderItemMapper——退款失败发生在查订单明细之前，
+        // 若 stub 了反而说明生产代码先准备了回库存（顺序错误）。
+        when(paymentService.refund(any(RefundCommand.class))).thenReturn(RefundResult.failed("渠道超时"));
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> orderService.cancelOrder(ORDER_NO, BUYER_ID));
+
+        assertTrue(ex.getMessage().contains("退款失败"));
+        verify(productMapper, never()).increaseStock(anyLong(), anyInt());
+        verify(orderMapper, never()).updateCampusOrder(any());
+        assertEquals(Integer.valueOf(1), order.getStatus());
     }
 
     @Test
@@ -332,7 +381,7 @@ class CampusOrderServiceTest {
         ServiceException ex = assertThrows(ServiceException.class, () -> orderService.cancelOrder(ORDER_NO, BUYER_ID));
 
         assertEquals("当前订单状态不可取消", ex.getMessage());
-        verify(accountService, never()).refund(anyLong(), any());
+        verify(paymentService, never()).refund(any(RefundCommand.class));
     }
 
     // ---------------- 发货 / 收货 ----------------

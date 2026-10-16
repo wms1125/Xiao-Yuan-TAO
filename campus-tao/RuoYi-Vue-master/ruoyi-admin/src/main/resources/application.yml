@@ -46,7 +46,7 @@ info:
   app:
     name: campus-tao
     description: 校园淘 校园二手交易平台
-    version: 1.0.17
+    version: 1.0.18
 
 # 开发环境配置
 server:
@@ -203,6 +203,20 @@ campus:
   order:
     # 未支付订单自动取消超时（分钟），可由环境变量 CAMPUS_PAY_TIMEOUT_MINUTES 覆盖
     pay-timeout-minutes: ${CAMPUS_PAY_TIMEOUT_MINUTES:30}
+  # 支付渠道：channel 决定走哪个 IPaymentGateway 实现（sandbox | wechat），
+  # 切换渠道只改这里、不改业务代码。默认 sandbox（站内余额，唯一已跑通的渠道）。
+  # 微信商户参数未填齐时 enabled 判定为 false，渠道路由会明确报错而非静默回落沙箱。
+  # 密钥一律通过环境变量注入，禁止在本文件写明文口令。
+  payment:
+    channel: ${CAMPUS_PAYMENT_CHANNEL:sandbox}
+    wechat:
+      enabled: ${CAMPUS_WECHAT_PAY_ENABLED:false}
+      app-id: ${CAMPUS_WECHAT_APP_ID:}
+      mch-id: ${CAMPUS_WECHAT_MCH_ID:}
+      api-v3-key: ${CAMPUS_WECHAT_API_V3_KEY:}
+      serial-no: ${CAMPUS_WECHAT_SERIAL_NO:}
+      private-key-path: ${CAMPUS_WECHAT_PRIVATE_KEY_PATH:}
+      notify-url: ${CAMPUS_WECHAT_NOTIFY_URL:}
   # 短信/邮件外呼通道：站内通知为必达链路，外呼为可选增强链路。
   # 网关地址未通过环境变量注入时通道自动视为「未启用」，降级为仅站内通知，并在 campus_notify_log 留痕。
   # 密钥一律通过环境变量注入，禁止在本文件写明文口令。

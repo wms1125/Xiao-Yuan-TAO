@@ -32,7 +32,9 @@ import com.ruoyi.campus.mapper.CampusAftersaleMapper;
 import com.ruoyi.campus.mapper.CampusOrderItemMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
 import com.ruoyi.campus.mapper.CampusProductMapper;
-import com.ruoyi.campus.service.ICampusAccountService;
+import com.ruoyi.campus.payment.ICampusPaymentService;
+import com.ruoyi.campus.payment.RefundCommand;
+import com.ruoyi.campus.payment.RefundResult;
 import com.ruoyi.campus.service.ICampusNoticeService;
 import com.ruoyi.campus.service.impl.CampusAftersaleServiceImpl;
 import com.ruoyi.common.exception.ServiceException;
@@ -58,7 +60,7 @@ class CampusAftersaleServiceTest {
     @Mock
     private CampusProductMapper productMapper;
     @Mock
-    private ICampusAccountService accountService;
+    private ICampusPaymentService paymentService;
     @Mock
     private ICampusNoticeService noticeService;
 
@@ -148,7 +150,7 @@ class CampusAftersaleServiceTest {
                 () -> aftersaleService.audit(AFTERSALE_NO, "admin", true, null));
 
         assertEquals("售后单状态异常", ex.getMessage());
-        verify(accountService, never()).refund(anyLong(), any());
+        verify(paymentService, never()).refund(any(RefundCommand.class));
     }
 
     @Test
@@ -162,7 +164,7 @@ class CampusAftersaleServiceTest {
 
         assertEquals("关联订单不存在，无法审核", ex.getMessage());
         // 关键：不得先退款/回库存再抛错，否则会留下已退款但订单状态未变的半成品
-        verify(accountService, never()).refund(anyLong(), any());
+        verify(paymentService, never()).refund(any(RefundCommand.class));
         verify(productMapper, never()).increaseStock(anyLong(), anyInt());
         verify(aftersaleMapper, never()).updateCampusAftersale(any());
     }
@@ -175,16 +177,44 @@ class CampusAftersaleServiceTest {
         CampusOrder order = order(ORDER_NO, BUYER_ID, 5, "60.00");
         when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
         when(orderItemMapper.selectByOrderNo(ORDER_NO)).thenReturn(Collections.singletonList(item(PRODUCT_ID, 2)));
+        when(paymentService.refund(any(RefundCommand.class))).thenReturn(RefundResult.success("REF-001"));
 
         assertTrue(aftersaleService.audit(AFTERSALE_NO, "admin", true, "同意退款"));
 
-        verify(accountService).refund(BUYER_ID, new BigDecimal("60.00"));
+        ArgumentCaptor<RefundCommand> cmdCaptor = ArgumentCaptor.forClass(RefundCommand.class);
+        verify(paymentService).refund(cmdCaptor.capture());
+        RefundCommand sent = cmdCaptor.getValue();
+        assertEquals(BUYER_ID, sent.getUserId());
+        assertEquals(ORDER_NO, sent.getOrderNo());
+        assertEquals(0, new BigDecimal("60.00").compareTo(sent.getAmount()));
         verify(productMapper).increaseStock(PRODUCT_ID, 2);
         assertEquals(Integer.valueOf(3), as.getStatus());
         assertEquals("admin", as.getHandler());
         assertNotNull(as.getHandleTime());
         assertEquals(Integer.valueOf(6), order.getStatus());
         verify(noticeService).push(eq(BUYER_ID), eq("aftersale"), anyString(), anyString(), eq(AFTERSALE_NO));
+    }
+
+    @Test
+    @DisplayName("审核通过但退款失败：抛异常中止，不回库存不改状态（避免钱没退、库存已回）")
+    void auditAbortsWhenRefundFails() {
+        CampusAftersale as = aftersale(AFTERSALE_NO, ORDER_NO, 0);
+        when(aftersaleMapper.selectByAftersaleNo(AFTERSALE_NO)).thenReturn(as);
+        CampusOrder order = order(ORDER_NO, BUYER_ID, 5, "60.00");
+        when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
+        // 注意：此处**不** stub orderItemMapper——退款失败发生在查订单明细之前，
+        // 若 stub 了反而说明生产代码先做了回库存的准备（顺序错误）。
+        when(paymentService.refund(any(RefundCommand.class))).thenReturn(RefundResult.failed("渠道超时"));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> aftersaleService.audit(AFTERSALE_NO, "admin", true, "同意退款"));
+
+        assertTrue(ex.getMessage().contains("退款失败"));
+        verify(productMapper, never()).increaseStock(anyLong(), anyInt());
+        verify(orderMapper, never()).updateCampusOrder(any());
+        verify(aftersaleMapper, never()).updateCampusAftersale(any());
+        assertEquals(Integer.valueOf(0), as.getStatus());
+        assertEquals(Integer.valueOf(5), order.getStatus());
     }
 
     @Test
@@ -197,7 +227,7 @@ class CampusAftersaleServiceTest {
 
         assertTrue(aftersaleService.audit(AFTERSALE_NO, "admin", false, "不符合退款条件"));
 
-        verify(accountService, never()).refund(anyLong(), any());
+        verify(paymentService, never()).refund(any(RefundCommand.class));
         verify(productMapper, never()).increaseStock(anyLong(), anyInt());
         assertEquals(Integer.valueOf(2), as.getStatus());
         assertEquals(Integer.valueOf(3), order.getStatus());

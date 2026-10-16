@@ -10,7 +10,11 @@ import com.ruoyi.campus.mapper.CampusCartMapper;
 import com.ruoyi.campus.mapper.CampusOrderItemMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
 import com.ruoyi.campus.mapper.CampusProductMapper;
-import com.ruoyi.campus.service.ICampusAccountService;
+import com.ruoyi.campus.payment.ICampusPaymentService;
+import com.ruoyi.campus.payment.PayCommand;
+import com.ruoyi.campus.payment.PayResult;
+import com.ruoyi.campus.payment.RefundCommand;
+import com.ruoyi.campus.payment.RefundResult;
 import com.ruoyi.campus.service.ICampusAddressService;
 import com.ruoyi.campus.service.ICampusCartService;
 import com.ruoyi.campus.service.ICampusNoticeService;
@@ -42,7 +46,7 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
     @Autowired
     private CampusOrderItemMapper orderItemMapper;
     @Autowired
-    private ICampusAccountService accountService;
+    private ICampusPaymentService paymentService;
     @Autowired
     private ICampusCartService cartService;
     @Autowired
@@ -183,10 +187,16 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         if (order.getStatus() != STATUS_WAIT_PAY) {
             throw new ServiceException("订单状态异常，无法支付");
         }
-        // 扣沙箱余额（库存已在下单时预占）
-        boolean ok = accountService.pay(userId, order.getTotalAmount());
-        if (!ok) {
+        // 扣款走支付网关（默认沙箱渠道扣站内余额；接真实渠道后此处代码不变）
+        // 余额不足与渠道失败分开处理：前者订单保持待付款并提示充值，
+        // 后者抛异常触发事务回滚，避免"钱已扣、订单却没动"的半完成状态。
+        PayResult payResult = paymentService.pay(
+                PayCommand.of(userId, order.getOrderNo(), order.getTotalAmount()));
+        if (payResult.getStatus() == PayResult.Status.INSUFFICIENT_BALANCE) {
             return false; // 余额不足
+        }
+        if (!payResult.isSuccess()) {
+            throw new ServiceException("支付失败：" + payResult.getFailReason());
         }
         order.setStatus(STATUS_PAID);
         order.setPayTime(new Date());
@@ -209,9 +219,17 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
             orderMapper.updateCampusOrder(order);
             return true;
         } else if (order.getStatus() == STATUS_PAID) {
-            // 已付款：退款 + 回库存
+            // 已付款：退款 + 回库存。
+            // 顺序必须是**先退款、后回库存**：退款是不可逆的外部动作，
+            // 若先回库存再退款，退款失败时只能靠 @Transactional 回滚来撤销库存增量——
+            // 一旦将来 returnStock 被标注 REQUIRES_NEW（或事务被移除），
+            // 就会留下"库存已回补、钱却没退"的不一致。先退款则失败时天然无副作用需要撤销。
+            RefundResult refundResult = paymentService.refund(RefundCommand.of(
+                    userId, order.getOrderNo(), null, order.getTotalAmount()));
+            if (!refundResult.isSuccess()) {
+                throw new ServiceException("退款失败：" + refundResult.getFailReason());
+            }
             returnStock(order);
-            accountService.refund(userId, order.getTotalAmount());
             order.setStatus(STATUS_CANCELLED);
             order.setCancelTime(new Date());
             orderMapper.updateCampusOrder(order);
