@@ -104,10 +104,44 @@ Successfully applied 1 migration to schema `campus_tao_fw`, now at version v2 (e
 
 ### 未纳入本轮（如实记录）
 - **`getDefaultAddress()` 已封装但页面未使用**：页面从列表首条推导默认地址（后端已按 `isDefault desc` 排序，与 `selectDefault` 口径一致）；独立接口留给后续购物车/下单页的"预填默认地址"场景，其本身已进单测覆盖（100%）。
-- **Docker 镜像仍未在本机构建**：本机无 Docker，故镜像与 compose 的**构建**验证只能由 CI `docker` job 承担——但也正因如此，本轮 CI 才独立抓出了「bind mount 日志目录权限导致后端起不来」这个本地不可能发现的缺陷（见上文验证节）。1.0.16 轮的 `docker` job 曾因此失败，本轮已修为具名卷；该 job 在本轮 push 后的复跑结果见下条。
+- **Docker 镜像未在本机构建**：本机无 Docker，镜像与 compose 的**构建**验证只能由 CI `docker` job 承担——但也正因如此，本轮 CI 才独立抓出了「bind mount 日志目录权限导致后端起不来」这个本地不可能发现的缺陷（见上文验证节）。**该缺陷修复后 CI `docker` job 已转绿**：后端容器第 5 次探测进入 `healthy`、前端静态页可达、`/prod-api/captchaImage` 返回 200（nginx 反代后端生效）。1.0.16 轮的 `docker` job 曾因此失败。
 - **收藏 / 搜索历史 / IM 沟通仍未实现**：V2 迁移已建 `campus_favorite` / `campus_search_history` / `campus_message` 三张表，但 Java 服务层与 Vue 页面尚未落地。收货地址只是买家侧四项断点里的第一项。
 - **支付网关抽象层未动**：`CampusAccount` 仍是沙箱余额账户，未抽 `IPaymentGateway`。
-- **Docker 镜像仍未在本机构建**：本机无 Docker，构建验证继续由 CI `docker` job 承担。
+- **旧增量脚本仍带硬编码 `USE campus_tao`**：`sql/migration-v1.0.5.sql` / `migration-v1.0.7.sql` / `migration-v1.0.15.sql` 三个已发布脚本沿用旧惯例，脚本内的 `USE` 会覆盖命令行传入的库名（在临时库上验证时可能误写）。本轮只在新脚本 `migration-v1.0.17.sql` 中修正；改动已发布过的脚本需单独评估影响面，故未在本轮处理。
+
+---
+
+## CI 最终结论（1.0.17 · run 38896154030）
+
+修复上述两个 CI 缺陷后重跑，**6 个 job 全部通过——这是本项目第一次全部门禁转绿**（1.0.16 轮为 5/6，`docker` 失败；中间轮为 4/6，`docker` 与 `e2e` 失败）：
+
+| job | 结果 |
+|---|---|
+| 后端构建 · 单元测试 · 覆盖率门禁 | success |
+| 端到端业务回归（MySQL 8 · 双账号全链路） | success |
+| 前端单测 · 覆盖率门禁 · 生产构建 | success |
+| 数据库迁移与回滚（Flyway · 逐表行数核对） | success |
+| 容器镜像构建与起栈自检（Dockerfile · docker compose） | success |
+| 依赖漏洞扫描（前端 npm audit · 后端 osv-scanner） | success |
+
+e2e job 关键输出（证明 Flyway 真的升级了存量库，而非"应用能启动就放过"）：
+
+```
+tables=47
+baseline_ok=1
+v2_ok=1
+address_snapshot_ok=1
+Tests run: 13, Failures: 0, Errors: 0, Skipped: 0
+RESULT: ALL_PASS
+```
+
+docker job 关键输出（证明容器化交付物真的能跑）：
+
+```
+第 5 次探测：backend health = healthy
+前端静态页可达
+/prod-api/captchaImage → 200（nginx 反代后端生效）
+```
 
 ## [1.0.16] - 2026-10-16
 
