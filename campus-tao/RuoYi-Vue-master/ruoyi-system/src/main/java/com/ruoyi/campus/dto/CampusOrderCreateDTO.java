@@ -21,7 +21,25 @@ public class CampusOrderCreateDTO {
     @NotBlank(message = "收货地址不能为空")
     private String address;
 
+    /**
+     * 选用的收货地址ID（可选）。
+     * <p>
+     * 传入时服务端会**校验归属**并以地址簿内容为准覆盖
+     * `receiverName` / `receiverPhone` / `address` 三个字段，同时写入订单的
+     * `address_snapshot`——即"选了地址簿就不能被前端篡改"。
+     * 不传则按手填内容下单（兼容原有调用方）。
+     */
+    private Long addressId;
+
     private String remark;
+
+    public Long getAddressId() {
+        return addressId;
+    }
+
+    public void setAddressId(Long addressId) {
+        this.addressId = addressId;
+    }
 
     public List<Long> getCartIds() {
         return cartIds;

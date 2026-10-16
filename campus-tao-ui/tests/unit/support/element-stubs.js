@@ -83,7 +83,7 @@ export const ElTableColumn = defineComponent({
   }
 })
 
-/** 弹窗：modelValue 为真才渲染内容，footer 插槽单独渲染 */
+/** 弹窗：modelValue 为真才渲染内容；title 需如实渲染（页面对新增/修改两种弹窗标题有断言） */
 export const ElDialog = defineComponent({
   name: 'el-dialog',
   props: { modelValue: Boolean, title: String, width: String, appendToBody: Boolean },
@@ -92,6 +92,7 @@ export const ElDialog = defineComponent({
     return () =>
       props.modelValue
         ? h('div', { class: 'el-dialog-stub' }, [
+            h('div', { class: 'el-dialog-stub__title' }, props.title),
             slots.default ? slots.default() : [],
             slots.footer ? slots.footer() : []
           ])
@@ -103,26 +104,40 @@ export const ElDescriptions = slotStub('el-descriptions')
 export const ElDescriptionsItem = slotStub('el-descriptions-item')
 export const ElFormItem = slotStub('el-form-item')
 
-/** 表单：暴露 validate / resetFields，供页面里的提交与重置路径驱动 */
+/** 表单：暴露 validate / resetFields / clearValidate，供页面里的提交、重置与校验清理路径驱动 */
 export const ElForm = defineComponent({
   name: 'el-form',
   props: { model: Object, rules: Object, inline: Boolean, labelWidth: String },
   setup(_, { slots, expose }) {
     const validate = (cb) => cb(true)
     const resetFields = vi.fn()
-    expose({ validate, resetFields })
+    // 真实 ElForm 暴露该方法；页面在 reset() 里经 formRef 调用，替身必须齐备
+    const clearValidate = vi.fn()
+    expose({ validate, resetFields, clearValidate })
     return () => h('form', { class: 'el-form-stub' }, slots.default ? slots.default() : [])
   }
 })
 
-/** 输入框：把 update:modelValue 透出，测试可直接驱动 v-model */
+/** 输入框：把 update:modelValue 透出，测试可直接驱动 v-model；placeholder 需如实渲染 */
 export const ElInput = defineComponent({
   name: 'el-input',
   inheritAttrs: false,
-  props: { modelValue: [String, Number], placeholder: String, clearable: Boolean, type: String, rows: Number },
+  props: {
+    modelValue: [String, Number],
+    placeholder: String,
+    clearable: Boolean,
+    type: String,
+    rows: Number
+  },
   emits: ['update:modelValue'],
   setup(props, { attrs }) {
-    return () => h('input', { class: 'el-input-stub', value: props.modelValue, ...attrs })
+    return () =>
+      h('input', {
+        class: 'el-input-stub',
+        value: props.modelValue,
+        placeholder: props.placeholder,
+        ...attrs
+      })
   }
 })
 
@@ -144,6 +159,17 @@ export const ElInputNumber = defineComponent({
   emits: ['update:modelValue'],
   setup(props, { attrs }) {
     return () => h('div', { class: 'el-input-number-stub', 'data-value': props.modelValue, ...attrs })
+  }
+})
+
+/** 开关：把当前值写进 data-value，便于断言表单里「默认地址」的回填与切换 */
+export const ElSwitch = defineComponent({
+  name: 'el-switch',
+  inheritAttrs: false,
+  props: { modelValue: [Number, String, Boolean], activeValue: null, inactiveValue: null, disabled: Boolean },
+  emits: ['update:modelValue', 'change'],
+  setup(props, { attrs }) {
+    return () => h('div', { class: 'el-switch-stub', 'data-value': props.modelValue, ...attrs })
   }
 })
 
@@ -206,6 +232,7 @@ export function elementStubs() {
       'el-input-number': ElInputNumber,
       'el-select': ElSelect,
       'el-option': ElOption,
+      'el-switch': ElSwitch,
       'el-rate': ElRate,
       'el-radio-group': ElRadioGroup,
       'el-radio': ElRadio,

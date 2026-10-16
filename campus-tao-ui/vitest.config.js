@@ -40,7 +40,8 @@ export default defineConfig({
         'src/views/campus/aftersale/index.vue',
         'src/views/campus/mall/index.vue',
         'src/views/campus/mall/detail.vue',
-        'src/views/campus/review/index.vue'
+        'src/views/campus/review/index.vue',
+        'src/views/campus/address/index.vue'
       ],
       exclude: ['**/node_modules/**', 'src/utils/generator/**'],
       thresholds: {

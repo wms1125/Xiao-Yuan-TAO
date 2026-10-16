@@ -11,9 +11,10 @@ import java.util.List;
  */
 public interface ICampusOrderService {
 
-    /** 结算下单：预占库存，生成订单与订单项，清空对应购物车 */
+    /** 结算下单：预占库存，生成订单与订单项，清空对应购物车
+     *  @param addressId 可选的收货地址簿 ID；传入时以地址簿内容为准并写入地址快照 */
     String createOrder(Long userId, String userName, Long[] cartIds,
-                        String receiverName, String receiverPhone, String address, String remark);
+                        String receiverName, String receiverPhone, String address, Long addressId, String remark);
 
     /** 支付：扣沙箱余额，订单 0→1。余额不足返回 false */
     boolean payOrder(String orderNo, Long userId);

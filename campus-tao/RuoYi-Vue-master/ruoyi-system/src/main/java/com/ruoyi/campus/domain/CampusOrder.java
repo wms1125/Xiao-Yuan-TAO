@@ -25,6 +25,8 @@ public class CampusOrder implements Serializable {
     private Date shipTime;
     /** 物流单号（发货时录入） */
     private String logisticsNo;
+    /** 收货地址快照：下单时把所选地址内容冻结在此，避免地址簿后续修改导致历史订单漂移 */
+    private String addressSnapshot;
     private Date finishTime;
     private Date cancelTime;
     private Date createTime;
@@ -59,6 +61,8 @@ public class CampusOrder implements Serializable {
     public void setShipTime(Date shipTime) { this.shipTime = shipTime; }
     public String getLogisticsNo() { return logisticsNo; }
     public void setLogisticsNo(String logisticsNo) { this.logisticsNo = logisticsNo; }
+    public String getAddressSnapshot() { return addressSnapshot; }
+    public void setAddressSnapshot(String addressSnapshot) { this.addressSnapshot = addressSnapshot; }
     public Date getFinishTime() { return finishTime; }
     public void setFinishTime(Date finishTime) { this.finishTime = finishTime; }
     public Date getCancelTime() { return cancelTime; }

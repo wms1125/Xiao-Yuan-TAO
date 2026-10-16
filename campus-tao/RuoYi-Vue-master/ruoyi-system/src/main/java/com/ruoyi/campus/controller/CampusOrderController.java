@@ -40,7 +40,8 @@ public class CampusOrderController extends BaseController {
         Long userId = SecurityUtils.getUserId();
         Long[] cartIds = body.getCartIds().stream().map(Long::valueOf).toArray(Long[]::new);
         String orderNo = orderService.createOrder(userId, SecurityUtils.getUsername(), cartIds,
-                body.getReceiverName(), body.getReceiverPhone(), body.getAddress(), body.getRemark());
+                body.getReceiverName(), body.getReceiverPhone(), body.getAddress(),
+                body.getAddressId(), body.getRemark());
         return AjaxResult.success("下单成功", orderNo);
     }
 

@@ -17,6 +17,7 @@
         <result property="payTime" column="pay_time"/>
         <result property="shipTime" column="ship_time"/>
         <result property="logisticsNo" column="logistics_no"/>
+        <result property="addressSnapshot" column="address_snapshot"/>
         <result property="finishTime" column="finish_time"/>
         <result property="cancelTime" column="cancel_time"/>
         <result property="createTime" column="create_time"/>
@@ -31,14 +32,23 @@
 
     <sql id="Base_Column_List">
         id, order_no, user_id, user_name, total_amount, status, receiver_name, receiver_phone,
-        address, remark, pay_time, ship_time, logistics_no, finish_time, cancel_time, create_time, update_time
+        address, remark, pay_time, ship_time, logistics_no, address_snapshot,
+        finish_time, cancel_time, create_time, update_time
     </sql>
 
+    <!--
+      address_snapshot 在库中是 `NOT NULL DEFAULT ''`。
+      注意：MySQL 的 DEFAULT 只在**列被省略**时生效——若显式传入 NULL 仍会触发
+      `Column 'address_snapshot' cannot be null`。而本 mapper 是通用入口，
+      不保证调用方一定 set 过该字段，故在此用 COALESCE 兜底为 ''，
+      同时显式声明 jdbcType=VARCHAR 避免 MyBatis 对 null 推断成 OTHER。
+    -->
     <insert id="insertCampusOrder" parameterType="com.ruoyi.campus.domain.CampusOrder" useGeneratedKeys="true" keyProperty="id">
         insert into campus_order (order_no, user_id, user_name, total_amount, status,
-            receiver_name, receiver_phone, address, remark)
+            receiver_name, receiver_phone, address, remark, address_snapshot)
         values (#{orderNo}, #{userId}, #{userName}, #{totalAmount}, #{status},
-            #{receiverName}, #{receiverPhone}, #{address}, #{remark})
+            #{receiverName}, #{receiverPhone}, #{address}, #{remark},
+            COALESCE(#{addressSnapshot,jdbcType=VARCHAR}, ''))
     </insert>
 
     <update id="updateCampusOrder" parameterType="com.ruoyi.campus.domain.CampusOrder">

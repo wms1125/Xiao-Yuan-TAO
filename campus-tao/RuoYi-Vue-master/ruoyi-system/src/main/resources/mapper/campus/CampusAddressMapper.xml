@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.campus.mapper.CampusAddressMapper">
+    <resultMap type="com.ruoyi.campus.domain.CampusAddress" id="CampusAddressResult">
+        <id property="addressId" column="address_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="receiver" column="receiver"/>
+        <result property="phone" column="phone"/>
+        <result property="region" column="region"/>
+        <result property="detail" column="detail"/>
+        <result property="isDefault" column="is_default"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        address_id, user_id, receiver, phone, region, detail, is_default, create_time, update_time
+    </sql>
+
+    <insert id="insertCampusAddress" parameterType="com.ruoyi.campus.domain.CampusAddress"
+            useGeneratedKeys="true" keyProperty="addressId">
+        insert into campus_address (user_id, receiver, phone, region, detail, is_default)
+        values (#{userId}, #{receiver}, #{phone}, #{region}, #{detail}, #{isDefault})
+    </insert>
+
+    <update id="updateCampusAddress" parameterType="com.ruoyi.campus.domain.CampusAddress">
+        update campus_address
+        <set>
+            <if test="receiver != null">receiver = #{receiver},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="region != null">region = #{region},</if>
+            <if test="detail != null">detail = #{detail},</if>
+            <if test="isDefault != null">is_default = #{isDefault},</if>
+        </set>
+        where address_id = #{addressId} and user_id = #{userId}
+    </update>
+
+    <!-- 带 user_id 条件：越权删除在 SQL 层即被拦住，不依赖上层判空 -->
+    <delete id="deleteCampusAddressById">
+        delete from campus_address where address_id = #{addressId} and user_id = #{userId}
+    </delete>
+
+    <update id="clearDefaultByUser">
+        update campus_address set is_default = 0 where user_id = #{userId} and is_default = 1
+    </update>
+
+    <select id="selectAddressById" resultMap="CampusAddressResult">
+        select <include refid="Base_Column_List"/> from campus_address where address_id = #{addressId}
+    </select>
+
+    <select id="selectListByUser" resultMap="CampusAddressResult">
+        select <include refid="Base_Column_List"/> from campus_address
+        where user_id = #{userId}
+        order by is_default desc, create_time desc
+    </select>
+
+    <select id="countByUserId" resultType="int">
+        select count(1) from campus_address where user_id = #{userId}
+    </select>
+</mapper>

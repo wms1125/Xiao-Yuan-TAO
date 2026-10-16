@@ -97,7 +97,7 @@ class CampusOrderServiceTest {
         when(cartService.selectListByUserId(BUYER_ID)).thenReturn(Collections.emptyList());
 
         ServiceException ex = assertThrows(ServiceException.class, () -> orderService.createOrder(BUYER_ID, "ry", null,
-                "张三", "13800000000", "1号楼101", null));
+                "张三", "13800000000", "1号楼101", null, null));
 
         assertEquals("购物车为空，无法下单", ex.getMessage());
         verify(orderMapper, never()).insertCampusOrder(any());
@@ -110,7 +110,7 @@ class CampusOrderServiceTest {
         when(productMapper.selectCampusProductById(PRODUCT_ID)).thenReturn(null);
 
         ServiceException ex = assertThrows(ServiceException.class, () -> orderService.createOrder(BUYER_ID, "ry",
-                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null));
+                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null, null));
 
         assertTrue(ex.getMessage().contains("商品不存在"));
     }
@@ -122,7 +122,7 @@ class CampusOrderServiceTest {
         when(productMapper.selectCampusProductById(PRODUCT_ID)).thenReturn(product(PRODUCT_ID, SELLER_ID, 0, "30.00"));
 
         ServiceException ex = assertThrows(ServiceException.class, () -> orderService.createOrder(BUYER_ID, "ry",
-                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null));
+                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null, null));
 
         assertTrue(ex.getMessage().contains("未上架"));
     }
@@ -134,7 +134,7 @@ class CampusOrderServiceTest {
         when(productMapper.selectCampusProductById(PRODUCT_ID)).thenReturn(product(PRODUCT_ID, BUYER_ID, 1, "30.00"));
 
         ServiceException ex = assertThrows(ServiceException.class, () -> orderService.createOrder(BUYER_ID, "ry",
-                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null));
+                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null, null));
 
         assertTrue(ex.getMessage().contains("不能购买自己发布的商品"));
     }
@@ -147,7 +147,7 @@ class CampusOrderServiceTest {
         when(productMapper.decreaseStock(PRODUCT_ID, 5)).thenReturn(0);
 
         ServiceException ex = assertThrows(ServiceException.class, () -> orderService.createOrder(BUYER_ID, "ry",
-                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null));
+                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null, null));
 
         assertTrue(ex.getMessage().contains("库存不足"));
         // 关键：库存预占失败后不得落库订单，否则会留下"无货订单"
@@ -163,7 +163,7 @@ class CampusOrderServiceTest {
         when(productMapper.decreaseStock(PRODUCT_ID, 2)).thenReturn(1);
 
         String orderNo = orderService.createOrder(BUYER_ID, "ry", new Long[] { CART_ID },
-                "张三", "13800000000", "1号楼101", "尽快发货");
+                "张三", "13800000000", "1号楼101", null, "尽快发货");
 
         assertTrue(orderNo.startsWith("CT"), "订单号应以 CT 开头");
         verify(productMapper).decreaseStock(PRODUCT_ID, 2);
@@ -197,7 +197,7 @@ class CampusOrderServiceTest {
                     start.await();
                     for (int i = 0; i < perThread; i++) {
                         orderNos.add(orderService.createOrder(BUYER_ID, "ry", new Long[] { CART_ID },
-                                "张三", "13800000000", "1号楼101", null));
+                                "张三", "13800000000", "1号楼101", null, null));
                     }
                     return null;
                 }));
@@ -221,7 +221,7 @@ class CampusOrderServiceTest {
         when(cartMapper.selectCartById(CART_ID)).thenReturn(others);
 
         ServiceException ex = assertThrows(ServiceException.class, () -> orderService.createOrder(BUYER_ID, "ry",
-                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null));
+                new Long[] { CART_ID }, "张三", "13800000000", "1号楼101", null, null));
 
         assertEquals("购物车为空，无法下单", ex.getMessage());
     }

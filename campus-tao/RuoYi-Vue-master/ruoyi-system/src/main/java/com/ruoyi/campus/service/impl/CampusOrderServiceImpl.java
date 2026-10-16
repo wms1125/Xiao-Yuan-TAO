@@ -1,5 +1,6 @@
 package com.ruoyi.campus.service.impl;
 
+import com.ruoyi.campus.domain.CampusAddress;
 import com.ruoyi.campus.domain.CampusCart;
 import com.ruoyi.campus.domain.CampusOrder;
 import com.ruoyi.campus.domain.CampusOrderItem;
@@ -10,6 +11,7 @@ import com.ruoyi.campus.mapper.CampusOrderItemMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
 import com.ruoyi.campus.mapper.CampusProductMapper;
 import com.ruoyi.campus.service.ICampusAccountService;
+import com.ruoyi.campus.service.ICampusAddressService;
 import com.ruoyi.campus.service.ICampusCartService;
 import com.ruoyi.campus.service.ICampusNoticeService;
 import com.ruoyi.campus.service.ICampusOrderService;
@@ -45,6 +47,8 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
     private ICampusCartService cartService;
     @Autowired
     private ICampusNoticeService noticeService;
+    @Autowired
+    private ICampusAddressService addressService;
 
     /** 订单状态常量 */
     public static final int STATUS_WAIT_PAY = 0;
@@ -76,7 +80,7 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String createOrder(Long userId, String userName, Long[] cartIds,
-                               String receiverName, String receiverPhone, String address, String remark) {
+                               String receiverName, String receiverPhone, String address, Long addressId, String remark) {
         // 1) 取购物车明细（指定 cartIds，否则取已勾选）
         List<CampusCart> carts;
         if (cartIds != null && cartIds.length > 0) {
@@ -94,6 +98,17 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
             throw new ServiceException("购物车为空，无法下单");
         }
 
+        // 1.1) 选用地址簿时以地址簿内容为准（归属校验在 service 内完成），
+        //      防止前端篡改；未选用则按手填内容下单（兼容原有调用方）。
+        String snapshot = address;
+        if (addressId != null) {
+            CampusAddress chosen = addressService.requireOwned(addressId, userId);
+            receiverName = chosen.getReceiver();
+            receiverPhone = chosen.getPhone();
+            address = chosen.fullAddress();
+            snapshot = chosen.getReceiver() + " " + chosen.getPhone() + " " + chosen.fullAddress();
+        }
+
         // 2) 逐条校验库存并预占（M3-5 防超卖：decreaseStock 带 WHERE stock>=count）
         CampusOrder order = new CampusOrder();
         order.setOrderNo(genOrderNo(userId));
@@ -102,6 +117,7 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         order.setReceiverName(receiverName);
         order.setReceiverPhone(receiverPhone);
         order.setAddress(address);
+        order.setAddressSnapshot(snapshot == null ? "" : snapshot);
         order.setRemark(remark);
         order.setStatus(STATUS_WAIT_PAY);
         order.setTotalAmount(BigDecimal.ZERO);

@@ -35,6 +35,14 @@ import {
 } from '@/api/campus/notice'
 import { listNotifyLog } from '@/api/campus/notifylog'
 import { listReviewByProduct, addReview, listSellerReview } from '@/api/campus/review'
+import {
+  listAddress,
+  getDefaultAddress,
+  addAddress,
+  updateAddress,
+  setDefaultAddress,
+  delAddress
+} from '@/api/campus/address'
 
 const lastCall = () => request.mock.calls[request.mock.calls.length - 1][0]
 
@@ -243,5 +251,45 @@ describe('校园淘 - 评价接口', () => {
       method: 'get',
       params: { pageNum: 2, pageSize: 10 }
     })
+  })
+})
+
+describe('校园淘 - 收货地址接口', () => {
+  beforeEach(() => request.mockClear())
+
+  it('列表为 GET /campus/address/list，默认地址为 GET /campus/address/default', () => {
+    listAddress()
+    expect(lastCall()).toEqual({ url: '/campus/address/list', method: 'get' })
+
+    getDefaultAddress()
+    expect(lastCall()).toEqual({ url: '/campus/address/default', method: 'get' })
+  })
+
+  it('新增为 POST /campus/address 且携带表单体', () => {
+    addAddress({ receiver: '李四', phone: '13900000000', detail: '西校区 2 号楼 202' })
+    expect(lastCall()).toEqual({
+      url: '/campus/address',
+      method: 'post',
+      data: { receiver: '李四', phone: '13900000000', detail: '西校区 2 号楼 202' }
+    })
+  })
+
+  it('修改为 PUT /campus/address 且 data 含 addressId', () => {
+    updateAddress({ addressId: 7, receiver: '李四', phone: '13900000000', detail: '西校区 2 号楼 202' })
+    expect(lastCall()).toEqual({
+      url: '/campus/address',
+      method: 'put',
+      data: { addressId: 7, receiver: '李四', phone: '13900000000', detail: '西校区 2 号楼 202' }
+    })
+  })
+
+  it('设为默认地址为 PUT /campus/address/default/{addressId}', () => {
+    setDefaultAddress(7)
+    expect(lastCall()).toEqual({ url: '/campus/address/default/7', method: 'put' })
+  })
+
+  it('删除地址为 DELETE /campus/address/{addressId}', () => {
+    delAddress(7)
+    expect(lastCall()).toEqual({ url: '/campus/address/7', method: 'delete' })
   })
 })

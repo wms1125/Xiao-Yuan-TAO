@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -92,7 +93,7 @@ class CampusControllerOrderTradeTest {
         body.setReceiverPhone("13800000000");
         body.setAddress("1号楼101");
         body.setRemark("尽快发货");
-        when(orderService.createOrder(any(), any(), any(), any(), any(), any(), any())).thenReturn(ORDER_NO);
+        when(orderService.createOrder(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(ORDER_NO);
 
         AjaxResult result = orderController.create(body);
 
@@ -100,7 +101,7 @@ class CampusControllerOrderTradeTest {
         assertEquals("下单成功", result.get(AjaxResult.MSG_TAG));
         assertEquals(ORDER_NO, result.get(AjaxResult.DATA_TAG));
         verify(orderService).createOrder(eq(STUDENT_ID), eq(STUDENT_NAME), aryEq(new Long[] { 3L, 4L }),
-                eq("张三"), eq("13800000000"), eq("1号楼101"), eq("尽快发货"));
+                eq("张三"), eq("13800000000"), eq("1号楼101"), isNull(), eq("尽快发货"));
     }
 
     @Test

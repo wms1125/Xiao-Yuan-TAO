@@ -4,6 +4,49 @@
 
 开发过程留痕见 `campus-tao/ai-log/001~019`，里程碑文档见 `campus-tao/M1~M5`。
 
+## [1.0.17] - 2026-10-16
+
+《提升评分行动计划》阶段三：**买家侧旅程断点补全（第一项·收货地址）**。1.0.16 的 V2 迁移已建好 `campus_address` 表、菜单 2011 与权限 2115~2117，但没有任何服务层与页面——菜单点进去是空壳。本轮把数据底座变成可用功能，并补齐前端单测与门禁。
+
+### 新增
+- **收货地址后端**（7 个新文件，`ruoyi-system`）：
+  - `domain/CampusAddress`（含 `fullAddress()` 拼接辅助）、`mapper/CampusAddressMapper` + XML、`dto/CampusAddressSaveDTO`（手机号 `@Pattern("^1[3-9]\\d{9}$")`）、`service/ICampusAddressService` + `impl/CampusAddressServiceImpl`、`controller/CampusAddressController`；
+  - **归属校验两层独立生效**：mapper 删除 SQL 自带 `user_id` 条件（挡住"绕过服务层直接写库"），服务层另有 `requireOwned()`（挡住"忘写条件"）；所有接口的 `userId` 一律取自 `SecurityUtils.getUserId()`，不接受前端传参；
+  - 默认地址互斥用「先清后设」（`clearDefaultByUser` → 再置 1），首条地址强制默认，上限 `MAX_ADDRESSES_PER_USER = 20`。
+- **下单接入地址簿**：`CampusOrderCreateDTO` 增 `addressId`，下单时地址簿条目**覆盖手填的收货人/电话/地址**，并冻结为 `address_snapshot`（后续改地址簿不追溯改写历史订单）。
+- **收货地址前端**：`src/api/campus/address.js`（6 个接口封装）+ `src/views/campus/address/index.vue`——概览卡（总数 / 默认收货人 / 默认电话）+ 列表（默认标签、20 条上限禁用新增按钮）+ 新增/修改弹窗（含默认开关）。
+- **前端测试**：`tests/unit/views.campus.address.test.js`（16 例，覆盖挂载请求 / 渲染 / 默认标签 / 概览 / 时间截断 / 上限禁用 / 弹窗开关与回填 / 新增与修改两条提交路径 / 设默认与删除的确认与取消）/ `api.campus.test.js` 增补地址接口 5 例。
+- **测试替身库扩充**（`tests/unit/support/element-stubs.js`）：新增 `el-switch` 替身；`el-dialog` 如实渲染 `title`；`el-form` 补 `clearValidate`；`el-input` 渲染 `placeholder`。
+- **`campus-tao/ai-log/020-买家侧收货地址模块与前端门禁补齐.md`**：五段式留痕。
+
+### 变更
+- **`vitest.config.js`** 覆盖率白名单纳入 `src/views/campus/address/index.vue`。
+- 后端 `info.app.version` 更新为 `1.0.17`。
+
+### 修复
+- **`form` 裸解构导致地址簿输入框永远为空（最严重）**：`const { form } = data` 裸解构拿到的是旧对象引用，而 `reset()` / `handleUpdate()` 会整体替换 `form.value` —— 替换后模板里的 `v-model="form.receiver"` 仍指向旧对象，**输入框恒为空、`prop="receiver"` 的校验目标恒为 undefined**。特征是"接口层全绿、UI 层静默失效"，只测接口必然漏掉。改为若依正解 `const { form } = toRefs(data)`。
+- **取消确认框产生未处理的 Promise 拒绝**：`await confirm().catch(() => { throw })` 把取消异常重新抛出 async 函数，而模板 `@click` 未 `await`，原 `try/catch` 只包住接口调用、包不住取消。改为确认与请求统一包进一个 `try`，取消与接口失败一并吞掉（取消不提示，失败由请求拦截器统一提示）。
+- **测试替身库三处不保真**：`el-dialog` 不渲染 `title`（新增/修改弹窗靠标题区分）、`el-form` 未暴露 `clearValidate`（页面 `reset()` 经 `formRef` 调用，`nextTick` 里抛 `TypeError`）、`el-input` 把 `placeholder` 声明为 prop 却从不渲染（声明即消费，不进 `attrs`）。替身丢行为，测出来的绿是假的。
+- **MyBatis 显式 NULL 不触发 MySQL `DEFAULT`**：`address_snapshot varchar(400) NOT NULL DEFAULT ''`，传显式 `NULL` 时 `DEFAULT` 不生效（只在整列被省略时套用），7 个订单用例报 `Column 'address_snapshot' cannot be null`。mapper 改 `COALESCE(#{addressSnapshot,jdbcType=VARCHAR}, '')`，并补 `jdbcType`（不声明类型时 MyBatis 对 `null` 推断不出 JDBC 类型）。
+
+### 验证
+- **后端门禁**：`mvn -B verify` **BUILD SUCCESS**（Spotless clean；首跑因 `CampusAddressController` import 顺序违规被 `spotless-check` 拦下，`spotless:apply` 后复跑通过）。surefire 聚合 **163 用例 / 0 失败 / 0 错误 / 0 跳过**；`jacoco.csv` 独立实算（`com/ruoyi/campus/**`，排除 `domain/**` 与 `mapper/**`）行 **64.85%**（642/990）/ 分支 **50.81%**（188/370），门禁 55 / 40 通过。
+- **地址簿 → 下单快照冻结（DB 直查）**：下单时同时手填 `张三 / 13800000000 / 东校区1号楼101` 并传 `addressId` 指向 ry 的默认地址，入库结果以地址簿为准 —— `receiver_name=李四`、`receiver_phone=13900000000`、`address=西校区2号楼202`、`address_snapshot=李四 13900000000 西校区2号楼202`。
+- **前端门禁全绿**：`format:check` 通过；`lint` 0 error / 161 warning（161 条均为若依脚手架既有债，新文件 0 条）；`lint:strict`（`--max-warnings 0`）0 problems；`build:prod` 成功。
+- **前端测试与覆盖率**：vitest **111 用例 / 8 文件 / 0 失败**；覆盖率 语句 **62.68%** / 分支 **60.58%** / 函数 **69.51%** / 行 **64.06%**，门禁 45/45/55/40 全过（上一轮 59.58/57.46/66.58/60.54，棘轮只向上）。地址页自身 91.34 / 94.28 / 84.44 / 97.87；`address.js` 四项均 **100%**。
+- **菜单与权限实跑确认**：`GET /system/menu/list` 命中 `(2011,'收货地址','address','campus/address/index','campus:address:list')` 与 2115/2116/2117 三个按钮权限，菜单 `component` 与前端页面实际路径对得上。
+- **端到端业务回归**：`e2e_business.py` → **`RESULT: ALL_PASS`**（真实 MySQL + 真实 Service 层，含防超卖 / 越权 / 退款回滚 / 物流越权 / 外呼留痕隔离断言）。
+- **负向验证**：
+  - 取消路径缺陷修复前**稳定复现 2 个 Unhandled Rejection**（`handleSetDefault` / `handleDelete` 各一），修复后归零 —— 证明该断言非恒真；
+  - `form` 裸解构缺陷修复前断言 `element.value === '王五'` 实际拿到 `''`；
+  - `el-dialog` 不渲染 title 时「弹窗标题正确」断言**必然失败** —— 说明替身缺行为会被测试暴露而非悄悄放过。
+
+### 未纳入本轮（如实记录）
+- **`getDefaultAddress()` 已封装但页面未使用**：页面从列表首条推导默认地址（后端已按 `isDefault desc` 排序，与 `selectDefault` 口径一致）；独立接口留给后续购物车/下单页的"预填默认地址"场景，其本身已进单测覆盖（100%）。
+- **收藏 / 搜索历史 / IM 沟通仍未实现**：V2 迁移已建 `campus_favorite` / `campus_search_history` / `campus_message` 三张表，但 Java 服务层与 Vue 页面尚未落地。收货地址只是买家侧四项断点里的第一项。
+- **支付网关抽象层未动**：`CampusAccount` 仍是沙箱余额账户，未抽 `IPaymentGateway`。
+- **Docker 镜像仍未在本机构建**：本机无 Docker，构建验证继续由 CI `docker` job 承担。
+
 ## [1.0.16] - 2026-10-16
 
 《提升评分行动计划》阶段二：**可复现交付单点突破**。上一轮评估中"可复现交付"是四个维度里最低的一项（81/100），缺口集中在两件一眼可见的事——**没有数据库版本化迁移**（建库靠一次性全量脚本，无法回滚、无法在 CI 验证）与**没有任何容器化交付物**（全仓无 Dockerfile/compose）。本轮把这两件做完，并补上上一轮明确欠下的浏览器实测证据，最后 push 交由 CI 独立复验。
