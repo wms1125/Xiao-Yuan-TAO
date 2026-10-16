@@ -46,7 +46,7 @@ info:
   app:
     name: campus-tao
     description: 校园淘 校园二手交易平台
-    version: 1.0.15
+    version: 1.0.16
 
 # 开发环境配置
 server:
@@ -82,6 +82,21 @@ user:
 
 # Spring配置
 spring:
+  # 数据库版本化迁移（Flyway）
+  # 迁移脚本：classpath:db/migration/V*.sql；回滚脚本：db/rollback/U*.sql（Community 版无 undo，见 db/rollback/README.md）
+  # baseline-on-migrate + baseline-version=1：
+  #   - 空库 → 依次执行 V1、V2 …（全新环境由 Flyway 建表）
+  #   - 已建库（导入过 campus_tao_full.sql、无 flyway_schema_history）→ 打基线到 V1，只补执行 V2 及之后
+  # 目标库由下方 spring.datasource 连接串决定，迁移脚本内不得出现 CREATE DATABASE / USE。
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: baseline_campus_tao
+    table: flyway_schema_history
+    validate-on-migrate: true
+    out-of-order: false
   # 资源信息
   messages:
     # 国际化资源文件路径
@@ -106,10 +121,10 @@ spring:
   data:
     # redis 配置
     redis:
-      # 地址
-      host: localhost
+      # 地址（容器部署由 REDIS_HOST 指向 compose 的 redis 服务）
+      host: ${REDIS_HOST:localhost}
       # 端口，默认为6379
-      port: 6379
+      port: ${REDIS_PORT:6379}
       # 数据库索引
       database: 0
       # 密码

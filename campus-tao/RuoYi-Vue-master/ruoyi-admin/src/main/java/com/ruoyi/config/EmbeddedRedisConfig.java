@@ -24,6 +24,14 @@ public class EmbeddedRedisConfig
 
     public static void start()
     {
+        // 容器化部署时由外部提供 Redis（docker-compose 的 redis 服务），
+        // 通过 EMBEDDED_REDIS_ENABLED=false 关闭内嵌实例，避免在容器里多起一个进程。
+        String enabled = System.getenv("EMBEDDED_REDIS_ENABLED");
+        if (enabled != null && ("false".equalsIgnoreCase(enabled) || "0".equals(enabled)))
+        {
+            log.info("[EmbeddedRedis] 已通过 EMBEDDED_REDIS_ENABLED={} 禁用内嵌 Redis，使用外部实例", enabled);
+            return;
+        }
         try
         {
             redisServer = RedisServer.newRedisServer()

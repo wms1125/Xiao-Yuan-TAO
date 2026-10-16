@@ -39,6 +39,9 @@
         <jacoco.version>0.8.12</jacoco.version>
         <!-- 代码规范：spotless（后端 Java 卫生类检查，详见 build/plugins） -->
         <spotless.version>2.44.3</spotless.version>
+        <!-- 数据库版本化迁移：flyway（依赖在 ruoyi-admin/pom.xml，Maven 插件见 build/plugins） -->
+        <flyway.version>12.4.0</flyway.version>
+        <mysql.version>9.7.0</mysql.version>
     </properties>
 
     <!-- 依赖声明 -->
@@ -285,6 +288,44 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <!--
+              Flyway Maven 插件：供运维/CI 在**不启动应用**的情况下执行数据库迁移，
+              例如部署流水线里"先迁移、后启动"，或本地核对 migrate/validate/info。
+              插件自身不携带数据库方言，必须显式挂 flyway-mysql + MySQL 驱动。
+              刻意不绑定任何生命周期阶段（不会随 mvn package/verify 自动执行），
+              只在显式调用 `mvn flyway:migrate` 时运行。
+
+              例：
+                mvn flyway:info    -Dflyway.url=jdbc:mysql://localhost:3306/campus_tao \
+                                   -Dflyway.user=root -Dflyway.password=123456
+                mvn flyway:migrate ...（同上参数）
+            -->
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>${flyway.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.flywaydb</groupId>
+                        <artifactId>flyway-mysql</artifactId>
+                        <version>${flyway.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>com.mysql</groupId>
+                        <artifactId>mysql-connector-j</artifactId>
+                        <version>${mysql.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <locations>
+                        <location>filesystem:ruoyi-admin/src/main/resources/db/migration</location>
+                    </locations>
+                    <baselineOnMigrate>true</baselineOnMigrate>
+                    <baselineVersion>1</baselineVersion>
+                    <baselineDescription>baseline_campus_tao</baselineDescription>
+                    <table>flyway_schema_history</table>
+                </configuration>
             </plugin>
         </plugins>
     </build>

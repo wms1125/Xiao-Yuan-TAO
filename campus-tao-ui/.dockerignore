@@ -1,0 +1,13 @@
+# 前端构建上下文裁剪
+node_modules/
+dist/
+.vite/
+coverage/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+*.log
+Dockerfile
+.dockerignore

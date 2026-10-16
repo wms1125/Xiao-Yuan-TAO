@@ -67,6 +67,25 @@
             <version>1.4.3</version>
         </dependency>
 
+        <!-- 数据库版本化迁移：迁移脚本在 ruoyi-admin/src/main/resources/db/migration
+             版本由 spring-boot-dependencies BOM 统一管理；flyway-mysql 提供 MySQL 方言支持。
+
+             注意：Spring Boot 4 起自动配置被拆分为独立模块，只引入 flyway-core 不会激活
+             FlywayAutoConfiguration（应用能启动但迁移静默不执行）。必须同时引入
+             spring-boot-flyway，否则 spring.flyway.* 配置全部失效。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

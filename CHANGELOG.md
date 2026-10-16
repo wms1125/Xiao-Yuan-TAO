@@ -2,7 +2,70 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~018`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~019`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.16] - 2026-10-16
+
+《提升评分行动计划》阶段二：**可复现交付单点突破**。上一轮评估中"可复现交付"是四个维度里最低的一项（81/100），缺口集中在两件一眼可见的事——**没有数据库版本化迁移**（建库靠一次性全量脚本，无法回滚、无法在 CI 验证）与**没有任何容器化交付物**（全仓无 Dockerfile/compose）。本轮把这两件做完，并补上上一轮明确欠下的浏览器实测证据，最后 push 交由 CI 独立复验。
+
+### 新增
+- **数据库版本化迁移（Flyway）**：
+  - `ruoyi-admin/src/main/resources/db/migration/V1__baseline_campus_tao.sql`——由 `campus_tao_full.sql` **等价转化**的 42 表基线（唯一改动是移除 `CREATE DATABASE` / `USE`，目标库由连接串决定），保证"基线 == 现网结构"可被机器核对；
+  - `.../V2__buyer_journey.sql`——买家侧旅程数据底座：`campus_address`（收货地址）、`campus_favorite`（收藏，`uk_user_product`）、`campus_search_history`（搜索历史，`uk_user_keyword`）、`campus_message`（买卖双方消息，带订单上下文与已读位）；`campus_order` 增 `address_snapshot` 列；菜单 2011「收货地址」/ 2012「我的收藏」/ 2013「消息沟通」及按钮权限 2115~2120 授予 `role_id=2`；
+  - **`baseline-on-migrate: true` + `baseline-version: 1`**：同一套配置同时覆盖「空库顺序执行 V1→V2」与「存量库打基线后只补执行 V2 及之后」，老用户直接启动新版后端即自动升级，**无需任何手工 SQL**。
+- **回滚能力**（Flyway 社区版无 `undo`，采用补偿脚本 + 清理版本记录）：
+  - `db/rollback/U1__baseline_campus_tao.sql`、`U2__buyer_journey.sql`；
+  - `db/rollback/rollback.sh` 通用回滚工具（`rollback.sh <目标版本> [--dry-run]`，自动定位项目内置 mysql，倒序执行 U 脚本并清理 `flyway_schema_history` 对应版本）；
+  - `4-回滚数据库.bat` Windows 包装（`4-回滚数据库.bat 1` / `0`）；
+  - `db/rollback/README.md`：迁移体系说明、日常用法、新增迁移的步骤与约束（已合并的脚本不可修改，Flyway 用 checksum 校验）。
+- **迁移验证工具链**：
+  - `db/tools/compare_migration.sh`——参照库与迁移库**逐表行数核对**，差异项须命中预期清单（V2 菜单种子 `+9`、4 张新表），运行期写入表（`sys_job_log` 等）显式豁免并标注理由；
+  - `db/tools/verify_flyway.sh`——端到端 11 项断言：建参照库 → 空库迁移 → 行数核对 → 回滚到 0 → 重放 → 再核对。
+- **容器化交付物**：
+  - `campus-tao/RuoYi-Vue-master/Dockerfile`——后端多阶段镜像（maven 构建 → JRE 运行），非 root 用户、时区/编码、`HEALTHCHECK` 打 `/actuator/health`、上传目录与日志目录挂卷；
+  - `campus-tao-ui/Dockerfile` + `nginx.docker.conf`——前端多阶段镜像（`npm ci` 严格按 lock 构建 → nginx 托管），容器内 nginx 反代 `/prod-api/` 与 `/profile/` 到 `backend:8080`；
+  - `docker-compose.yml`——`mysql` + `redis` + `backend` + `frontend` 四服务，含健康检查与 `depends_on: service_healthy` 编排；数据库端口仅绑 `127.0.0.1`；数据库无需手工初始化（后端启动时 Flyway 自动迁移）；
+  - `.env.example`（含口令/密钥必填项与生成建议）、两份 `.dockerignore`。
+- **`campus-tao/RuoYi-Vue-master/tools/check_yml_dup_keys.py`**：Spring YAML 顶层重复键静态检查——本轮真实的启动失败（`found duplicate key spring`）只在运行期暴露，故加为提交前拦截。
+- **浏览器实测证据** `campus-tao/docs/evidence-v1.0.15/`：6 张真实 Chromium 渲染截图（登录页 / 买家首页 / **校园商城** / **商品详情** / **评价管理** / 我的订单）+ 可复现的 `capture.sh`。
+- **CI 新增两个 job**：
+  - `flyway`——在 MySQL service 上跑 `verify_flyway.sh`（迁移 → 行数核对 → 回滚 → 重放 → 再核对），并用 `mvn -N flyway:migrate` **不启动应用**执行迁移，避免运行期数据污染行数判定；
+  - `docker`——`docker compose build` → 起栈 → 轮询 backend 容器 health 至 `healthy` → 校验前端可达且 `/prod-api/` 反代生效 → 失败时 dump 容器日志。
+
+### 变更
+- **`spring-boot-flyway` 依赖（关键）**：Spring Boot 4 起自动配置被拆为独立模块，**只引 `flyway-core` 不会激活 `FlywayAutoConfiguration`**——应用照常启动、`/actuator/health` 也是 UP，但迁移静默不执行。已在 `ruoyi-admin/pom.xml` 补上该依赖并写下说明注释。
+- **根 `pom.xml`** 引入 `flyway-maven-plugin`（挂 `flyway-mysql` + MySQL 驱动，**不绑定任何生命周期**），供运维/CI 以 `mvn -N flyway:migrate|info|validate` 在**不启动应用**的前提下执行与检查迁移。
+- **配置外部化**：`application-druid.yml` 主库连接串改为 `${DB_URL:...}` 可覆盖；`application.yml` 的 Redis 地址/端口改为 `${REDIS_HOST:localhost}` / `${REDIS_PORT:6379}`。同时把连接串默认值的 `useSSL=true` 改为 `useSSL=false&allowPublicKeyRetrieval=true`（本地/容器场景下 `true` 会因无证书而连接失败）。
+- **`EmbeddedRedisConfig` 新增 `EMBEDDED_REDIS_ENABLED` 开关**：容器内已有 compose 的 redis 服务，设为 `false` 即不再启动内嵌实例。
+- **`.gitignore`** 忽略 `.env` / `.env.*`（保留 `.env.example`），避免容器部署的真实口令入库。
+- **`ci.yml` 注释校正**：后端覆盖率门禁描述由「行 ≥35% / 分支 ≥18%」更正为 pom 实际值「**行 ≥55% / 分支 ≥40%**」；"仓库为本地库（无远程）"更正为实际远程仓库地址。注释与配置不一致本身就是缺陷。
+- 后端 `info.app.version` 更新为 `1.0.16`。
+
+### 修复
+- **`U1__baseline_campus_tao.sql` 死代码导致回滚状态不一致**：脚本在 `DROP TABLE sys_menu` **之后**又 `DELETE FROM sys_menu` → mysql 退出码非零 → 回滚工具的 `set -e` 在清理版本记录**之前**中止，造成"库结构已回滚、`flyway_schema_history` 仍显示已应用"的不一致。现删除该已成死代码的 `DELETE`，并让回滚工具**显式捕获退出码、告警但不中断**，确保版本记录一定被清理。
+- **`rollback.sh` 静默把失败伪装成"版本 0"**：脚本依赖 `mysql` 在 PATH 上，而本项目自带 MySQL，查询失败被 `2>/dev/null` 吞掉后由 `|| echo 0` 兜成"当前版本 0"。现改为自行定位内置 mysql（`MYSQL_BIN` 可覆盖、最后回落 PATH），并在找不到客户端时明确报错。
+- **`rollback.sh` 未指定库名**：`mysql < U2.sql` 报 `ERROR 1046 No database selected`，现补上库名参数。
+- **逐表行数核对在 Windows 上全量误判**：Windows 版 mysql 客户端输出 CRLF，表名尾部带 `\r`，导致 42 张表**全部**被判为"不一致/非预期新增"。现统一 `tr -d '\r'`。
+- **回滚脚本迁移目录定位错误**：`U*.sql` 已统一收纳到 `db/rollback/`（与工具同处，不再随 jar 分发），`MIG_DIR` 指向 `ruoyi-admin/src/main/resources/db/migration`。
+
+### 验证
+- **Flyway 端到端（11/11 通过）**：参照库 42 表 → 空库迁移 `Successfully applied 2 migrations`、版本记录 `1,2`、表数 **47** → **逐表行数与全量脚本一致** → 回滚到 0（业务表全清、版本记录清空）→ 重放成功、表数恢复 47 → 重放后行数仍一致。
+- **存量库原地升级（baseline 路径）**：对已有 42 表、无版本表的 `campus_tao` 直接启动新版后端，日志输出 `Creating Schema History table ... with baseline` → `Successfully baselined schema with version: 1` → `Migrating ... to version "2 - buyer journey"` → `Successfully applied 1 migration, now at version v2`，`Started RuoYiApplication in 10.387 seconds`，`/actuator/health` = `{"status":"UP"}`。
+- **端到端业务回归**：`e2e_business.py` → **`RESULT: ALL_PASS`**（真实 MySQL + 真实 Service 层，含防超卖 / 越权 / 退款回滚 / 物流越权 / 外呼留痕隔离断言）。
+- **后端门禁**：`mvn -B verify` **BUILD SUCCESS**（7 模块全绿，Spotless 25 文件 clean）。surefire 聚合 **136 用例 / 0 失败 / 0 错误 / 0 跳过**；`jacoco.csv` 独立实算 行 **62.40%**（566/907）/ 分支 **46.75%**（158/338），门禁 55 / 40 通过。
+- **浏览器实测**：真实 Chromium 驱动，登录 `ry/admin123` 后逐页截图；商品详情页显示业务规则"不能购买自己发布的商品"（当前登录用户即卖家），证明为真实渲染而非静态占位。
+- **负向验证**：
+  - **"应用能启动" ≠ "迁移生效"**：只引 `flyway-core` 时应用正常启动、health 为 UP，但库是空的（由 `Table 'sys_config' doesn't exist` 暴露）——证明迁移证据必须落在 `flyway_schema_history` + 表数 + 行数核对上；
+  - 重复顶层键 `spring:` 导致应用**启动即失败**，证明该静态检查项非形式主义；
+  - 行数核对在 CRLF 缺陷未修时 42 张表**全部**报警，证明它不是"永远打印一致"的空壳；
+  - 回滚工具修好前，`verify_flyway.sh` 的「版本记录已清空」断言**必然失败**，说明该断言非恒真。
+
+### 未纳入本轮（如实记录）
+- **Docker 镜像未在本机实际构建**：本机**无 Docker**（`docker: command not found`），镜像与 compose 仅做 YAML/结构校验与静态审阅，真正的构建验证交由 CI 的 `docker` job。本轮结束时其状态是"已写好、未经构建验证"。
+- **`1-初始化数据库.bat` 未在"全空机器上从零"重跑**：脚本导入的 `campus_tao_full.sql` 本轮未改动，且 V1 基线正是由它等价转化（已由"逐表行数一致"间接覆盖）；与 Flyway 的衔接只在**已有库**上实测过。
+- **买家侧旅程功能实现仍未落地**：V2 迁移已建好 4 张表与菜单，但对应的 Java 服务层与 Vue 页面**尚未实现**——本轮铺的是数据底座，功能留待下一轮。
+- **支付网关抽象层未动**：`CampusAccount` 仍是沙箱余额账户（内部转账），未抽 `IPaymentGateway`，未对接第三方支付。
+- **eslint 161 条 warn 未清零**：均为若依脚手架文件的上游债务，维持"自有目录 0 warning"的口径。
 
 ## [1.0.15] - 2026-10-16
 

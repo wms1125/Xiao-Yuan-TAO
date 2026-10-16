@@ -5,5 +5,11 @@
 # Shell 脚本保持 LF
 *.sh text eol=lf
 
+# Dockerfile / .dockerignore / nginx 配置保持 LF：
+# Dockerfile 的 `RUN ... \` 续行若带 CR，反斜杠后多出的 \r 会让构建指令被截断。
+Dockerfile text eol=lf
+*.dockerignore text eol=lf
+*.conf text eol=lf
+
 # 其余按平台默认
 * text=auto

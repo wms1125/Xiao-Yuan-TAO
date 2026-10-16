@@ -1,0 +1,18 @@
+# 后端构建上下文裁剪：只保留 Maven 构建必需内容
+target/
+*/target/
+.git/
+.gitignore
+.github/
+.idea/
+.vscode/
+*.iml
+*.log
+logs/
+uploadPath/
+Dockerfile
+.dockerignore
+README.md
+**/*.md
+db/rollback/
+db/tools/

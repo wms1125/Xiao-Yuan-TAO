@@ -3,14 +3,14 @@
 # 覆盖：双账号登录 → 充值 → 发布商品(伪造卖家身份被服务端强制覆盖) → 加购 → 下单 →
 #       支付(原子扣款) → 发货 → 确认收货 → 评价 → 售后申请 → 审核(退款+回库存) →
 #       余额/库存回滚断言 → 订单归属断言 → 防超卖 → 权限收敛断言(403)
-import json, urllib.request, urllib.error, time, sys
+import json, os, urllib.request, urllib.error, time, sys
 
 try:  # Windows 控制台中文输出兜底
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
     pass
 
-BASE = "http://localhost:8080"
+BASE = os.environ.get("CAMPUS_BASE_URL", "http://localhost:8080")  # 容器/换端口时可用环境变量覆盖
 TS = str(int(time.time()))[-6:]  # 6位时间戳保证标题唯一
 
 def call(method, path, token=None, body=None):

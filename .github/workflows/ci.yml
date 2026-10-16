@@ -2,7 +2,7 @@ name: CI
 
 # 说明：
 # - 后端 job 覆盖「可编译 + 单元测试 + 覆盖率门禁 + 代码规范门禁」：一条 `mvn verify`
-#   即完成 package → test → jacoco report/check（行 ≥35%、分支 ≥18%，棘轮基线）
+#   即完成 package → test → jacoco report/check（行 ≥55%、分支 ≥40%，棘轮基线）
 #   → spotless:check（后端 Java 卫生类检查，详见根 pom 注释）。
 # - 前端 job 覆盖「静态检查 + 单测 + 覆盖率门禁 + 可构建」：npm ci 保证依赖与
 #   package-lock.json 一致；prettier --check 与 eslint 先行，任一步失败即中止。
@@ -13,8 +13,11 @@ name: CI
 #   同 job 内还真实执行 SQL 层集成测试（CampusMapperSqlIntegrationTest / CampusAccountAtomicSqlTest）：
 #   这两类用例直连真实 MySQL，在无库的 backend job 会自动跳过，故必须在有 service 的 e2e job 里跑。
 #   本地等价执行见仓库根 verify.bat 与 campus-tao/启动说明.md。
-# - 仓库当前为本地库（无远程），推送后本工作流即自动生效。
-
+# - flyway job 验证数据库版本化迁移：空库迁移 → 逐表行数与全量脚本核对 → 回滚 → 重放 → 再核对。
+#   对应 db/tools/verify_flyway.sh，本地等价执行见 campus-tao/RuoYi-Vue-master/db/rollback/README.md。
+# - docker job 验证容器化交付物真的能构建：docker build 后端与前端镜像，
+#   并以 compose 起栈后打后端健康检查，避免 Dockerfile 长期失修。
+# - 远程仓库：https://github.com/wms1125/Xiao-Yuan-TAO.git（origin/main），push 即触发。
 on:
   push:
     branches: [main]
@@ -201,6 +204,118 @@ jobs:
           name: frontend-coverage-report
           path: campus-tao-ui/coverage/
           if-no-files-found: warn
+
+  # ==========================================================================
+  # 数据库版本化迁移（Flyway）：空库迁移 → 行数核对 → 回滚 → 重放 → 再核对
+  #
+  # 直接用 flyway-maven-plugin（`mvn -N flyway:*`）执行迁移，**不启动应用**：
+  # 应用启动会写入 sys_job_log 等运行期数据，干扰"逐表行数与全量脚本一致"的判定。
+  # 应用侧的 Flyway 装配（spring-boot-flyway 依赖 + spring.flyway 配置）由
+  # e2e job 隐式覆盖——那个 job 用空库启动应用，启动成功即证明迁移在应用内生效。
+  # ==========================================================================
+  flyway:
+    name: 数据库迁移与回滚（Flyway · 逐表行数核对）
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: 123456
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p123456 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_USERNAME: root
+      DB_PASSWORD: 123456
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 JDK 17 与 Maven 缓存
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: |
+            campus-tao/RuoYi-Vue-master/pom.xml
+            campus-tao/RuoYi-Vue-master/*/pom.xml
+
+      - name: 迁移与回滚端到端验证
+        run: bash campus-tao/RuoYi-Vue-master/db/tools/verify_flyway.sh
+
+      - name: 输出核对明细
+        if: always()
+        run: |
+          echo "===== 空库迁移后核对 ====="
+          cat /tmp/cmp1.txt 2>/dev/null || true
+          echo "===== 回滚后重放核对 ====="
+          cat /tmp/cmp2.txt 2>/dev/null || true
+
+  # ==========================================================================
+  # 容器化交付物：镜像必须真的能构建，且 compose 起栈后后端能通过健康检查
+  # ==========================================================================
+  docker:
+    name: 容器镜像构建与起栈自检（Dockerfile · docker compose）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # compose 的 .env 不入库，这里由 CI 生成一次性值（非真实密钥）
+      - name: 生成 CI 环境变量
+        run: |
+          cat > .env <<'EOF'
+          APP_VERSION=ci
+          DB_NAME=campus_tao
+          DB_USERNAME=root
+          DB_PASSWORD=ci-docker-only-password
+          JWT_SECRET=ci-docker-only-jwt-secret-at-least-32-bytes
+          DRUID_LOGIN_USERNAME=ruoyi
+          DRUID_LOGIN_PASSWORD=ci-docker-only-druid-password
+          MYSQL_PORT=3307
+          BACKEND_PORT=8080
+          UI_PORT=8088
+          EOF
+
+      - name: 构建镜像（后端 + 前端）
+        run: docker compose build
+
+      - name: 起栈并等待后端健康
+        run: |
+          docker compose up -d
+          ok=0
+          for i in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' campus-tao-backend 2>/dev/null || echo none)
+            echo "第 ${i} 次探测：backend health = ${status}"
+            if [ "$status" = "healthy" ]; then ok=1; break; fi
+            sleep 5
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::后端容器未在预期时间内进入 healthy"
+            docker compose logs --tail=200 backend
+            exit 1
+          fi
+
+      - name: 验证前端可达且接口反代生效
+        run: |
+          curl -fsS http://localhost:8088/ > /dev/null && echo "前端静态页可达"
+          # 未带 token 访问受保护接口应返回业务错误码（证明 /prod-api 反代到了后端）
+          code=$(curl -s -o /tmp/api.json -w '%{http_code}' http://localhost:8088/prod-api/captchaImage)
+          echo "captchaImage HTTP $code, body: $(head -c 120 /tmp/api.json)"
+          [ "$code" = "200" ] || { echo "::error::前端反代后端失败"; exit 1; }
+
+      - name: 失败时输出容器日志
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: 清理
+        if: always()
+        run: docker compose down -v
 
   security:
     name: 依赖漏洞扫描（前端 npm audit · 后端 osv-scanner）

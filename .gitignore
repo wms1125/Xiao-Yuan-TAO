@@ -24,6 +24,14 @@ uploadPath/
 logs/
 *.log
 
+# ===== 容器化部署的真实环境变量（含口令，务必勿入库）=====
+# 只忽略仓库根目录下的 .env，不要用 `.env.*` 通配——那会误伤前端已入库的
+# campus-tao-ui/.env.development、.env.production、.env.staging。
+/.env
+/.env.local
+/.env.*.local
+!/.env.example
+
 # ===== IDE / 编辑器 / 系统 =====
 .idea/
 .vscode/

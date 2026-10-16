@@ -2,7 +2,8 @@ import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
 import createVitePlugins from './vite/plugins'
 
-const baseUrl = 'http://localhost:8080' // 后端接口
+// 后端接口地址：默认本机 8080；容器编排 / 端口占用时可用 VITE_API_TARGET 覆盖
+const baseUrl = process.env.VITE_API_TARGET || 'http://localhost:8080'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode, command }) => {
