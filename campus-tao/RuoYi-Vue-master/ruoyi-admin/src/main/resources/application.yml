@@ -46,7 +46,7 @@ info:
   app:
     name: campus-tao
     description: 校园淘 校园二手交易平台
-    version: 1.0.14
+    version: 1.0.15
 
 # 开发环境配置
 server:

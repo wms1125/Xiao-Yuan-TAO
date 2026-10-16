@@ -15,9 +15,6 @@ public interface CampusProductMapper {
 
     int deleteCampusProductById(Long id);
 
-    /** 乐观锁更新：影响行数为 0 表示版本冲突（并发修改） */
-    int updateCampusProductWithVersion(CampusProduct product);
-
     CampusProduct selectCampusProductById(Long id);
 
     List<CampusProduct> selectCampusProductList(CampusProduct product);

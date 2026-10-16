@@ -15,4 +15,6 @@ public interface CampusReviewMapper {
     List<CampusReview> selectByProductId(Long productId);
     List<CampusReview> selectByOrderId(Long orderId);
     CampusReview selectByOrderAndProduct(@Param("orderId") Long orderId, @Param("productId") Long productId);
+    /** 卖家视角：查询本人名下商品收到的全部评价（含商品标题） */
+    List<CampusReview> selectReviewListBySellerId(Long sellerId);
 }

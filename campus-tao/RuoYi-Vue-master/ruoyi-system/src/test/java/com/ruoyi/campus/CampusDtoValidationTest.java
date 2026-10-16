@@ -11,8 +11,13 @@ import org.junit.jupiter.api.Test;
 
 import com.ruoyi.campus.dto.CampusAccountRechargeDTO;
 import com.ruoyi.campus.dto.CampusCartAddDTO;
+import com.ruoyi.campus.dto.CampusCartCheckDTO;
+import com.ruoyi.campus.dto.CampusCartQuantityDTO;
+import com.ruoyi.campus.dto.CampusCategorySaveDTO;
 import com.ruoyi.campus.dto.CampusOrderCreateDTO;
 import com.ruoyi.campus.dto.CampusProductCreateDTO;
+import com.ruoyi.campus.dto.CampusProductStatusDTO;
+import com.ruoyi.campus.dto.CampusProductUpdateDTO;
 import com.ruoyi.campus.dto.CampusReviewAddDTO;
 
 import jakarta.validation.ConstraintViolation;
@@ -149,5 +154,92 @@ class CampusDtoValidationTest {
         String msg = VALIDATOR.validate(dto).stream()
                 .map(ConstraintViolation::getMessage).reduce("", String::concat);
         assertTrue(msg.contains("购买数量至少为 1"), "应返回中文校验提示，实际: " + msg);
+    }
+
+    // ---------- 商品修改（v1.0.15 起由实体直收改为 DTO）----------
+
+    @Test
+    @DisplayName("商品修改：缺少主键应校验失败")
+    void 商品修改缺少主键_校验失败() {
+        CampusProductUpdateDTO dto = new CampusProductUpdateDTO();
+        dto.setTitle("二手显示器");
+        dto.setCategoryId(1L);
+        dto.setPrice(new BigDecimal("30"));
+        dto.setStock(1);
+        assertFalse(valid(dto), "缺少商品ID应触发校验错误");
+    }
+
+    @Test
+    @DisplayName("商品修改：库存为负应校验失败")
+    void 商品修改库存为负_校验失败() {
+        CampusProductUpdateDTO dto = new CampusProductUpdateDTO();
+        dto.setId(5L);
+        dto.setTitle("二手显示器");
+        dto.setCategoryId(1L);
+        dto.setPrice(new BigDecimal("30"));
+        dto.setStock(-1);
+        assertFalse(valid(dto), "库存为负应触发校验错误");
+    }
+
+    @Test
+    @DisplayName("商品修改：字段齐备时校验通过")
+    void 商品修改字段齐备_校验通过() {
+        CampusProductUpdateDTO dto = new CampusProductUpdateDTO();
+        dto.setId(5L);
+        dto.setTitle("二手显示器");
+        dto.setCategoryId(1L);
+        dto.setPrice(new BigDecimal("30"));
+        dto.setStock(0);
+        assertTrue(valid(dto), "库存为 0 属合法的下架态，应校验通过");
+    }
+
+    // ---------- 商品上下架 ----------
+
+    @Test
+    @DisplayName("商品上下架：状态取值越界应校验失败")
+    void 商品上下架状态越界_校验失败() {
+        CampusProductStatusDTO dto = new CampusProductStatusDTO();
+        dto.setId(5L);
+        dto.setStatus(2);
+        assertFalse(valid(dto), "状态只能是 0/1，越界应触发校验错误");
+    }
+
+    // ---------- 分类新增/修改 ----------
+
+    @Test
+    @DisplayName("分类新增：名称为空应校验失败")
+    void 分类名称为空_校验失败() {
+        CampusCategorySaveDTO dto = new CampusCategorySaveDTO();
+        dto.setName("   ");
+        assertFalse(valid(dto), "名称空白应触发校验错误");
+    }
+
+    @Test
+    @DisplayName("分类新增：新增场景无需主键，字段齐备时校验通过")
+    void 分类新增字段齐备_校验通过() {
+        CampusCategorySaveDTO dto = new CampusCategorySaveDTO();
+        dto.setName("教材书籍");
+        dto.setSort(1);
+        assertTrue(valid(dto), "新增场景 id 为空属正常，应校验通过");
+    }
+
+    // ---------- 购物车数量与勾选 ----------
+
+    @Test
+    @DisplayName("购物车数量：为0应校验失败")
+    void 购物车数量为零_校验失败() {
+        CampusCartQuantityDTO dto = new CampusCartQuantityDTO();
+        dto.setId(7L);
+        dto.setQuantity(0);
+        assertFalse(valid(dto), "数量为 0 应触发校验错误");
+    }
+
+    @Test
+    @DisplayName("购物车勾选：取值越界应校验失败")
+    void 购物车勾选越界_校验失败() {
+        CampusCartCheckDTO dto = new CampusCartCheckDTO();
+        dto.setId(7L);
+        dto.setChecked(2);
+        assertFalse(valid(dto), "勾选状态只能是 0/1，越界应触发校验错误");
     }
 }

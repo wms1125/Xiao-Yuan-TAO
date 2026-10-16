@@ -15,8 +15,9 @@ import jakarta.validation.Valid;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.utils.SecurityUtils;
-import com.ruoyi.campus.domain.CampusCart;
 import com.ruoyi.campus.dto.CampusCartAddDTO;
+import com.ruoyi.campus.dto.CampusCartCheckDTO;
+import com.ruoyi.campus.dto.CampusCartQuantityDTO;
 import com.ruoyi.campus.service.ICampusCartService;
 
 /**
@@ -46,16 +47,16 @@ public class CampusCartController extends BaseController {
 
     @PreAuthorize("@ss.hasPermi('campus:cart:edit')")
     @PutMapping("/quantity")
-    public AjaxResult updateQuantity(@RequestBody CampusCart cart) {
+    public AjaxResult updateQuantity(@Valid @RequestBody CampusCartQuantityDTO body) {
         return AjaxResult.success(
-                cartService.updateQuantity(cart.getId(), cart.getQuantity(), SecurityUtils.getUserId()));
+                cartService.updateQuantity(body.getId(), body.getQuantity(), SecurityUtils.getUserId()));
     }
 
     @PreAuthorize("@ss.hasPermi('campus:cart:edit')")
     @PutMapping("/check")
-    public AjaxResult toggleChecked(@RequestBody CampusCart cart) {
+    public AjaxResult toggleChecked(@Valid @RequestBody CampusCartCheckDTO body) {
         return AjaxResult.success(
-                cartService.toggleChecked(cart.getId(), cart.getChecked(), SecurityUtils.getUserId()));
+                cartService.toggleChecked(body.getId(), body.getChecked(), SecurityUtils.getUserId()));
     }
 
     @PreAuthorize("@ss.hasPermi('campus:cart:remove')")

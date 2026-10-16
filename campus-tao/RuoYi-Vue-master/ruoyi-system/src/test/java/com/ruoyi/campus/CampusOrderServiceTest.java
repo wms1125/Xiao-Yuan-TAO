@@ -17,9 +17,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -168,6 +176,41 @@ class CampusOrderServiceTest {
         assertEquals(Long.valueOf(BUYER_ID), saved.getUserId());
         assertEquals(Integer.valueOf(0), saved.getStatus(), "新订单应为待付款(0)");
         assertEquals(0, new BigDecimal("60.00").compareTo(saved.getTotalAmount()), "总金额应为 30.00 × 2 = 60.00");
+    }
+
+    @Test
+    @DisplayName("下单：同一秒内并发下单，订单号互不重复（回归 uk_order_no 同秒冲突）")
+    void createOrderGeneratesUniqueOrderNoUnderConcurrency() throws Exception {
+        final int threads = 16;
+        final int perThread = 8;
+        when(cartMapper.selectCartById(CART_ID)).thenReturn(cart(CART_ID, PRODUCT_ID, 1));
+        when(productMapper.selectCampusProductById(PRODUCT_ID)).thenReturn(product(PRODUCT_ID, SELLER_ID, 1, "30.00"));
+        when(productMapper.decreaseStock(PRODUCT_ID, 1)).thenReturn(1);
+
+        Set<String> orderNos = ConcurrentHashMap.newKeySet();
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        List<Future<?>> futures = new ArrayList<>();
+        try {
+            for (int t = 0; t < threads; t++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    for (int i = 0; i < perThread; i++) {
+                        orderNos.add(orderService.createOrder(BUYER_ID, "ry", new Long[] { CART_ID },
+                                "张三", "13800000000", "1号楼101", null));
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> f : futures) {
+                f.get(10, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertEquals(threads * perThread, orderNos.size(), "同一秒内并发下单的订单号必须互不重复");
     }
 
     @Test

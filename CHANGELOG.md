@@ -2,7 +2,48 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~017`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~018`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.15] - 2026-10-16
+
+《提升评分行动计划》阶段一（T1 + T3 + T4）落地。本轮聚焦三件事：**补全买家侧业务闭环**（此前 7 个页面全是管理台风格，买家旅程断在"看不到商品"）、**建立 AI 辅助开发规范**、**清理项目自己已如实披露却一直未闭环的 7 个遗留项**。
+
+### 新增
+- **买家侧三页（业务闭环补全）**：
+  - `src/views/campus/mall/index.vue` 校园商城——关键词 / 分类 / 排序筛选 + 商品卡片网格，服务端强制 `status=1`（仅展示在售），点击卡片跳详情；
+  - `src/views/campus/mall/detail.vue` 商品详情——图片相册与缩略图切换、信息面板、评价列表与平均分；`canBuy` / `buyBlockReason` 在前端**提前拦截**自购 / 已下架 / 零库存三类不可购买情形（服务端仍有强制校验）；
+  - `src/views/campus/review/index.vue` 评价管理——卖家视角统计卡（总数 / 均分 / 好评数）+ 列表 + 分页。
+- **后端卖家视角评价接口** `GET /campus/review/seller`：`sellerId` **取自登录态**，不接受前端传参；`CampusReview` 增加非表字段 `productTitle`，由 mapper `join campus_product` 带出，供卖家列表展示。
+- **DTO 校验收敛**：新增 `CampusCartQuantityDTO`、`CampusCartCheckDTO`、`CampusCategorySaveDTO`、`CampusProductStatusDTO`、`CampusProductUpdateDTO` 共 5 个 DTO，购物车数量/勾选、分类保存、商品更新/改状态等写接口全部改为 `@Valid` + 声明式约束，替代原先的裸字段接收与散落判空。
+- **`campus-tao/AI-辅助开发规范.md`**：十章规范，确立"**'用了 AI'不是加分项，'能被验证的 AI 产出'才是**"的立场；五原则（人在环内 / 产出即证据 / **自述不算证据** / 单一事实来源 / 留痕可追溯）；AI 可做 / 须人工确认 / 红线三段式边界；`ai-log` 五段式留痕模板；门禁表；**负向验证为强制动作**；提交前 Checklist。
+- **`campus-tao/M3-业务闭环实现与前端交付.md`**：补齐缺失的 M3 里程碑文档（此前仅有 M1/M2/M4/M5），十章覆盖闭环全景、订单状态机、10 个业务域接口清单、10 个前端页面、动态菜单权限矩阵、建库脚本与 E2E 证据。至此 M1~M5 齐备。
+- **`sql/migration-v1.0.15.sql`**：面向已建库环境的增量脚本，新增菜单 2008「校园商城」、2009「商品详情」（`visible='1'` 隐藏菜单，仅为注册 `/campus/mall-detail` 路由）、2010「评价管理」，并授予 `role_id=2`；`campus_tao_full.sql` 同步追加。
+- **前端 `lint:strict` 脚本**：`eslint src/views/campus src/api/campus src/utils/ruoyi.js tests --max-warnings 0`。
+- **组件用例**：`tests/unit/views.campus.mall.test.js`（13 例）、`tests/unit/views.campus.review.test.js`（5 例）。
+
+### 变更
+- **ESLint 分两档门禁**：全仓仍守 **0 error**（若依脚手架遗留 161 条 warn 属上游债务，不阻断）；**校园淘自有目录额外守 0 warning**（`lint:strict`）。CI `frontend` job 与根 `verify.bat` 均同步新增该步骤，防止新增代码的告警混进既有噪声被长期忽略。
+- **前端覆盖率白名单**纳入 `mall/index.vue`、`mall/detail.vue`、`review/index.vue` 三页。
+- **订单页**：新增「评价」按钮（`status===3` 且 `v-hasPermi=['campus:review:add']`）与评价弹窗（逐商品星级 + 内容），提交用 `Promise.allSettled`；操作列宽 260→320。
+- **CI `frontend` job 注释校正**：覆盖率棘轮基线描述由「行 ≥25%」更正为「行 ≥40 / 分支 ≥45 / 语句 ≥45 / 函数 ≥55」，与 `vitest.config.js` 实际阈值一致。
+- 后端 `info.app.version` 更新为 `1.0.15`。
+
+### 修复
+- **订单号同秒并发冲突**：原 `genOrderNo` 仅含秒级时间戳（`CT + yyyyMMddHHmmss + userId`），同一用户同秒多次下单会撞 `uk_order_no` 且无重试。现追加进程内 `AtomicInteger` 序列（4 位、`%10000` 回绕），并以唯一索引兜底；多实例部署的已知边界已写入方法注释。
+- **`getStats()` 缺 `.catch()`**：订单页概览请求失败会产生未处理 Promise rejection 且残留旧统计，与列表侧行为不一致。现补 `.catch()` 并清空 `statusStats`。
+- **删除死代码** `updateCampusProductWithVersion`（mapper 接口 + 两处 XML 块）：该乐观锁 SQL 无任何调用方。
+
+### 验证
+- **后端**：`mvn -B verify` **BUILD SUCCESS**（7 模块全绿，Spotless 25 文件 clean）。surefire 聚合 **123 用例 / 0 失败 / 0 错误 / 0 跳过**；`jacoco.csv` 独立实算 行 **62.40%**（566/907）/ 分支 **46.75%**（158/338），门禁 55 / 40 通过。
+- **前端**：`vitest run --coverage` **90/90 全绿**（7 个测试文件）。实测 语句 **59.89%** / 分支 **57.46%** / 函数 **67.52%** / 行 **60.88%**，门禁 45 / 45 / 55 / 40 通过。
+- **前端静态检查**：`format:check` 通过；`lint` **0 error / 161 warn**（全部位于若依脚手架文件）；`lint:strict` **退出码 0**（校园淘自有目录 0 warning）。`build:prod` 退出码 0。
+- **负向验证（订单号并发用例真在断言）**：临时还原旧 `genOrderNo` 实现 → 并发用例失败，报 `expected: <128> but was: <1>`（16 线程 × 8 单 = 128 次下单仅产出 **1** 个唯一订单号）；恢复修复后全绿。
+- **未做浏览器实测（如实记录）**：本轮**未取得**新增三页的浏览器实测证据——本地 8080 后端与 8088 前端均未启动，MySQL 3306 亦不可连。三页的行为由组件用例（18 例）与前端四道门禁覆盖，但"页面实测确认"**不成立**，需在服务启动后补验。
+
+### 未纳入本轮（如实记录）
+- **T2 Flyway 数据库版本化迁移与回滚**：属交付行为变更且需先启动本地 MySQL，待确认后再做。
+- **T5 容器化 / T6 `@SpringBootTest` / T7 SpotBugs + CodeQL / T8 覆盖率上调 / T9 k6 压测 / T10 ai-log 可审计化**：阶段二、三任务，尚未开始。
+- **eslint 161 条 warn 未清零**：均为若依脚手架文件（`tool/build/RightPanel.vue`、`tool/gen/*`、`Crontab/*` 等）的上游债务，本轮通过"自有目录 0 warning"把质量口径钉在本项目代码上，而非改动上游脚手架。
 
 ## [1.0.14] - 2026-10-16
 

@@ -18,6 +18,8 @@ public class CampusReview implements Serializable {
     private String content;
     private String images;
     private Date createTime;
+    /** 商品标题（卖家视角评价列表的展示字段，非 campus_review 表列） */
+    private String productTitle;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -37,4 +39,6 @@ public class CampusReview implements Serializable {
     public void setImages(String images) { this.images = images; }
     public Date getCreateTime() { return createTime; }
     public void setCreateTime(Date createTime) { this.createTime = createTime; }
+    public String getProductTitle() { return productTitle; }
+    public void setProductTitle(String productTitle) { this.productTitle = productTitle; }
 }

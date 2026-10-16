@@ -14,6 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:strict": "eslint src/views/campus src/api/campus src/utils/ruoyi.js tests --max-warnings 0",
     "format": "prettier --write \"src/**/*.{js,vue}\" \"vite/**/*.js\" \"tests/**/*.js\" \"*.js\" \"index.html\"",
     "format:check": "prettier --check \"src/**/*.{js,vue}\" \"vite/**/*.js\" \"tests/**/*.js\" \"*.js\" \"index.html\""
   },

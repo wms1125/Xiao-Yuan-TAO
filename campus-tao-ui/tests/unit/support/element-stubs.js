@@ -136,6 +136,28 @@ export const ElSelect = defineComponent({
   }
 })
 
+/** 数字输入：把当前值写进 data-value，便于断言「加购数量」是否被页面正确约束 */
+export const ElInputNumber = defineComponent({
+  name: 'el-input-number',
+  inheritAttrs: false,
+  props: { modelValue: Number, min: Number, max: Number, size: String },
+  emits: ['update:modelValue'],
+  setup(props, { attrs }) {
+    return () => h('div', { class: 'el-input-number-stub', 'data-value': props.modelValue, ...attrs })
+  }
+})
+
+/** 评分：把当前分值写进 data-rate，便于断言评价弹窗的默认分与回填 */
+export const ElRate = defineComponent({
+  name: 'el-rate',
+  inheritAttrs: false,
+  props: { modelValue: Number, disabled: Boolean, size: String },
+  emits: ['update:modelValue'],
+  setup(props, { attrs }) {
+    return () => h('div', { class: 'el-rate-stub', 'data-rate': props.modelValue, ...attrs })
+  }
+})
+
 /** 分页：页面通过 v-model:page + @pagination 联动，替身需如实透出这两个事件 */
 export const Pagination = defineComponent({
   name: 'Pagination',
@@ -181,8 +203,10 @@ export function elementStubs() {
       'el-form': ElForm,
       'el-form-item': ElFormItem,
       'el-input': ElInput,
+      'el-input-number': ElInputNumber,
       'el-select': ElSelect,
       'el-option': ElOption,
+      'el-rate': ElRate,
       'el-radio-group': ElRadioGroup,
       'el-radio': ElRadio,
       'el-timeline': ElTimeline,

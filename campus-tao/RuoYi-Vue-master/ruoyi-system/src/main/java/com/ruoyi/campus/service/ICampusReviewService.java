@@ -12,4 +12,6 @@ public interface ICampusReviewService {
                    Integer rating, String content, String images);
     List<CampusReview> selectByProductId(Long productId);
     CampusReview selectByOrderAndProduct(Long orderId, Long productId);
+    /** 卖家视角：本人名下商品收到的评价列表 */
+    List<CampusReview> selectBySellerId(Long sellerId);
 }

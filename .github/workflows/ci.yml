@@ -170,17 +170,24 @@ jobs:
       - name: 安装依赖（严格按 lock 文件）
         run: npm ci
 
-      # 静态检查：Prettier 只做校验不改写；ESLint 以 0 error 为门禁
-      #（脚手架既有债的 161 条 warn 不阻断，仅在日志中可见）。
+      # 静态检查：Prettier 只做校验不改写。
+      # ESLint 分两档：全仓 0 error 门禁（脚手架既有债的 161 条 warn 不阻断，仅日志可见），
+      # 自有代码另跑 0 warning 门禁（lint:strict）。
       # .eslintrc-auto-import.json 由 unplugin-auto-import 在构建期产出并随仓库提交，
       # 故 npm ci 之后即可直接 lint，无需先构建。
       - name: 格式校验（prettier --check）
         run: npm run format:check
 
-      - name: 代码检查（eslint，0 error 门禁）
+      - name: 代码检查（eslint，全仓 0 error 门禁）
         run: npm run lint
 
-      # vitest run --coverage：v8 provider，阈值为棘轮基线（行 ≥25%）
+      # 校园淘自有代码执行更严的 0 warning 门禁：脚手架（若依）遗留的 161 条 warn
+      # 属于上游债务，不计入本项目质量口径；自有目录必须做到 warn 也为零，
+      # 防止新增代码把告警混进既有噪声里被长期忽略。
+      - name: 自有代码严格检查（eslint --max-warnings 0，仅校园淘目录）
+        run: npm run lint:strict
+
+      # vitest run --coverage：v8 provider，阈值为棘轮基线（行 ≥40 / 分支 ≥45 / 语句 ≥45 / 函数 ≥55）
       - name: 单元测试 + 覆盖率门禁（vitest + v8）
         run: npm run test:coverage
 

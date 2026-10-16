@@ -25,6 +25,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -54,9 +55,22 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
     public static final int STATUS_REFUNDING = 5;
     public static final int STATUS_REFUNDED = 6;
 
+    /**
+     * 同秒内下单的递增序号。
+     *
+     * <p>原实现为「CT + 秒级时间戳 + userId」——同一用户在同一秒内重复下单会生成相同订单号，
+     * 直接撞 {@code uk_order_no} 且无重试。改为「CT + 秒级时间戳 + 4 位原子序号」：
+     * 单实例内每秒可容纳 10000 笔订单，且不再依赖 userId（不同用户同秒也不会相撞）。
+     *
+     * <p>边界（已知、未隐藏）：多实例部署时各 JVM 的序号相互独立，理论上仍可能在同秒相撞，
+     * 由 {@code uk_order_no} 唯一键兜底。本项目为单实例部署，如需水平扩展应改为数据库序列。
+     */
+    private static final AtomicInteger ORDER_NO_SEQ = new AtomicInteger(0);
+
     private String genOrderNo(Long userId) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
-        return "CT" + sdf.format(new Date()) + userId;
+        int seq = ORDER_NO_SEQ.getAndUpdate(v -> (v + 1) % 10000);
+        return "CT" + sdf.format(new Date()) + String.format("%04d", seq);
     }
 
     @Override

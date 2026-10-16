@@ -31,7 +31,10 @@ import com.ruoyi.campus.domain.CampusCategory;
 import com.ruoyi.campus.domain.CampusNotifyLog;
 import com.ruoyi.campus.domain.CampusProduct;
 import com.ruoyi.campus.domain.CampusReview;
+import com.ruoyi.campus.dto.CampusCategorySaveDTO;
 import com.ruoyi.campus.dto.CampusProductCreateDTO;
+import com.ruoyi.campus.dto.CampusProductStatusDTO;
+import com.ruoyi.campus.dto.CampusProductUpdateDTO;
 import com.ruoyi.campus.dto.CampusReviewAddDTO;
 import com.ruoyi.campus.service.ICampusCategoryService;
 import com.ruoyi.campus.service.ICampusNotifyLogService;
@@ -71,6 +74,8 @@ class CampusControllerCatalogTest {
 
     @Captor
     private ArgumentCaptor<CampusProduct> productCaptor;
+    @Captor
+    private ArgumentCaptor<CampusCategory> categoryCaptor;
 
     @BeforeEach
     void setUp() {
@@ -114,17 +119,21 @@ class CampusControllerCatalogTest {
     @Test
     @DisplayName("分类新增/修改/删除：委派服务层")
     void categoryCrudDelegate() {
-        CampusCategory category = new CampusCategory();
-        category.setId(3L);
-        category.setName("教材书籍");
+        CampusCategorySaveDTO body = new CampusCategorySaveDTO();
+        body.setId(3L);
+        body.setName("教材书籍");
 
-        categoryController.add(category);
-        categoryController.edit(category);
+        categoryController.add(body);
+        categoryController.edit(body);
         categoryController.remove(3L);
 
-        verify(categoryService).insertCampusCategory(category);
-        verify(categoryService).updateCampusCategory(category);
+        verify(categoryService).insertCampusCategory(categoryCaptor.capture());
+        verify(categoryService).updateCampusCategory(categoryCaptor.capture());
         verify(categoryService).deleteCampusCategoryById(3L);
+
+        CampusCategory passed = categoryCaptor.getAllValues().get(0);
+        assertEquals(3L, passed.getId());
+        assertEquals("教材书籍", passed.getName());
     }
 
     // ---------------- 商品 ----------------
@@ -184,13 +193,10 @@ class CampusControllerCatalogTest {
     @Test
     @DisplayName("修改商品：丢弃前端传入的 sellerId/sellerName，仅透传可编辑字段")
     void productEditDropsForgedSeller() {
-        CampusProduct body = new CampusProduct();
+        CampusProductUpdateDTO body = new CampusProductUpdateDTO();
         body.setId(5L);
         body.setTitle("改名后的商品");
         body.setStock(9);
-        // 伪造归属：前端尝试把商品挂到别人名下
-        body.setSellerId(99L);
-        body.setSellerName("forged-hacker");
 
         productController.edit(body);
 
@@ -199,6 +205,7 @@ class CampusControllerCatalogTest {
         assertEquals(5L, passed.getId());
         assertEquals("改名后的商品", passed.getTitle());
         assertEquals(9, passed.getStock());
+        // DTO 不接受 sellerId/sellerName，实体上永远为 null（伪造归属无法穿透）
         assertNull(passed.getSellerId());
         assertNull(passed.getSellerName());
     }
@@ -216,7 +223,7 @@ class CampusControllerCatalogTest {
     @Test
     @DisplayName("上下架：归属校验参数取自登录态")
     void productChangeStatusUsesLoginUser() {
-        CampusProduct body = new CampusProduct();
+        CampusProductStatusDTO body = new CampusProductStatusDTO();
         body.setId(5L);
         body.setStatus(0);
 

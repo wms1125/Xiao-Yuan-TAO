@@ -52,25 +52,6 @@
     where id = #{id}
   </update>
 
-  <update id="updateCampusProductWithVersion" parameterType="com.ruoyi.campus.domain.CampusProduct">
-    update campus_product
-    <set>
-      <if test="categoryId != null">category_id = #{categoryId},</if>
-      <if test="title != null">title = #{title},</if>
-      <if test="price != null">price = #{price},</if>
-      <if test="originalPrice != null">original_price = #{originalPrice},</if>
-      <if test="conditionLevel != null">condition_level = #{conditionLevel},</if>
-      <if test="description != null">description = #{description},</if>
-      <if test="images != null">images = #{images},</if>
-      <if test="stock != null">stock = #{stock},</if>
-      <if test="sellerId != null">seller_id = #{sellerId},</if>
-      <if test="sellerName != null">seller_name = #{sellerName},</if>
-      <if test="status != null">status = #{status},</if>
-      version = version + 1
-    </set>
-    where id = #{id} and version = #{version}
-  </update>
-
   <delete id="deleteCampusProductById" parameterType="Long">
     delete from campus_product where id = #{id}
   </delete>

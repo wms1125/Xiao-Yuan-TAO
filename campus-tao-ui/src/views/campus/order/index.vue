@@ -92,7 +92,7 @@
               ><span class="campus-num">{{ parseTime(scope.row.createTime) }}</span></template
             >
           </el-table-column>
-          <el-table-column label="操作" align="center" width="260" fixed="right">
+          <el-table-column label="操作" align="center" width="320" fixed="right">
             <template #default="scope">
               <el-button link type="primary" @click="handleDetail(scope.row)">详情</el-button>
               <el-button
@@ -126,6 +126,14 @@
                 @click="handleFinish(scope.row)"
                 v-hasPermi="['campus:order:edit']"
                 >确认收货</el-button
+              >
+              <el-button
+                v-if="scope.row.status === 3"
+                link
+                type="warning"
+                @click="handleReview(scope.row)"
+                v-hasPermi="['campus:review:add']"
+                >评价</el-button
               >
             </template>
           </el-table-column>
@@ -239,6 +247,36 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 发表评价 -->
+    <el-dialog v-model="reviewOpen" title="发表评价" width="620px" append-to-body>
+      <div class="review-dialog">
+        <div class="review-dialog__order">
+          订单 <span class="campus-num">{{ reviewForm.orderNo }}</span>
+        </div>
+        <div v-for="item in reviewForm.items" :key="item.productId" class="review-row">
+          <div class="review-row__title">{{ item.productTitle || '商品' }}</div>
+          <div class="review-row__field">
+            <span class="review-row__label">评分</span>
+            <el-rate v-model="item.rating" />
+          </div>
+          <el-input
+            v-model="item.content"
+            type="textarea"
+            :rows="2"
+            maxlength="500"
+            show-word-limit
+            placeholder="成色是否与描述相符？发货是否及时？"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="reviewOpen = false">取 消</el-button>
+          <el-button type="primary" :loading="reviewLoading" @click="submitReview">提交评价</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -257,6 +295,7 @@ import {
   getLogisticsTrace,
   syncLogisticsTrace
 } from '@/api/campus/order'
+import { addReview } from '@/api/campus/review'
 
 const orderList = ref([])
 const loading = ref(true)
@@ -266,6 +305,9 @@ const traceList = ref([])
 const traceLoading = ref(false)
 const logisticsStatus = ref(false)
 const total = ref(0)
+const reviewOpen = ref(false)
+const reviewLoading = ref(false)
+const reviewForm = ref({ orderNo: '', orderId: null, items: [] })
 // 概览数字改由服务端按状态聚合（分页后不能再遍历当前页推导）
 const statusStats = ref({})
 
@@ -354,14 +396,19 @@ function getList() {
 
 // 概览与列表使用同一筛选条件（分页参数不参与聚合）
 function getStats() {
-  orderStats({ status: queryParams.status, orderNo: queryParams.orderNo }).then((res) => {
-    const map = {}
-    const rows = res.data || []
-    rows.forEach((row) => {
-      map[row.status] = row
+  orderStats({ status: queryParams.status, orderNo: queryParams.orderNo })
+    .then((res) => {
+      const map = {}
+      const rows = res.data || []
+      rows.forEach((row) => {
+        map[row.status] = row
+      })
+      statusStats.value = map
     })
-    statusStats.value = map
-  })
+    .catch(() => {
+      // 概览失败不应影响列表可用性；清空统计避免展示上一次筛选的陈旧数字
+      statusStats.value = {}
+    })
 }
 
 // 列表与概览一起刷新，避免两者不同步
@@ -461,6 +508,55 @@ function handleFinish(row) {
       })
     })
     .catch(() => {})
+}
+
+// 评价：先取订单详情拿到 orderId 与商品明细（列表行不保证带 id）
+function handleReview(row) {
+  getOrder(row.orderNo).then((res) => {
+    const data = res.data
+    if (!data) return
+    reviewForm.value = {
+      orderNo: data.orderNo,
+      orderId: data.id,
+      items: (data.items || []).map((it) => ({
+        productId: it.productId,
+        productTitle: it.productTitle,
+        rating: 5,
+        content: ''
+      }))
+    }
+    reviewOpen.value = true
+  })
+}
+
+function submitReview() {
+  const targets = reviewForm.value.items.filter((it) => it.productId)
+  if (!targets.length) {
+    ElMessage.warning('该订单没有可评价的商品')
+    return
+  }
+  reviewLoading.value = true
+  // 逐件提交：单件失败（如已评价过）不应吞掉其余商品的提交结果
+  Promise.allSettled(
+    targets.map((it) =>
+      addReview({
+        orderId: reviewForm.value.orderId,
+        productId: it.productId,
+        rating: it.rating,
+        content: it.content
+      })
+    )
+  ).then((results) => {
+    reviewLoading.value = false
+    const ok = results.filter((r) => r.status === 'fulfilled').length
+    const fail = results.length - ok
+    if (fail === 0) {
+      ElMessage.success('评价已提交（' + ok + ' 件商品）')
+      reviewOpen.value = false
+    } else {
+      ElMessage.warning('提交完成：成功 ' + ok + ' 件，失败 ' + fail + ' 件（可能已评价过）')
+    }
+  })
 }
 
 onMounted(() => {
@@ -661,5 +757,42 @@ onMounted(() => {
 .trace-node__context {
   font-size: 12.5px;
   color: var(--c-ink-2);
+}
+
+/* 评价弹窗 */
+.review-dialog__order {
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--c-line-soft);
+  font-size: 13px;
+  color: var(--c-ink-3);
+}
+
+.review-row {
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--c-line);
+}
+
+.review-row:last-child {
+  border-bottom: none;
+}
+
+.review-row__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--c-ink);
+  margin-bottom: 8px;
+}
+
+.review-row__field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.review-row__label {
+  font-size: 13px;
+  color: var(--c-ink-3);
 }
 </style>

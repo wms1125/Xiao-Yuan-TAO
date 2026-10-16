@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import com.ruoyi.common.annotation.Anonymous;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.campus.domain.CampusReview;
 import com.ruoyi.campus.dto.CampusReviewAddDTO;
@@ -43,5 +44,14 @@ public class CampusReviewController extends BaseController {
     public AjaxResult listByProduct(@PathVariable Long productId) {
         List<CampusReview> list = reviewService.selectByProductId(productId);
         return AjaxResult.success(list);
+    }
+
+    /** 卖家视角：本人名下商品收到的评价（卖家范围取自登录态，不接受前端传 sellerId） */
+    @PreAuthorize("@ss.hasPermi('campus:review:list')")
+    @GetMapping("/seller")
+    public TableDataInfo listBySeller() {
+        startPage();
+        List<CampusReview> list = reviewService.selectBySellerId(SecurityUtils.getUserId());
+        return getDataTable(list);
     }
 }

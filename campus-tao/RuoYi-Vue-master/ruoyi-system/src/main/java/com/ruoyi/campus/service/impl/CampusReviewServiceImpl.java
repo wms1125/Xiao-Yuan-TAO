@@ -54,4 +54,9 @@ public class CampusReviewServiceImpl implements ICampusReviewService {
     public CampusReview selectByOrderAndProduct(Long orderId, Long productId) {
         return reviewMapper.selectByOrderAndProduct(orderId, productId);
     }
+
+    @Override
+    public List<CampusReview> selectBySellerId(Long sellerId) {
+        return reviewMapper.selectReviewListBySellerId(sellerId);
+    }
 }

@@ -30,6 +30,8 @@ import com.ruoyi.campus.domain.CampusCart;
 import com.ruoyi.campus.domain.CampusNotice;
 import com.ruoyi.campus.dto.CampusAccountRechargeDTO;
 import com.ruoyi.campus.dto.CampusCartAddDTO;
+import com.ruoyi.campus.dto.CampusCartCheckDTO;
+import com.ruoyi.campus.dto.CampusCartQuantityDTO;
 import com.ruoyi.campus.service.ICampusAccountService;
 import com.ruoyi.campus.service.ICampusCartService;
 import com.ruoyi.campus.service.ICampusNoticeService;
@@ -130,7 +132,7 @@ class CampusControllerAccountCartNoticeTest {
     @Test
     @DisplayName("修改数量：归属校验参数取自登录态")
     void cartUpdateQuantityUsesLoginUser() {
-        CampusCart body = new CampusCart();
+        CampusCartQuantityDTO body = new CampusCartQuantityDTO();
         body.setId(7L);
         body.setQuantity(3);
 
@@ -142,7 +144,7 @@ class CampusControllerAccountCartNoticeTest {
     @Test
     @DisplayName("勾选状态：归属校验参数取自登录态")
     void cartToggleCheckedUsesLoginUser() {
-        CampusCart body = new CampusCart();
+        CampusCartCheckDTO body = new CampusCartCheckDTO();
         body.setId(7L);
         body.setChecked(1);
 

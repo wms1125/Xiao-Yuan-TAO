@@ -8,3 +8,7 @@ export function listReviewByProduct(productId) {
 export function addReview(data) {
   return request({ url: '/campus/review/add', method: 'post', data: data })
 }
+// 卖家视角：本人名下商品收到的评价（分页）
+export function listSellerReview(query) {
+  return request({ url: '/campus/review/seller', method: 'get', params: query })
+}

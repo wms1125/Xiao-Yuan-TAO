@@ -23,6 +23,10 @@ vi.mock('@/api/campus/order', () => ({
   syncLogisticsTrace: vi.fn()
 }))
 
+vi.mock('@/api/campus/review', () => ({
+  addReview: vi.fn()
+}))
+
 import { ElMessageBox } from 'element-plus'
 import {
   listOrder,
@@ -34,6 +38,7 @@ import {
   finishOrder,
   getLogisticsTrace
 } from '@/api/campus/order'
+import { addReview } from '@/api/campus/review'
 import OrderPage from '@/views/campus/order/index.vue'
 import { elementStubs, clickButton, statValues, Pagination } from './support/element-stubs'
 
@@ -201,12 +206,77 @@ describe('校园淘 - 订单页（分页与概览联动）', () => {
   })
 
   it('列表请求失败时不抛出未处理异常，加载态归位', async () => {
-    // 注：概览请求（getStats）当前没有 catch，故此处不构造其失败分支，另行记录为观察项
     listOrder.mockRejectedValue(new Error('network down'))
     const wrapper = mount(OrderPage, { global: elementStubs() })
     await flushPromises()
 
     expect(wrapper.vm.loading).toBe(false)
     expect(listOrder).toHaveBeenCalledTimes(1)
+  })
+
+  it('概览请求失败时不产生未处理 rejection，且不残留上一次筛选的统计', async () => {
+    // 回归：getStats 原先只有 .then() 没有 .catch()，概览失败会产生未处理的 Promise rejection
+    stubApi({ rows: [orderRow()], total: 25 })
+    const wrapper = await mountPage()
+    expect(statValues(wrapper)).toEqual(['25', '0', '4', '11'])
+
+    orderStats.mockRejectedValue(new Error('stats down'))
+    const chip = wrapper.findAll('.status-chip').find((node) => node.text() === '已付款')
+    await chip.trigger('click')
+    await flushPromises()
+
+    // 列表仍然可用，概览清空而不是继续展示旧筛选下的数字
+    expect(wrapper.vm.loading).toBe(false)
+    expect(statValues(wrapper)).toEqual(['25', '0', '0', '0'])
+  })
+
+  it('已完成订单可打开评价弹窗：按订单明细逐件带入并默认 5 分', async () => {
+    getOrder.mockResolvedValue({
+      code: 200,
+      data: {
+        id: 88,
+        orderNo: ORDER_NO,
+        items: [
+          { productId: 11, productTitle: '二手自行车' },
+          { productId: 12, productTitle: '考研英语真题' }
+        ]
+      }
+    })
+    stubApi({ rows: [orderRow({ status: 3 })] })
+    const wrapper = await mountPage()
+
+    await clickButton(wrapper, '评价')
+    await flushPromises()
+
+    expect(getOrder).toHaveBeenCalledWith(ORDER_NO)
+    const rows = wrapper.findAll('.review-row')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('二手自行车')
+    expect(wrapper.findAll('.el-rate-stub').map((n) => n.attributes('data-rate'))).toEqual(['5', '5'])
+  })
+
+  it('提交评价：按商品逐件调用评价接口，全部成功时提示成功并关闭弹窗', async () => {
+    addReview.mockResolvedValue({ code: 200 })
+    getOrder.mockResolvedValue({
+      code: 200,
+      data: { id: 88, orderNo: ORDER_NO, items: [{ productId: 11, productTitle: '二手自行车' }] }
+    })
+    stubApi({ rows: [orderRow({ status: 3 })] })
+    const wrapper = await mountPage()
+
+    await clickButton(wrapper, '评价')
+    await flushPromises()
+
+    wrapper.vm.reviewForm.items[0].content = '成色很好'
+    await clickButton(wrapper, '提交评价')
+    await flushPromises()
+
+    expect(addReview).toHaveBeenCalledWith({
+      orderId: 88,
+      productId: 11,
+      rating: 5,
+      content: '成色很好'
+    })
+    expect(wrapper.vm.reviewOpen).toBe(false)
   })
 })

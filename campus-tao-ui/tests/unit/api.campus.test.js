@@ -34,6 +34,7 @@ import {
   readAllCampusNotice
 } from '@/api/campus/notice'
 import { listNotifyLog } from '@/api/campus/notifylog'
+import { listReviewByProduct, addReview, listSellerReview } from '@/api/campus/review'
 
 const lastCall = () => request.mock.calls[request.mock.calls.length - 1][0]
 
@@ -215,5 +216,32 @@ describe('校园淘 - 外呼留痕接口', () => {
   it('列表为 GET /campus/notifylog/list 并透传渠道/结果筛选', () => {
     listNotifyLog({ channel: 'sms', status: 2 })
     expect(lastCall()).toEqual({ url: '/campus/notifylog/list', method: 'get', params: { channel: 'sms', status: 2 } })
+  })
+})
+
+describe('校园淘 - 评价接口', () => {
+  beforeEach(() => request.mockClear())
+
+  it('按商品查询评价：商品ID 走路径参数', () => {
+    listReviewByProduct(7)
+    expect(lastCall()).toEqual({ url: '/campus/review/product/7', method: 'get' })
+  })
+
+  it('提交评价为 POST /campus/review/add 并透传 body', () => {
+    addReview({ orderId: 1, productId: 7, rating: 5, content: '很好' })
+    expect(lastCall()).toEqual({
+      url: '/campus/review/add',
+      method: 'post',
+      data: { orderId: 1, productId: 7, rating: 5, content: '很好' }
+    })
+  })
+
+  it('卖家评价列表为 GET /campus/review/seller 并透传分页参数', () => {
+    listSellerReview({ pageNum: 2, pageSize: 10 })
+    expect(lastCall()).toEqual({
+      url: '/campus/review/seller',
+      method: 'get',
+      params: { pageNum: 2, pageSize: 10 }
+    })
   })
 })

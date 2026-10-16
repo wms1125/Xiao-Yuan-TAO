@@ -22,6 +22,8 @@ import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.campus.domain.CampusProduct;
 import com.ruoyi.campus.dto.CampusProductCreateDTO;
+import com.ruoyi.campus.dto.CampusProductStatusDTO;
+import com.ruoyi.campus.dto.CampusProductUpdateDTO;
 import com.ruoyi.campus.service.ICampusProductService;
 
 /**
@@ -70,7 +72,7 @@ public class CampusProductController extends BaseController {
     @PreAuthorize("@ss.hasPermi('campus:product:edit')")
     @Log(title = "校园淘商品", businessType = BusinessType.UPDATE)
     @PutMapping
-    public AjaxResult edit(@RequestBody CampusProduct body) {
+    public AjaxResult edit(@Valid @RequestBody CampusProductUpdateDTO body) {
         // 仅允许修改可编辑字段，sellerId/sellerName 不接受前端传入，防止篡改归属
         CampusProduct product = new CampusProduct();
         product.setId(body.getId());
@@ -96,8 +98,8 @@ public class CampusProductController extends BaseController {
     @PreAuthorize("@ss.hasPermi('campus:product:edit')")
     @Log(title = "校园淘商品", businessType = BusinessType.UPDATE)
     @PutMapping("/status")
-    public AjaxResult changeStatus(@RequestBody CampusProduct product) {
+    public AjaxResult changeStatus(@Valid @RequestBody CampusProductStatusDTO body) {
         return AjaxResult.success(
-                productService.changeStatus(product.getId(), product.getStatus(), SecurityUtils.getUserId()));
+                productService.changeStatus(body.getId(), body.getStatus(), SecurityUtils.getUserId()));
     }
 }

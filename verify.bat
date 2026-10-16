@@ -8,7 +8,7 @@ echo   校园淘 交付前校验（CI 的本地等价脚本）
 echo     1) 预检：发行 jar 是否被占用
 echo     2) 后端 mvn -B -DskipTests clean package
 echo     3) 后端 mvn -B verify（单元测试 + jacoco 覆盖率门禁 + spotless 代码规范门禁）
-echo     4) 前端静态检查（prettier --check + eslint）
+echo     4) 前端静态检查（prettier --check + eslint；自有代码另跑 --max-warnings 0）
 echo     5) 前端 npm run test:coverage（vitest + v8 覆盖率门禁）
 echo     6) 前端 npm run build:prod
 echo   全部通过则退出码为 0，任一失败为 1。
@@ -95,6 +95,9 @@ call npm run format:check
 if errorlevel 1 (set "FAIL=1" & echo [失败] 前端格式检查) else (echo [通过] 前端格式检查)
 call npm run lint
 if errorlevel 1 (set "FAIL=1" & echo [失败] 前端 ESLint) else (echo [通过] 前端 ESLint)
+echo   -- 自有代码严格检查（eslint --max-warnings 0，仅校园淘目录）--
+call npm run lint:strict
+if errorlevel 1 (set "FAIL=1" & echo [失败] 前端自有代码严格 ESLint（存在 warning）) else (echo [通过] 前端自有代码严格 ESLint)
 echo.
 echo ---- [5/6] 前端单元测试 + 覆盖率门禁（vitest + v8）----
 call npm run test:coverage
