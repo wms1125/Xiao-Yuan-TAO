@@ -28,6 +28,14 @@
 - **取消确认框产生未处理的 Promise 拒绝**：`await confirm().catch(() => { throw })` 把取消异常重新抛出 async 函数，而模板 `@click` 未 `await`，原 `try/catch` 只包住接口调用、包不住取消。改为确认与请求统一包进一个 `try`，取消与接口失败一并吞掉（取消不提示，失败由请求拦截器统一提示）。
 - **测试替身库三处不保真**：`el-dialog` 不渲染 `title`（新增/修改弹窗靠标题区分）、`el-form` 未暴露 `clearValidate`（页面 `reset()` 经 `formRef` 调用，`nextTick` 里抛 `TypeError`）、`el-input` 把 `placeholder` 声明为 prop 却从不渲染（声明即消费，不进 `attrs`）。替身丢行为，测出来的绿是假的。
 - **MyBatis 显式 NULL 不触发 MySQL `DEFAULT`**：`address_snapshot varchar(400) NOT NULL DEFAULT ''`，传显式 `NULL` 时 `DEFAULT` 不生效（只在整列被省略时套用），7 个订单用例报 `Column 'address_snapshot' cannot be null`。mapper 改 `COALESCE(#{addressSnapshot,jdbcType=VARCHAR}, '')`，并补 `jdbcType`（不声明类型时 MyBatis 对 `null` 推断不出 JDBC 类型）。
+- **【CI 抓到的】容器内日志目录权限导致后端永远起不来**：`docker-compose.yml` 用宿主 bind mount `./logs/backend:/app/logs` 挂日志，而容器以非 root 用户 `campus` 运行。bind mount **不会**继承镜像里的 `chown`，CI runner 上该宿主目录由 Docker 以 root 创建 → logback 写 `logs/sys-*.log` 报 `Permission denied` → `Logging system failed to initialize` → 后端进程退出、health 永远 unhealthy（CI `docker` job 10 分钟超时）。改为**具名卷** `backend-logs:/app/logs`——具名卷首次创建时会把镜像目录的内容连同所有权拷入卷内，能正确继承 `campus`。已写下注释说明"要宿主侧直接翻日志可自行改回 bind mount，但必须先 chown"。
+- **【CI 抓到的】e2e job 建库不含 V2 列，SQL 层集成测试 7 个 error**：e2e job 导入的 `campus_tao_full.sql` 是 Flyway V1 基线的等价物（42 表、无 `address_snapshot`），而 `CampusMapperSqlIntegrationTest` 需要该列，直接报 `Unknown column 'address_snapshot' in 'field list'`。**调整步骤顺序**修复——把「打包后端 + 启动后端」提到 SQL 层测试之前，让应用自身的 Flyway 完成存量库升级（baseline V1 → apply V2），再跑测试。这比"手工预先套增量脚本"更正确：后者会和后到的 Flyway 撞车（V2 的 `ALTER TABLE ADD COLUMN` 非幂等，列已存在时 Flyway 报 Duplicate column 而启动失败）。同时新增「断言 Flyway 版本记录与表数」步骤，把"迁移真的生效"变成可断言的证据而非默认放过。
+- **`sql/migration-v1.0.17.sql` 移除硬编码 `USE campus_tao`**：带 `USE` 的脚本会无视命令行传入的库名、永远写到 `campus_tao` 上——在临时库上验证时会造成误写且难以发现。改为目标库由命令行参数指定；不指定时 mysql 明确报 `ERROR 1046 No database selected`，是安全的失败方式。
+
+### 新增（增量迁移脚本）
+- **`campus-tao/sql/migration-v1.0.17.sql`**：面向「已建库」环境的增量脚本，与 Flyway V2 **语义等价**（4 张新表 + `campus_order.address_snapshot` + 菜单 2011~2013 与按钮权限 2115~2120）。带幂等防护：`CREATE TABLE IF NOT EXISTS`、`INSERT IGNORE`，`ALTER ADD COLUMN` 用 `information_schema` 判存后动态 `PREPARE`（MySQL 8 无 `ADD COLUMN IF NOT EXISTS`）。**走 Flyway 的环境无需执行本脚本**——后端启动时自动应用 V2；本脚本面向手工维护、未启用 Flyway 的存量库。
+- **CI e2e job 新增「断言 Flyway 版本记录与表数」步骤**：打印 `flyway_schema_history` 并核对 `baseline_ok` / `v2_ok` / `address_snapshot_ok` / `tables` 四项。
+
 
 ### 验证
 - **后端门禁**：`mvn -B verify` **BUILD SUCCESS**（Spotless clean；首跑因 `CampusAddressController` import 顺序违规被 `spotless-check` 拦下，`spotless:apply` 后复跑通过）。surefire 聚合 **163 用例 / 0 失败 / 0 错误 / 0 跳过**；`jacoco.csv` 独立实算（`com/ruoyi/campus/**`，排除 `domain/**` 与 `mapper/**`）行 **64.85%**（642/990）/ 分支 **50.81%**（188/370），门禁 55 / 40 通过。
@@ -41,8 +49,62 @@
   - `form` 裸解构缺陷修复前断言 `element.value === '王五'` 实际拿到 `''`；
   - `el-dialog` 不渲染 title 时「弹窗标题正确」断言**必然失败** —— 说明替身缺行为会被测试暴露而非悄悄放过。
 
+### 本轮由 CI 独立复验抓到的缺陷（本地全绿、CI 红）
+
+这两项本地跑都是绿的，只有 CI 暴露出来——正是"必须让 CI 独立复验"的理由。
+
+**1. 容器内日志目录权限：后端永远起不来**
+
+CI `docker` job 报 `后端容器未在预期时间内进入 healthy`，容器日志：
+
+```
+ERROR in ch.qos.logback.core.rolling.RollingFileAppender[sys-user] -
+  openFile(logs/sys-user.log,true) call failed. java.io.FileNotFoundException: logs/sys-user.log (Permission denied)
+Logging system failed to initialize using configuration from 'null'
+```
+
+根因：`docker-compose.yml` 用**宿主 bind mount** `./logs/backend:/app/logs` 挂日志目录，而容器以非 root 用户 `campus` 运行。**bind mount 不继承镜像里的 `chown`**，宿主目录在 CI runner 上由 Docker 以 root 创建，于是非 root 进程写不进去。logback 初始化失败直接让 Spring Boot 退出，health 永远 unhealthy。
+
+修复：改为**具名卷** `backend-logs:/app/logs`。具名卷在首次创建时会把镜像目录的内容**连同所有权**拷入卷内，因此能正确继承 `campus`。
+
+**2. e2e job 建库不含 V2 列：SQL 层集成测试 7 个 error**
+
+```
+### Error updating database. Cause: java.sql.SQLSyntaxErrorException:
+    Unknown column 'address_snapshot' in 'field list'
+```
+
+本地能过是因为开发库早已被 Flyway 升到 V2；CI 的 e2e job 只导入了 `campus_tao_full.sql`（V1 基线等价物，42 表），而 `CampusMapperSqlIntegrationTest` 需要 `address_snapshot`。
+
+修复是**调整步骤顺序**而非加脚本：把「打包后端 + 启动后端」提到 SQL 层测试之前，让应用自身的 Flyway 完成存量库升级（baseline V1 → apply V2），再跑测试。**没有**采用"手工预先套 `migration-v1.0.17.sql`"这个看似更直接的方案——因为 V2 的 `ALTER TABLE ADD COLUMN address_snapshot` 非幂等，手工套完之后 Flyway 再跑一遍会报 Duplicate column 而启动失败，等于把一个 bug 换成另一个。
+
+**本地实测这条新顺序**（在 42 表、无版本记录的存量库上直接启动后端）：
+
+```
+Schema history table `campus_tao_fw`.`flyway_schema_history` does not exist yet
+Creating Schema History table ... with baseline ...
+Successfully baselined schema with version: 1
+Migrating schema `campus_tao_fw` to version "2 - buyer journey"
+Successfully applied 1 migration to schema `campus_tao_fw`, now at version v2 (execution time 00:00.165s)
+```
+
+表数 42 → **47**；随后 `mvn -Dtest=CampusMapperSqlIntegrationTest,CampusAccountAtomicSqlTest test` → **13 用例 / 0 失败 / 0 错误**（此前为 7 个 error）。
+
+**3. 增量迁移脚本与 Flyway V2 的等价性交叉验证**
+
+`sql/migration-v1.0.17.sql` 手工套到 42 表存量库后，与 Flyway 产出的库逐项 diff：
+
+- 表数 46 vs 47，**唯一差异是 `flyway_schema_history`**（Flyway 自己的登记表，手工路径本就不该有）；
+- `campus_order` 列（列名/类型/可空/默认值）**完全一致**；
+- `campus_address` 表结构**完全一致**。
+
+幂等性：连跑两遍，第二遍输出 `address_snapshot 已存在，跳过`，退出码 0。
+负向验证：不指定库名时输出 `ERROR 1046 (3D000) at line 31: No database selected`——移除硬编码 `USE` 后失败方式是安全的，不会误写到别的库。
+
+
 ### 未纳入本轮（如实记录）
 - **`getDefaultAddress()` 已封装但页面未使用**：页面从列表首条推导默认地址（后端已按 `isDefault desc` 排序，与 `selectDefault` 口径一致）；独立接口留给后续购物车/下单页的"预填默认地址"场景，其本身已进单测覆盖（100%）。
+- **Docker 镜像仍未在本机构建**：本机无 Docker，故镜像与 compose 的**构建**验证只能由 CI `docker` job 承担——但也正因如此，本轮 CI 才独立抓出了「bind mount 日志目录权限导致后端起不来」这个本地不可能发现的缺陷（见上文验证节）。1.0.16 轮的 `docker` job 曾因此失败，本轮已修为具名卷；该 job 在本轮 push 后的复跑结果见下条。
 - **收藏 / 搜索历史 / IM 沟通仍未实现**：V2 迁移已建 `campus_favorite` / `campus_search_history` / `campus_message` 三张表，但 Java 服务层与 Vue 页面尚未落地。收货地址只是买家侧四项断点里的第一项。
 - **支付网关抽象层未动**：`CampusAccount` 仍是沙箱余额账户，未抽 `IPaymentGateway`。
 - **Docker 镜像仍未在本机构建**：本机无 Docker，构建验证继续由 CI `docker` job 承担。

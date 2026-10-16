@@ -68,7 +68,7 @@ services:
     build:
       context: ./campus-tao/RuoYi-Vue-master
       dockerfile: Dockerfile
-    image: campus-tao-backend:${APP_VERSION:-1.0.16}
+    image: campus-tao-backend:${APP_VERSION:-1.0.17}
     container_name: campus-tao-backend
     restart: unless-stopped
     depends_on:
@@ -91,7 +91,13 @@ services:
       REDIS_PORT: "6379"
     volumes:
       - upload-data:/app/uploadPath
-      - ./logs/backend:/app/logs
+      # 日志用**具名卷**而非宿主 bind mount：容器以非 root 用户 campus 运行，
+      # 而 Dockerfile 已 chown /app/logs 给该用户。bind mount（如 ./logs/backend:/app/logs）
+      # 会直接用宿主目录的所有权覆盖镜像里的 chown——CI runner 上该目录由 Docker 以 root 创建，
+      # 于是 logback 写 logs/sys-*.log 报 Permission denied，应用起不来、health 永远 unhealthy。
+      # 具名卷在首次创建时会把镜像目录的内容**连同所有权**拷入卷内，故能正确继承 campus。
+      # 需要宿主侧直接翻日志文件时，可自行改为 bind mount，但必须先把宿主目录 chown 给容器用户。
+      - backend-logs:/app/logs
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     networks: [campus]
@@ -101,7 +107,7 @@ services:
     build:
       context: ./campus-tao-ui
       dockerfile: Dockerfile
-    image: campus-tao-ui:${APP_VERSION:-1.0.16}
+    image: campus-tao-ui:${APP_VERSION:-1.0.17}
     container_name: campus-tao-ui
     restart: unless-stopped
     depends_on:
@@ -117,6 +123,7 @@ volumes:
   mysql-data:
   redis-data:
   upload-data:
+  backend-logs:
 
 networks:
   campus:

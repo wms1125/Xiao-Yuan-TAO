@@ -1,14 +1,14 @@
 # ============================================================================
 # 校园淘 · 后端镜像（多阶段构建）
 #
-# 构建：  docker build -t campus-tao-backend:1.0.15 .
+# 构建：  docker build -t campus-tao-backend:1.0.17 .
 # 运行：  docker run -p 8080:8080 \
 #           -e DB_URL='jdbc:mysql://host.docker.internal:3306/campus_tao?...' \
 #           -e DB_USERNAME=root -e DB_PASSWORD=123456 \
 #           -e JWT_SECRET=<至少32位随机串> \
 #           -e DRUID_LOGIN_USERNAME=ruoyi -e DRUID_LOGIN_PASSWORD=<随机串> \
 #           -e EMBEDDED_REDIS_ENABLED=false -e REDIS_HOST=redis \
-#           campus-tao-backend:1.0.15
+#           campus-tao-backend:1.0.17
 #
 # 说明：
 #   - 构建阶段跑 mvn package（跳过测试，测试由 CI 的 backend job 独立执行）；

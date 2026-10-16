@@ -115,25 +115,25 @@ jobs:
             campus-tao/RuoYi-Vue-master/pom.xml
             campus-tao/RuoYi-Vue-master/*/pom.xml
 
-      # 全量脚本自带 CREATE DATABASE campus_tao 与 USE，故直接整份导入
-      - name: 导入全量建库脚本
+      # 全量脚本自带 CREATE DATABASE campus_tao 与 USE，故直接整份导入。
+      # 它等价于 Flyway 的 V1 基线（42 表、不含 V2 内容），导入后**故意不手工套增量脚本**：
+      # 让下面的「启动后端」由应用自身的 Flyway 完成存量库升级（baseline V1 → apply V2），
+      # 这才是真实用户拿到的路径。手工预先套 migration-v1.0.17.sql 反而会和后到的 Flyway
+      # 撞车——V2 的 `ALTER TABLE campus_order ADD COLUMN address_snapshot` 非幂等，
+      # 列已存在时 Flyway 报 Duplicate column，应用直接启动失败。
+      - name: 导入全量建库脚本（V1 基线状态）
         run: |
           mysql -h 127.0.0.1 -uroot -p123456 < campus-tao/sql/campus_tao_full.sql
           mysql -h 127.0.0.1 -uroot -p123456 -N -e "select concat('campus_product rows=', count(*)) from campus_tao.campus_product"
-
-      # SQL 层集成测试（真实 mapper XML / 原子 UPDATE）× 真实 MySQL。
-      # 这些用例在无库环境下靠 Assumptions 自动跳过，故 backend job（无 MySQL service）
-      # 只会显示 skipped；真正执行它们的是这里——用 service 容器当数据库。
-      - name: SQL 层集成测试（mapper XML 与原子 SQL × MySQL）
-        working-directory: campus-tao/RuoYi-Vue-master
-        run: mvn -B -Dtest=CampusMapperSqlIntegrationTest,CampusAccountAtomicSqlTest -Dsurefire.failIfNoSpecifiedTests=false test
 
       # 单测与覆盖率门禁已在 backend job 完成，这里只产出可运行的发行 jar
       - name: 打包后端
         working-directory: campus-tao/RuoYi-Vue-master
         run: mvn -B -DskipTests clean package
 
-      - name: 启动后端并等待就绪
+      # 关键一步：库处于「存量 42 表、无 flyway_schema_history」的状态，
+      # 应用启动时 Flyway 应打基线到 V1 并补应用 V2，自动升到 47 表。
+      - name: 启动后端（Flyway 自动完成存量库升级）
         run: |
           nohup java -jar campus-tao/RuoYi-Vue-master/ruoyi-admin/target/ruoyi-admin.jar > /tmp/backend.log 2>&1 &
           for i in $(seq 1 60); do
@@ -146,6 +146,31 @@ jobs:
           echo "后端启动超时，输出日志尾部："
           tail -100 /tmp/backend.log
           exit 1
+
+      # 断言 Flyway 真的升级了存量库，而不是「应用能启动」就放过。
+      # 应用能启动 ≠ 迁移生效：Spring Boot 4 把自动配置拆成独立模块，只引 flyway-core
+      # 不会激活 FlywayAutoConfiguration——应用照常启动、health 也是 UP，但迁移静默不执行。
+      - name: 断言 Flyway 版本记录与表数（迁移生效的证据）
+        run: |
+          mysql -h 127.0.0.1 -uroot -p123456 -e \
+            "select installed_rank, version, description, success from campus_tao.flyway_schema_history order by installed_rank"
+          echo "--- 期望：1(baseline_campus_tao) + 2(buyer journey)，success 均为 1 ---"
+          mysql -h 127.0.0.1 -uroot -p123456 -N -e \
+            "select concat('tables=', count(*)) from information_schema.tables where table_schema='campus_tao' and table_type='BASE TABLE'"
+          mysql -h 127.0.0.1 -uroot -p123456 -N -e \
+            "select concat('baseline_ok=', count(*)) from campus_tao.flyway_schema_history where version='1' and success=1"
+          mysql -h 127.0.0.1 -uroot -p123456 -N -e \
+            "select concat('v2_ok=', count(*)) from campus_tao.flyway_schema_history where version='2' and success=1"
+          mysql -h 127.0.0.1 -uroot -p123456 -N -e \
+            "select concat('address_snapshot_ok=', count(*)) from information_schema.columns where table_schema='campus_tao' and table_name='campus_order' and column_name='address_snapshot'"
+
+      # SQL 层集成测试（真实 mapper XML / 原子 UPDATE）× 真实 MySQL。
+      # 这些用例在无库环境下靠 Assumptions 自动跳过，故 backend job（无 MySQL service）
+      # 只会显示 skipped；真正执行它们的是这里——用 service 容器当数据库。
+      # 放在后端启动之后：campus_order.address_snapshot 属 V2，须待 Flyway 升级后才存在。
+      - name: SQL 层集成测试（mapper XML 与原子 SQL × MySQL）
+        working-directory: campus-tao/RuoYi-Vue-master
+        run: mvn -B -Dtest=CampusMapperSqlIntegrationTest,CampusAccountAtomicSqlTest -Dsurefire.failIfNoSpecifiedTests=false test
 
       - name: 执行端到端业务回归
         run: python3 campus-tao/e2e_business.py
