@@ -44,7 +44,10 @@ export default defineConfig({
         'src/views/campus/address/index.vue',
         // v1.0.18 三张空表落地：收藏页 / 站内信页 / 收藏与搜索历史在商城页的挂载
         'src/views/campus/favorite/index.vue',
-        'src/views/campus/message/index.vue'
+        'src/views/campus/message/index.vue',
+        // v1.0.20 P1-4：购物车页（勾选联动结算）与商品管理页（发布/修改/上下架/加购）
+        'src/views/campus/cart/index.vue',
+        'src/views/campus/product/index.vue'
       ],
       exclude: ['**/node_modules/**', 'src/utils/generator/**'],
       thresholds: {

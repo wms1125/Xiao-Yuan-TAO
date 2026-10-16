@@ -60,10 +60,27 @@ export const ElTable = defineComponent({
   name: 'el-table',
   inheritAttrs: false,
   props: { data: { type: Array, default: () => [] } },
-  setup(props, { slots, attrs }) {
+  emits: ['selection-change'],
+  setup(props, { slots, attrs, emit, expose }) {
     // 下发取值函数而非数组本身：:data 是 ref，列表加载完成后引用会被整体替换，
     // 只在 setup 阶段取一次会永远拿到挂载时的空数组，列替身也就渲染不出任何行。
     provide('elTableRows', () => props.data)
+    // 选中状态在替身内部记账。语义必须与真实表格一致：toggleRowSelection /
+    // clearSelection 操作选中集后**必须回抛 selection-change**——
+    // 购物车页的「已选件数 / 待结算金额」全靠该事件联动，替身丢事件，
+    // 这些路径一次都测不到（测出来的绿是假的）。
+    const selected = new Map()
+    const fireSelection = () => emit('selection-change', Array.from(selected.values()))
+    const toggleRowSelection = (row, isSelected = true) => {
+      if (isSelected) selected.set(row.id, row)
+      else selected.delete(row.id)
+      fireSelection()
+    }
+    const clearSelection = () => {
+      selected.clear()
+      fireSelection()
+    }
+    expose({ toggleRowSelection, clearSelection })
     return () =>
       h('div', { ...attrs, class: mergeStubClass(attrs, 'el-table-stub') }, [
         slots.default ? slots.default() : [],
@@ -185,14 +202,28 @@ export const ElInputNumber = defineComponent({
   }
 })
 
-/** 开关：把当前值写进 data-value，便于断言表单里「默认地址」的回填与切换 */
+/** 开关：点按切换并如实回抛 update:modelValue 与 change（新值）——
+ *  与真实开关一致：先翻转值再触发 change。商品管理页的「上下架」、
+ *  地址页的「默认地址」都由 change/v-model 驱动，替身不回抛事件，
+ *  这些路径一次都测不到（替身丢行为，测出来的绿是假的）。 */
 export const ElSwitch = defineComponent({
   name: 'el-switch',
   inheritAttrs: false,
   props: { modelValue: [Number, String, Boolean], activeValue: null, inactiveValue: null, disabled: Boolean },
   emits: ['update:modelValue', 'change'],
-  setup(props, { attrs }) {
-    return () => h('div', { ...attrs, class: mergeStubClass(attrs, 'el-switch-stub'), 'data-value': props.modelValue })
+  setup(props, { attrs, emit }) {
+    return () =>
+      h('div', {
+        ...attrs,
+        class: mergeStubClass(attrs, 'el-switch-stub'),
+        'data-value': props.modelValue,
+        onClick: () => {
+          if (props.disabled) return
+          const next = props.modelValue === props.activeValue ? props.inactiveValue : props.activeValue
+          emit('update:modelValue', next)
+          emit('change', next)
+        }
+      })
   }
 })
 
