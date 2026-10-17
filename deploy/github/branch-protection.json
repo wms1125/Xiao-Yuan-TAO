@@ -1,0 +1,26 @@
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": [
+      "后端构建 · 单元测试 · 覆盖率门禁",
+      "端到端业务回归（MySQL 8 · 双账号全链路）",
+      "前端单测 · 覆盖率门禁 · 生产构建",
+      "数据库迁移与回滚（Flyway · 逐表行数核对）",
+      "容器镜像构建与起栈自检（Dockerfile · docker compose）",
+      "依赖漏洞扫描（前端 npm audit · 后端 osv-scanner）"
+    ]
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 0
+  },
+  "restrictions": null,
+  "required_conversation_resolution": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_linear_history": false,
+  "block_creations": false,
+  "lock_branch": false
+}
