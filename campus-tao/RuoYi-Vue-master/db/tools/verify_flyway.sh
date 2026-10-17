@@ -66,18 +66,20 @@ fi
 
 # ---------- 1. 空库迁移 ----------
 echo
-echo "[1/5] 空库执行迁移（V1 + V2 + V3）"
+echo "[1/5] 空库执行迁移（V1 + V2 + V3 + V4）"
 sql "DROP DATABASE IF EXISTS $TEST_DB; CREATE DATABASE $TEST_DB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
 out=$(flyway migrate)
-if echo "$out" | grep -q "Successfully applied 3 migrations"; then
-  ok "迁移成功：Successfully applied 3 migrations"
+if echo "$out" | grep -q "Successfully applied 4 migrations"; then
+  ok "迁移成功：Successfully applied 4 migrations"
 else
   bad "迁移未按预期完成"; echo "$out" | tail -8 | sed 's/^/      /'
 fi
 v=$(tsql "select group_concat(version order by installed_rank) from flyway_schema_history where success=1;")
-[ "$v" = "1,2,3" ] && ok "flyway_schema_history 记录 V1,V2,V3" || bad "版本记录异常：$v"
+[ "$v" = "1,2,3,4" ] && ok "flyway_schema_history 记录 V1,V2,V3,V4" || bad "版本记录异常：$v"
 t=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB';")
 [ "$t" = "47" ] && ok "迁移后表数 47（42 基线 + 4 新增 + 1 版本表）" || bad "迁移后表数异常：$t（期望 47）"
+i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name='idx_user_time'));")
+[ "$i" = "4" ] && ok "V4 复合索引已生效（4/4）" || bad "V4 索引缺失：$i（期望 4）"
 
 # ---------- 2. 逐表行数核对 ----------
 echo
@@ -95,7 +97,7 @@ fi
 
 # ---------- 3. 回滚 ----------
 echo
-echo "[3/5] 回滚到空库（V2 → V1）"
+echo "[3/5] 回滚到空库（V4 → V1）"
 ( cd "$REPO_ROOT/db/rollback" && DB_NAME="$TEST_DB" DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" \
   DB_USERNAME="$DB_USERNAME" DB_PASSWORD="$DB_PASSWORD" bash rollback.sh 0 ) > /tmp/rb.txt 2>&1
 rc=$?
@@ -104,18 +106,22 @@ left=$(sql "select group_concat(table_name) from information_schema.tables where
 [ "$left" = "flyway_schema_history" ] && ok "业务表已全部删除（仅保留空的版本表）" || bad "回滚后残留表：$left"
 h=$(tsql "select count(*) from flyway_schema_history;")
 [ "$h" = "0" ] && ok "版本记录已清空" || bad "版本记录残留 $h 行"
+i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name='idx_user_time'));")
+[ "$i" = "0" ] && ok "回滚后 V4 索引无残留" || bad "回滚后残留索引：$i"
 
 # ---------- 4. 再迁移 ----------
 echo
 echo "[4/5] 回滚后再次迁移（验证可重放）"
 out=$(flyway migrate)
-if echo "$out" | grep -q "Successfully applied 3 migrations"; then
+if echo "$out" | grep -q "Successfully applied 4 migrations"; then
   ok "再次迁移成功"
 else
   bad "再次迁移未按预期完成"; echo "$out" | tail -8 | sed 's/^/      /'
 fi
 t=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB';")
 [ "$t" = "47" ] && ok "表数恢复为 47" || bad "表数异常：$t（期望 47）"
+i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name='idx_user_time'));")
+[ "$i" = "4" ] && ok "重放后 V4 索引恢复（4/4）" || bad "重放后索引缺失：$i（期望 4）"
 
 # ---------- 5. 再核对 ----------
 echo

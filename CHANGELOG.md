@@ -2,7 +2,40 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~024`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~025`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.22] - 2026-10-17
+
+收口 v1.0.21 明确记录的两项「未纳入」：**候选索引 DDL 以版本化迁移落地交付库**、**容器镜像归档到镜像仓库并留 digest**。至此性能实测的结论不再停留在报告里，镜像也不再只能从源码构建。
+
+### 新增（V4 索引迁移：把性能实测结论落进交付库）
+- 新增 `db/migration/V4__product_order_indexes.sql`：4 条复合索引——`campus_product.idx_status_time (status,create_time)`、`idx_seller_time (seller_id,create_time)`、`idx_category_status_time (category_id,status,create_time)`、`campus_order.idx_user_time (user_id,create_time)`。设计原则与 `perf/idx-candidate.sql` 一致：**过滤列与 `create_time` 编进同一索引**，商城列表的 `Using filesort` 消除并转为覆盖索引。
+- 对应回滚脚本 `db/rollback/U4__product_order_indexes.sql`（Flyway Community 无 undo，沿用既有 U1~U3 约定）。
+- **幂等实现**：MySQL 8.0 不支持 `CREATE INDEX IF NOT EXISTS`，故先查 `information_schema.STATISTICS`，再以 `PREPARE/EXECUTE` 执行或 `DO 0` 空操作。重复应用 / 重复回滚均不报错。
+- V3 的 3 处迁移断言链（空库迁移 → 逐表行数 → 回滚 → 重放）同步扩到 V4，并新增 3 处索引断言。断言刻意带 `table_name` 与 `seq_in_index=1` 限定——`campus_search_history` 存在同名 `idx_user_time`，裸判会假通过。
+- **实测（本地）**：空库 `Successfully applied 4 migrations ... now at version v4`，`flyway_schema_history = 1,2,3,4`，表数 47；索引 4/4 命中；U4 后为 0、再执行 U4 仍为 0（幂等）；重放 V4 后为 4、再执行 V4 仍为 4（幂等）。交付库 `campus_tao` 由 v3 升至 v4 并落地 4 条索引。
+- 索引实证依据：商品管理查询回表 **49,628 行 → 100 行（48×）**，耗时 10.50ms → 0.219ms（详见 `docs/perf-report-v1.0.21.md`）。
+
+### 新增（容器镜像归档：GHCR + digest）
+- 新增 `.github/workflows/release-image.yml`：`v*` tag 触发（亦支持 `workflow_dispatch` 手工指定版本）。与 `ci.yml` 的 `docker` job **职责分离**——后者只验证「能构建、能起栈、健康检查通过」，本 workflow 负责**推送与留痕**。
+- 推送两个镜像到 GHCR：`ghcr.io/wms1125/campus-tao-backend`、`ghcr.io/wms1125/campus-tao-ui`，tag 为 `<version>` 与 `latest`；`docker/build-push-action` 构建并输出 **image digest**，以 artifact 与 Release 资产 `campus-tao-images-v1.0.22.txt` 双份留痕。
+- `permissions` 显式声明 `contents: write` + `packages: write`（推 GHCR 与上传 Release 资产所需），不使用默认宽权限。
+- CI 侧改用 `docker/setup-buildx-action` + gha 缓存，避免每次冷构建。
+
+### 修复
+- **`docker-compose.yml` 默认版本号漂移**：两处 `APP_VERSION:-1.0.17` 停在四个版本之前，不显式传 `.env` 时会拉到不存在的镜像 tag。已对齐为 `1.0.22`。
+- 同一文件内「`V1/V2` 迁移」的过期注释更正为「`V1~V4`」。
+- `application.yml` 的 `info.app.version` 同步升至 `1.0.22`（v1.0.21 曾因漏改导致发行 jar 内嵌旧版本，此次发布前先改）。
+
+### 验证
+- 后端 `mvn -B -o clean verify` 通过（离线，覆盖率/Checkstyle/SpotBugs 门禁不降级）。
+- Flyway：空库 4 版本迁移 + U4 回滚 + 重放全部通过；交付库 `campus_tao` 已在 v4。
+- CI 六 job 全绿；新增的 `release-image` workflow 在 tag `v1.0.22` 上实跑，产出两镜像 digest。
+- 制品：Release `v1.0.22` 挂 `ruoyi-admin-v1.0.22.jar`、`campus-tao-ui-dist-v1.0.22.zip`、`campus-tao-sbom-v1.0.22.zip`、`SHA256SUMS.txt`，以及镜像清单 `campus-tao-images-v1.0.22.txt`。
+
+### 未纳入本轮（如实记录）
+- **镜像仅推 GHCR、未做漏洞扫描与签名**（镜像层 CVE 与 cosign 签名留待后续）。
+- **V4 索引未在大数据量下复测**：结论来自 5 万级沙箱库的前后对照，生产规模仍需回归。
 
 ## [1.0.21] - 2026-10-17
 

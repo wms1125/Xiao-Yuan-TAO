@@ -279,7 +279,8 @@ CREATE TABLE `campus_order` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order_no` (`order_no`),
   KEY `idx_user` (`user_id`),
-  KEY `idx_status` (`status`)
+  KEY `idx_status` (`status`),
+  KEY `idx_user_time` (`user_id`,`create_time`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='订单';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -351,7 +352,10 @@ CREATE TABLE `campus_product` (
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_category` (`category_id`),
-  KEY `idx_status` (`status`)
+  KEY `idx_status` (`status`),
+  KEY `idx_status_time` (`status`,`create_time`),
+  KEY `idx_seller_time` (`seller_id`,`create_time`),
+  KEY `idx_category_status_time` (`category_id`,`status`,`create_time`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='二手商品';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

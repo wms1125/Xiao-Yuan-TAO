@@ -1,0 +1,138 @@
+name: Release Images
+
+# 说明：
+# - 触发：推送 v* tag（正式发布）或手动触发（需指定版本号）。
+# - 构建后端与前端两个镜像，推送到 GitHub Container Registry（GHCR），
+#   同时打 <version> 与 latest 两个 tag。
+# - 每个镜像的 digest 先作为 Actions artifact 归档；record job 再把汇总文件
+#   挂到同名 GitHub Release，使「取制品即用」覆盖到容器镜像层。
+# - 与 ci.yml 的 docker job 分工：ci.yml 只验证镜像能构建、能起栈；
+#   本 workflow 负责发布与归档，只在 tag 上运行。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '镜像版本号（如 1.0.22）'
+        required: true
+
+permissions:
+  contents: write   # 上传 digest 汇总到 Release
+  packages: write   # 推送镜像到 GHCR
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: 镜像 ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: campus-tao-backend
+            context: campus-tao/RuoYi-Vue-master
+          - image: campus-tao-ui
+            context: campus-tao-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解析版本号
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            v="${{ inputs.version }}"
+          else
+            v="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "镜像版本：$v"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 生成镜像元数据
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=${{ matrix.image }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: 构建并推送
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      - name: 归档镜像 digest
+        run: |
+          echo "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}" \
+            > "digest-${{ matrix.image }}.txt"
+          cat "digest-${{ matrix.image }}.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.image }}
+          path: digest-${{ matrix.image }}.txt
+
+  record:
+    name: 汇总 digest 并挂到 Release
+    needs: images
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: 汇总 digest 文件
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          out="campus-tao-images-v${version}.txt"
+          {
+            echo "# 校园淘 v${version} 容器镜像 digest"
+            echo "# 生成时间：$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "# 拉取：docker pull ghcr.io/${{ github.repository_owner }}/campus-tao-backend:${version}"
+            echo
+            cat digests/digest-*.txt | sort
+          } > "$out"
+          cat "$out"
+          echo "ASSET=$out" >> "$GITHUB_ENV"
+
+      - name: 上传到 GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Release 可能比镜像构建更晚创建，最多等待约 20 分钟
+          for i in $(seq 1 80); do
+            if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+              gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
+              echo "digest 已挂到 Release $GITHUB_REF_NAME"
+              exit 0
+            fi
+            echo "第 ${i} 次等待 Release $GITHUB_REF_NAME ..."
+            sleep 15
+          done
+          echo "::error::Release $GITHUB_REF_NAME 未创建，digest 仅保留在 Actions artifact 中"
+          exit 1
