@@ -22,6 +22,13 @@
 - `permissions` 显式声明 `contents: write` + `packages: write`（推 GHCR 与上传 Release 资产所需），不使用默认宽权限。
 - CI 侧改用 `docker/setup-buildx-action` + gha 缓存，避免每次冷构建。
 
+### 新增（镜像漏洞扫描：Trivy + 报告随 Release 归档）
+- `release-image.yml` 新增 `scan` job：按 `images` job 产出的 **image digest**（而非 tag）用 Trivy 扫描两个镜像，`severity=CRITICAL,HIGH` + `ignore-unfixed=true` + `scanners=vuln`；**CRITICAL 数量大于 0 即判失败**，HIGH 只记录不拦截。按 digest 扫描是为了避免「扫描时 tag 已被下一次构建覆盖」导致的证据错位。
+- 报告双落点：Actions artifact（`trivy-<image>`）留存 JSON 与 Markdown 摘要；`record` job 汇总为 Release 资产 `campus-tao-security-scan-v1.0.22.md` + `trivy-campus-tao-{backend,ui}-v1.0.22.json`。
+- `record` job 改为 `needs: [images, scan]` 且 `always()` 执行：**扫描失败时 digest 与报告仍会落到 Release**，红叉本身即为门禁结论，而不是让发布资产与门禁结果脱钩。
+- **首次实跑抓出两处真实缺陷**：① `aquasecurity/trivy-action@0.36.0` 无法解析——该仓库只发布 `v*` tag，改为 `@v0.36.0`；② 前端镜像扫出 **2 个可修复 CRITICAL**（`libcrypto3`/`libssl3` 3.3.3-r0，CVE-2026-31789，修复版本 3.3.7-r0）。根因是 `nginx:1.27-alpine` 基于 **Alpine 3.20（2026-04 已 EOL）**，不再获得安全更新；基础镜像升级为 `nginx:1.30.6-alpine` 后清零。
+- 最终扫描结论（digest 级）：后端 **CRITICAL 0 / HIGH 1**（`commons-io:commons-io 2.8.0`，修复版本 2.14.0，待后续随依赖升级处理）；前端 **CRITICAL 0 / HIGH 0**。
+
 ### 修复
 - **`docker-compose.yml` 默认版本号漂移**：两处 `APP_VERSION:-1.0.17` 停在四个版本之前，不显式传 `.env` 时会拉到不存在的镜像 tag。已对齐为 `1.0.22`。
 - 同一文件内「`V1/V2` 迁移」的过期注释更正为「`V1~V4`」。
@@ -32,10 +39,12 @@
 - 后端 `mvn -B -o clean verify` 通过（离线，覆盖率/Checkstyle/SpotBugs 门禁不降级）。
 - Flyway：空库 4 版本迁移 + U4 回滚 + 重放全部通过；交付库 `campus_tao` 已在 v4。
 - CI 六 job 全绿；`release-image` 修正 `--repo` 后在 tag `v1.0.22` 上重跑，两镜像 job 与 `record` job 全部 success。
-- 制品：Release `v1.0.22`（已发布，Latest）挂 `ruoyi-admin-v1.0.22.jar`、`campus-tao-ui-dist-v1.0.22.zip`、`campus-tao-sbom-v1.0.22.zip`、`SHA256SUMS.txt`，以及镜像清单 `campus-tao-images-v1.0.22.txt`（含 backend / ui 两条 digest）。
+- `release-image` 加入扫描后共 **5 个 job**（镜像 ×2、扫描 ×2、汇总 ×1），在 tag `v1.0.22` 上 run `39035665298` 全部 success；扫描按 digest 命中本次发布的两个镜像。
+- 制品：Release `v1.0.22`（Latest）挂 `ruoyi-admin-v1.0.22.jar`、`campus-tao-ui-dist-v1.0.22.zip`、`campus-tao-sbom-v1.0.22.zip`、`SHA256SUMS.txt`、镜像清单 `campus-tao-images-v1.0.22.txt`（含 backend / ui 两条 digest），以及扫描证据 `campus-tao-security-scan-v1.0.22.md`、`trivy-campus-tao-backend-v1.0.22.json`、`trivy-campus-tao-ui-v1.0.22.json`。
 
 ### 未纳入本轮（如实记录）
-- **镜像仅推 GHCR、未做漏洞扫描与签名**（镜像层 CVE 与 cosign 签名留待后续）。
+- **镜像未做 cosign 签名**（签名与 provenance 留待后续；漏洞扫描已在本轮落地）。
+- **后端镜像仍有 1 个可修复 HIGH**：`commons-io:commons-io 2.8.0 → 2.14.0`（传递依赖，需随依赖升级专项处理）。
 - **V4 索引未在大数据量下复测**：结论来自 5 万级沙箱库的前后对照，生产规模仍需回归。
 
 ## [1.0.21] - 2026-10-17
