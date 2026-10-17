@@ -28,7 +28,13 @@ vi.mock('@/api/login', () => ({
 }))
 
 import { ElMessage } from 'element-plus'
-import { listConversation, listOrderMessage, readOrderMessage, sendMessage } from '@/api/campus/message'
+import {
+  listConversation,
+  listOrderMessage,
+  readOrderMessage,
+  sendMessage,
+  unreadMessageCount
+} from '@/api/campus/message'
 import { getInfo } from '@/api/login'
 import MessagePage from '@/views/campus/message/index.vue'
 import { elementStubs } from './support/element-stubs'
@@ -62,8 +68,15 @@ const msgRow = (over = {}) => ({
   ...over
 })
 
-function stubConversations(rows = [convRow()]) {
-  listConversation.mockResolvedValue({ code: 200, data: rows })
+/**
+ * 服务端分页响应：{ total, rows }。
+ * 曾经会话列表是"一次全量返回数组"，前端拿 res.data 当列表；
+ * 现在是标准表格分页结构，rows 才是列表，total 是会话总数（不是当前页长度）。
+ */
+const paged = (rows, total = rows.length) => ({ total, rows })
+
+function stubConversations(rows = [convRow()], total = rows.length) {
+  listConversation.mockResolvedValue(paged(rows, total))
 }
 
 function stubMessages(rows = [msgRow()]) {
@@ -82,6 +95,8 @@ beforeEach(() => {
   // 登录态：getInfo 返回当前用户 ID
   getInfo.mockResolvedValue({ code: 200, user: { userId: MY_ID } })
   readOrderMessage.mockResolvedValue({ code: 200 })
+  // 未读总数走独立接口（/campus/message/unread）：分页后未读数可能落在其他页
+  unreadMessageCount.mockResolvedValue({ code: 200, data: { count: 0 } })
 })
 
 describe('消息沟通页', () => {
@@ -91,6 +106,8 @@ describe('消息沟通页', () => {
 
     expect(listConversation).toHaveBeenCalledTimes(1)
     expect(getInfo).toHaveBeenCalledTimes(1)
+    // 未读总数走独立接口：分页后未读数可能落在其他页，不能遍历当前页累加
+    expect(unreadMessageCount).toHaveBeenCalledTimes(1)
   })
 
   it('渲染会话的订单号、最后一条消息与金额', async () => {
@@ -102,13 +119,45 @@ describe('消息沟通页', () => {
     expect(wrapper.text()).toContain('60.00')
   })
 
-  it('概览：会话总数与未读总数正确', async () => {
-    stubConversations([convRow({ unread: 2 }), convRow({ orderNo: 'CT202601010002', unread: 1 })])
+  it('概览：会话总数与未读总数均取服务端值，不是当前页长度', async () => {
+    // 当前页只回了 2 行，但总数是 37；未读数也不在这两行里
+    stubConversations([convRow({ unread: 2 }), convRow({ orderNo: 'CT202601010002', unread: 1 })], 37)
+    unreadMessageCount.mockResolvedValue({ code: 200, data: { count: 12 } })
     const wrapper = await mountPage()
 
     const stats = wrapper.findAll('.campus-stat__value').map((n) => n.text())
-    expect(stats[0]).toBe('2') // 会话总数
-    expect(stats[1]).toBe('3') // 未读合计
+    expect(stats[0]).toBe('37') // 会话总数来自 total，不是 2
+    expect(stats[1]).toBe('12') // 未读合计来自聚合接口，不是本页累加的 3
+  })
+
+  it('分页：total>0 时渲染分页器，并把 total/当前页码透给控件', async () => {
+    stubConversations([convRow()], 37)
+    const wrapper = await mountPage()
+
+    const pager = wrapper.find('.el-pagination-stub')
+    expect(pager.exists()).toBe(true)
+    expect(pager.attributes('data-total')).toBe('37')
+    expect(pager.attributes('data-page')).toBe('1')
+  })
+
+  it('分页：翻页时带新页码再请求一次列表', async () => {
+    stubConversations([convRow()], 37)
+    const wrapper = await mountPage()
+    listConversation.mockClear()
+
+    // 替身的"下一页"按钮会派发 current-change(currentPage + 1)
+    await wrapper.find('.el-pagination__next-stub').trigger('click')
+    await flushPromises()
+
+    expect(listConversation).toHaveBeenCalledTimes(1)
+    expect(listConversation).toHaveBeenCalledWith({ pageNum: 2, pageSize: 10 })
+  })
+
+  it('分页：空会话时不渲染分页器（total=0）', async () => {
+    stubConversations([], 0)
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('.el-pagination-stub').exists()).toBe(false)
   })
 
   it('未读会话显示角标，已读会话不显示', async () => {
@@ -196,8 +245,10 @@ describe('消息沟通页', () => {
     expect(ElMessage.success).toHaveBeenCalledWith('消息已发送')
     // 消息列表：点会话 1 次 + 发送后刷新 1 次
     expect(listOrderMessage).toHaveBeenCalledTimes(2)
-    // 会话列表：挂载 1 + 点会话后刷新 1（标记已读后要刷新未读数）+ 发送后刷新 1
+    // 会话列表：挂载 1 + 点会话后刷新 1 + 发送后刷新 1
     expect(listConversation).toHaveBeenCalledTimes(3)
+    // 未读总数三次都要重新取：标记已读与发送都会改变未读数
+    expect(unreadMessageCount).toHaveBeenCalledTimes(3)
   })
 
   it('空内容时发送按钮被禁用（不发送空消息）', async () => {

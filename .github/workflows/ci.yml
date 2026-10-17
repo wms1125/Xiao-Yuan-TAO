@@ -161,13 +161,18 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -p123456 -e \
             "select installed_rank, version, description, success from campus_tao.flyway_schema_history order by installed_rank"
-          echo "--- 期望：1(baseline_campus_tao) + 2(buyer journey)，success 均为 1 ---"
+          echo "--- 期望：1(baseline) + 2~5 全部 success=1 ---"
           mysql -h 127.0.0.1 -uroot -p123456 -N -e \
             "select concat('tables=', count(*)) from information_schema.tables where table_schema='campus_tao' and table_type='BASE TABLE'"
           mysql -h 127.0.0.1 -uroot -p123456 -N -e \
             "select concat('baseline_ok=', count(*)) from campus_tao.flyway_schema_history where version='1' and success=1"
           mysql -h 127.0.0.1 -uroot -p123456 -N -e \
             "select concat('v2_ok=', count(*)) from campus_tao.flyway_schema_history where version='2' and success=1"
+          # V5 统一了校园表排序规则。这里断言"0 张非 0900 校园表"：
+          # 一旦有人再写出 COLLATE=utf8mb4_general_ci 的建表语句，站内信会话列表
+          # 会重新报 Illegal mix of collations（V5 修的就是这个），本断言提前拦住。
+          mysql -h 127.0.0.1 -uroot -p123456 -N -e \
+            "select concat('collation_ok=', count(*) = 0) from information_schema.tables where table_schema='campus_tao' and table_name like 'campus\\_%' and table_collation <> 'utf8mb4_0900_ai_ci'"
           mysql -h 127.0.0.1 -uroot -p123456 -N -e \
             "select concat('address_snapshot_ok=', count(*)) from information_schema.columns where table_schema='campus_tao' and table_name='campus_order' and column_name='address_snapshot'"
 
@@ -189,6 +194,44 @@ jobs:
 
       - name: 执行端到端业务回归
         run: python3 campus-tao/e2e_business.py
+
+      # ------------------------------------------------------------------
+      # 浏览器级 E2E：证明「用户点下去对」，补上接口脚本证明不了的那一半。
+      #
+      # 分工：e2e_business.py 打 HTTP，验后端业务逻辑；本步骤开真实 Chrome 点界面。
+      # 为什么必须放在这个 job：用例需要真实后端 + 真实 MySQL + 演示数据，
+      # 这里三样都齐了，另起一个 job 等于把整套环境再搭一遍。
+      #
+      # 用 runner 自带的 Chrome（playwright.config.js 里 channel: 'chrome'），
+      # 不下载 Chromium；headless 由 CI 环境自动生效。
+      # ------------------------------------------------------------------
+      - name: 设置 Node 22（浏览器 E2E）
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: campus-tao-ui/package-lock.json
+
+      - name: 安装前端依赖（浏览器 E2E）
+        working-directory: campus-tao-ui
+        run: npm ci
+
+      - name: 浏览器 E2E（Playwright · 真实 Chrome · headless）
+        working-directory: campus-tao-ui
+        run: npx playwright test
+        env:
+          # 播种脚本直连后端（不经 Vite 代理），端口与上面的启动步骤保持一致
+          E2E_API_URL: http://127.0.0.1:8080
+
+      # 失败留证据：trace（可回放每一步）+ video + 截图。
+      # 这三样是"红了之后能在本地复现"的前提，比日志有用得多。
+      - name: 上传浏览器 E2E 失败证据（trace / video / 截图）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-e2e-artifacts
+          path: campus-tao-ui/test-results/
+          if-no-files-found: ignore
 
       - name: 失败时输出后端日志
         if: failure()
@@ -387,3 +430,67 @@ jobs:
         with:
           scan-args: |-
             --sbom=campus-tao/sbom/backend-bom.json
+
+      # ------------------------------------------------------------------
+      # 密钥泄漏扫描（gitleaks，扫全量 git 历史）
+      #
+      # 为什么扫历史而不是只扫当前工作区：密钥一旦提交过，"后来删掉"并不算撤回，
+      # 尤其这个仓库在 GitHub 上。只扫最后一次提交等于主动放弃这条最能查出问题的路。
+      # 本仓库第一次跑就抓到一个真实结果：若依脚手架带来的 RSA 私钥曾把用户记住的
+      # 密码加密后写进 cookie（该功能已删除），配置与取舍逐条写在 .gitleaks.toml 里。
+      #
+      # 用官方 action 而不是自己装二进制：版本由 tag 固定，CI 环境无需外部下载。
+      # ------------------------------------------------------------------
+      - name: 密钥泄漏扫描（gitleaks · 全量历史）
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # 必须扫历史，见上方说明
+          fetch-depth: 0
+
+  # ==========================================================================
+  # 静态代码分析（CodeQL · Java + JavaScript/TypeScript）
+  #
+  # 与 gitleaks 的分工：gitleaks 管"密钥别进仓库"，CodeQL 管"代码里的坏味道会变成漏洞"
+  # （注入、路径穿越、反序列化、某些 XSS 等）。两者互补，谁也替代不了谁。
+  #
+  # 为什么暂时不设为 required status check：本 job 的首次运行结果无法在本地预演，
+  # 先让它真跑一次、看到具体告警清单，再决定哪些要修、阈值怎么设。
+  # 一条没跑过就设为必需的检查，第一次拦住急活时就会被整个关掉。
+  # 首次全绿后再同步进 deploy/github/branch-protection.json（注意同步 README）。
+  #
+  # 别重新命名这个 job：name 与 required status check 一一对应，改名会让 PR 卡在
+  # "Expected — Waiting for status to be reported"。
+  # ==========================================================================
+  codeql:
+    name: 静态代码分析（CodeQL · Java + JS/TS）
+    runs-on: ubuntu-latest
+    needs: [backend]
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # CodeQL 的 Java 分析需要可用 JDK（自动构建会调用 mvn）
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: |
+            campus-tao/RuoYi-Vue-master/pom.xml
+            campus-tao/RuoYi-Vue-master/*/pom.xml
+
+      - name: 初始化 CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java, javascript-typescript
+
+      # 自动构建本项目（根 pom 是 Maven 工程）；codeql-action 的 autobuild
+      # 会调用 mvn 完成增量编译，Java 分析才有可查询的数据库。
+      - name: 分析（CodeQL）
+        uses: github/codeql-action/analyze@v3

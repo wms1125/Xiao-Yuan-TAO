@@ -270,4 +270,22 @@ must(st == 200 and len(rows) > 0, "外呼留痕已留痕可查（短信/邮件�
 must(any(r.get("bizNo") == order_no for r in rows), "外呼留痕关联到本次订单业务号", str([r.get("bizNo") for r in rows][:10]))
 must(set(r.get("channel") for r in rows) >= {"sms", "email"}, "短信与邮件通道均有留痕", str(sorted(set(r.get("channel") for r in rows))))
 
+print("\n=== 19) 断言[可观测性 v1.0.23]：traceId 与业务指标 ===")
+# /actuator/prometheus 返回的是文本格式，call() 会按 JSON 解析而失败，故此处单独取原始文本
+try:
+    with urllib.request.urlopen(BASE + "/actuator/prometheus", timeout=15) as r:
+        prom_status, prom_text = r.status, r.read().decode()
+except urllib.error.HTTPError as e:
+    prom_status, prom_text = e.code, e.read().decode(errors="ignore")
+print("指标端点:", prom_status, "长度:", len(prom_text))
+must(prom_status == 200, "指标端点匿名可抓取（Prometheus 抓取前提）", str(prom_status))
+must("campus_payment_channel_available" in prom_text, "业务指标已注册：渠道可用性 gauge", prom_text[:120])
+must("campus_payment_attempts_total" in prom_text, "业务指标已注册：支付尝试计数", "")
+
+# traceId 由 TraceIdFilter 回写；健康检查同样经过该过滤器
+with urllib.request.urlopen(urllib.request.Request(BASE + "/actuator/health"), timeout=15) as r:
+    trace_id = r.headers.get("X-Trace-Id")
+print("traceId:", trace_id)
+must(bool(trace_id) and len(trace_id) == 32, "响应头回写 traceId（32 位）", str(trace_id))
+
 print("\nRESULT:", "ALL_PASS" if ok else "HAS_FAIL")

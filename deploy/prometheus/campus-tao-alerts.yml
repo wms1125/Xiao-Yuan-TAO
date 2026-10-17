@@ -1,0 +1,105 @@
+# 校园淘 · Prometheus 告警规则
+#
+# 用法（Prometheus 2.x）：
+#   rule_files:
+#     - /etc/prometheus/rules/campus-tao-alerts.yml
+#
+# 指标来源：应用 /actuator/prometheus（需先按 deploy/prometheus/README.md 配置抓取）。
+# 命名规则：Micrometer 会把 `campus.payment.attempts` 转成 `campus_payment_attempts_total`。
+#
+# 设计取舍：
+# - 只对「用户已经受损」或「马上要受损」的现象告警，不做资源水位告警。
+# - 每条规则都写 runbook 式的 description——半夜被叫起来的人不该再去猜"这条是什么意思"。
+# - 阈值保守（宁可漏报也不刷屏）：支付失败率 20% / 持续 10 分钟，才说明是真故障而非个别余额不足。
+
+groups:
+  - name: campus-tao-payment
+    rules:
+      - alert: CampusPaymentFailureRateHigh
+        # 支付失败率 = 失败数 / 总尝试数。只统计 sandbox/real 两种正常结果，
+        # 渠道不可用单独由 CampusPaymentChannelUnavailable 报警，避免同一故障报两次。
+        expr: |
+          sum(rate(campus_payment_attempts_total{result="failed"}[5m]))
+          /
+          clamp_min(sum(rate(campus_payment_attempts_total[5m])), 0.001)
+          > 0.20
+        for: 10m
+        labels:
+          severity: critical
+          service: campus-tao
+        annotations:
+          summary: "支付失败率超过 20%（持续 10 分钟）"
+          description: >-
+            当前失败率 {{ $value | humanizePercentage }}。排查顺序：
+            1) /actuator/prometheus 看 campus_payment_channel_available 是否为 0；
+            2) 查日志中 traceId 对应的 pay 调用与异常栈；
+            3) 沙箱渠道失败多为站内余额不足（属业务正常态，需确认是否集中爆发）。
+
+      - alert: CampusRefundAttemptFailed
+        # 退款失败没有"可容忍比例"：任何一笔失败都意味着钱退不回去。
+        expr: increase(campus_refund_attempts_total{result="failed"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: campus-tao
+        annotations:
+          summary: "15 分钟内有退款失败（{{ $value }} 笔）"
+          description: >-
+            退款是不可逆外部动作，失败会直接卡住用户资金。排查：
+            1) 确认渠道状态与商户参数；
+            2) 核对订单状态是否停在「退款中」（状态 5）；
+            3) 若为沙箱渠道，检查 campus_account 余额是否被扣空导致回滚失败。
+
+      - alert: CampusPaymentChannelUnavailable
+        # 渠道不可用 = 整条交易链路断掉，比失败率更严重，故 2 分钟即报。
+        expr: campus_payment_channel_available == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: campus-tao
+        annotations:
+          summary: "支付渠道不可用（channel={{ $labels.channel }}）"
+          description: >-
+            配置的渠道无法解析：未注册或商户参数未配置齐。
+            应用不会静默回落到沙箱（刻意设计），因此所有支付会直接报错。
+            排查：GET /campus/payment/channel 看 mode 是否为 unavailable，
+            以及 registered / enabled 两个集合的差异。
+
+  - name: campus-tao-runtime
+    rules:
+      - alert: CampusHttp5xxRateHigh
+        # 5xx 代表服务端自身出错（4xx 是客户端问题，不在此列）。
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 0.001)
+          > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          service: campus-tao
+        annotations:
+          summary: "HTTP 5xx 占比超过 1%（持续 10 分钟）"
+          description: >-
+            先按 uri 分组定位是哪个接口：
+            topk(5, sum by (uri) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))).
+            再按 traceId 到日志里取异常栈。
+
+      - alert: CampusDbPoolExhausted
+        # 连接池等待数 > 0 说明请求已经在排队。application.yml 的 maxWait=60000，
+        # 意味着池耗尽时请求最长阻塞 60s——用户侧表现为"页面转圈一分钟然后超时"。
+        expr: hikaricp_connections_pending > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: campus-tao
+        annotations:
+          summary: "数据库连接池出现等待（pending={{ $value }}）"
+          description: >-
+            检查是否存在慢查询（performance_schema / 慢日志），
+            以及连接池上限与并发量是否匹配。
+            历史性能实测见 campus-tao/docs/perf-report-v1.0.21.md。
+
+# 未纳入本轮（如实记录）：
+# - 「待付订单超时积压」告警需要一条按状态聚合的 gauge，需引入定时任务周期性查库；
+#   本轮不写"指向不存在指标的规则"来凑数，待后续随订单超时任务一并落地。

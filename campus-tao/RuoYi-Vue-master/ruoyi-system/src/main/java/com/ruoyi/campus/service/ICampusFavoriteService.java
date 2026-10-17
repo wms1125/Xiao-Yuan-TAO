@@ -32,4 +32,14 @@ public interface ICampusFavoriteService {
 
     /** 取消收藏（按收藏 ID），越权时抛异常 */
     int removeByFavoriteId(Long favoriteId, Long userId);
+
+    /**
+     * 单个用户收藏数量上限。
+     *
+     * <p>为什么要有上限：收藏是买家私有数据且无成本，早期没有限制时
+     * 脚本可以无限收藏，把别人的收藏列表接口拖垮，也占满磁盘。
+     * 200 个对真实用户绰绰有余（商品列表通常也就几十个），
+     * 却能挡住"批量灌收藏"这类滥用。</p>
+     */
+    int MAX_FAVORITES = 200;
 }

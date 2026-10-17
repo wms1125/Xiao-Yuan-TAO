@@ -57,6 +57,7 @@ import {
   delSearchHistory,
   clearSearchHistory
 } from '@/api/campus/searchhistory'
+import { getPaymentChannel } from '@/api/campus/payment'
 
 const lastCall = () => request.mock.calls[request.mock.calls.length - 1][0]
 
@@ -328,29 +329,39 @@ describe('校园淘 - 商品收藏接口', () => {
     })
   })
 
-  it('切换收藏为 POST /campus/favorite/toggle 且 productId 走 query', () => {
+  // 收藏的切换/取消必须显式关掉全局防重复提交：
+  // 1）语义上这两个操作本就可重复，服务端按当前状态取反并返回 favored；
+  // 2）防重复提交的缓存键只含 { url, data }，参数走 params 时键里没有 productId，
+  //    一秒内连点两个不同商品会被误判为重复提交（真实缺陷，浏览器 E2E 抓到的）。
+  it('切换收藏为 POST /campus/favorite/toggle 且 productId 走 query，并关闭防重复提交', () => {
     toggleFavorite(7)
     expect(lastCall()).toEqual({
       url: '/campus/favorite/toggle',
       method: 'post',
-      params: { productId: 7 }
+      params: { productId: 7 },
+      headers: { repeatSubmit: false }
     })
   })
 
-  it('取消收藏为 POST /campus/favorite/remove 且 productId 走 query', () => {
+  it('取消收藏为 POST /campus/favorite/remove 且 productId 走 query，并关闭防重复提交', () => {
     removeFavorite(7)
     expect(lastCall()).toEqual({
       url: '/campus/favorite/remove',
       method: 'post',
-      params: { productId: 7 }
+      params: { productId: 7 },
+      headers: { repeatSubmit: false }
     })
   })
 })
 
 describe('校园淘 - 站内信接口', () => {
-  it('会话列表为 GET /campus/message/list', () => {
-    listConversation()
-    expect(lastCall()).toEqual({ url: '/campus/message/list', method: 'get' })
+  it('会话列表为 GET /campus/message/list，分页参数走 query', () => {
+    listConversation({ pageNum: 2, pageSize: 10 })
+    expect(lastCall()).toEqual({
+      url: '/campus/message/list',
+      method: 'get',
+      params: { pageNum: 2, pageSize: 10 }
+    })
   })
 
   it('未读数为 GET /campus/message/unread', () => {
@@ -414,5 +425,12 @@ describe('校园淘 - 搜索历史接口', () => {
   it('清空为 DELETE /campus/searchhistory/clear', () => {
     clearSearchHistory()
     expect(lastCall()).toEqual({ url: '/campus/searchhistory/clear', method: 'delete' })
+  })
+})
+
+describe('校园淘 - 支付渠道接口', () => {
+  it('渠道状态为 GET /campus/payment/channel', () => {
+    getPaymentChannel()
+    expect(lastCall()).toEqual({ url: '/campus/payment/channel', method: 'get' })
   })
 })

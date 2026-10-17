@@ -23,9 +23,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
+import com.ruoyi.campus.controller.CampusPaymentController;
 import com.ruoyi.campus.domain.CampusOrder;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
+import com.ruoyi.campus.observability.CampusMetrics;
 import com.ruoyi.campus.payment.IPaymentGateway;
 import com.ruoyi.campus.payment.PayCommand;
 import com.ruoyi.campus.payment.PayNotify;
@@ -38,6 +43,7 @@ import com.ruoyi.campus.payment.SandboxPaymentGateway;
 import com.ruoyi.campus.payment.WechatPayGateway;
 import com.ruoyi.campus.payment.impl.CampusPaymentServiceImpl;
 import com.ruoyi.campus.service.ICampusAccountService;
+import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.exception.ServiceException;
 
 /**
@@ -74,13 +80,17 @@ class CampusPaymentGatewayTest {
     private CampusPaymentServiceImpl paymentService;
     private PaymentGatewayResolver resolver;
     private PaymentChannelProperties props;
+    private SimpleMeterRegistry meterRegistry;
+    private CampusMetrics metrics;
 
     @BeforeEach
     void setUp() {
         props = new PaymentChannelProperties();
         wechat = new WechatPayGateway(props);
         resolver = new PaymentGatewayResolver(Arrays.asList(sandbox, wechat), props);
-        paymentService = new CampusPaymentServiceImpl(resolver, props, orderMapper);
+        meterRegistry = new SimpleMeterRegistry();
+        metrics = new CampusMetrics(meterRegistry, resolver, props);
+        paymentService = new CampusPaymentServiceImpl(resolver, props, orderMapper, metrics);
     }
 
     // ---------------- 渠道路由 ----------------
@@ -352,5 +362,139 @@ class CampusPaymentGatewayTest {
 
         assertFalse(w.isEnabled());
         assertFalse(w.isConfigured());
+    }
+
+    // ---------------- 资金语义声明（mode） ----------------
+
+    @Test
+    @DisplayName("沙箱渠道声明不涉及真实资金")
+    void sandbox_declaresNotRealMoney() {
+        assertFalse(sandbox.realMoney(), "沙箱只记站内余额，不得声明为真实资金");
+    }
+
+    @Test
+    @DisplayName("微信渠道按设计意图声明为真实资金")
+    void wechat_declaresRealMoney() {
+        assertTrue(wechat.realMoney(), "真实渠道若标成沙箱，界面会误导用户以为不扣钱");
+    }
+
+    @Test
+    @DisplayName("渠道状态接口：沙箱模式返回 mode=sandbox 与不扣款提示")
+    void channel_sandboxMode() {
+        Map<String, Object> data = channelData();
+
+        assertEquals("sandbox", data.get("channel"));
+        assertEquals("sandbox", data.get("mode"));
+        assertEquals(Boolean.FALSE, data.get("realMoney"));
+        assertTrue(String.valueOf(data.get("notice")).contains("不产生真实扣款"));
+    }
+
+    @Test
+    @DisplayName("渠道状态接口：真实渠道返回 mode=real 与扣款提示")
+    void channel_realMode() {
+        PaymentChannelProperties.Wechat w = props.getWechat();
+        w.setEnabled(true);
+        w.setAppId("wx1");
+        w.setMchId("m1");
+        w.setApiV3Key("k");
+        w.setSerialNo("s");
+        w.setPrivateKeyPath("apiclient_key.pem");
+        props.setChannel("wechat");
+
+        Map<String, Object> data = channelData();
+
+        assertEquals("wechat", data.get("channel"));
+        assertEquals("real", data.get("mode"));
+        assertEquals(Boolean.TRUE, data.get("realMoney"));
+        assertTrue(String.valueOf(data.get("notice")).contains("实际资金流动"));
+    }
+
+    @Test
+    @DisplayName("负向：配置的渠道不可用时 mode=unavailable，不得回落成 sandbox")
+    void channel_unavailableMode() {
+        // 渠道名指向未启用的微信：byChannel 返回 null，此时若回落成 sandbox，
+        // 界面会显示"沙箱演示、可正常支付"，而实际上支付根本走不通。
+        props.setChannel("wechat");
+
+        Map<String, Object> data = channelData();
+
+        assertEquals("unavailable", data.get("mode"));
+        assertEquals(Boolean.FALSE, data.get("realMoney"));
+        assertTrue(String.valueOf(data.get("notice")).contains("不可用"));
+    }
+
+    // ---------------- 业务指标（Prometheus 抓取口径） ----------------
+
+    @Test
+    @DisplayName("支付成功计入 campus.payment.attempts{result=success}")
+    void payment_metricCountsSuccess() {
+        when(accountService.pay(2L, new BigDecimal("60.00"))).thenReturn(true);
+
+        paymentService.pay(PayCommand.of(2L, "CT001", new BigDecimal("60.00")));
+
+        assertEquals(1d, counter(CampusMetrics.PAYMENT_ATTEMPTS, "sandbox", "sandbox", "success"));
+    }
+
+    @Test
+    @DisplayName("渠道不可用时支付抛异常，且计入 {mode=unavailable,result=failed}")
+    void payment_metricCountsChannelUnavailable() {
+        props.setChannel("wechat");
+        PayCommand cmd = PayCommand.of(2L, "CT001", new BigDecimal("60.00"));
+
+        assertThrows(ServiceException.class, () -> paymentService.pay(cmd));
+
+        // 这是本类最关键的一条：若只在拿到网关之后打点，"渠道挂了"在指标上是空白
+        assertEquals(1d, counter(CampusMetrics.PAYMENT_ATTEMPTS, "wechat", "unavailable", "failed"));
+    }
+
+    @Test
+    @DisplayName("余额不足计入 failed（业务失败也要可见，否则失败率永远为 0）")
+    void payment_metricCountsInsufficientBalance() {
+        when(accountService.pay(2L, new BigDecimal("60.00"))).thenReturn(false);
+
+        paymentService.pay(PayCommand.of(2L, "CT001", new BigDecimal("60.00")));
+
+        assertEquals(1d, counter(CampusMetrics.PAYMENT_ATTEMPTS, "sandbox", "sandbox", "failed"));
+    }
+
+    @Test
+    @DisplayName("退款失败计入 campus.refund.attempts{result=failed}")
+    void refund_metricCountsFailure() {
+        props.setChannel("wechat");
+        RefundCommand cmd = RefundCommand.of(2L, "CT001", null, new BigDecimal("60.00"));
+
+        assertThrows(ServiceException.class, () -> paymentService.refund(cmd));
+
+        assertEquals(1d, counter(CampusMetrics.REFUND_ATTEMPTS, "wechat", "unavailable", "failed"));
+    }
+
+    @Test
+    @DisplayName("渠道可用性 gauge：正常 1，配置不可解析 0")
+    void channelAvailableGauge() {
+        assertEquals(1d, meterRegistry.get(CampusMetrics.CHANNEL_AVAILABLE).gauge().value());
+
+        props.setChannel("wechat");
+        assertEquals(0d, meterRegistry.get(CampusMetrics.CHANNEL_AVAILABLE).gauge().value(),
+                "配置成未启用的渠道时 gauge 必须掉到 0，否则告警规则不会触发");
+    }
+
+    /** 按 channel/mode/result 三元组取计数器的当前值（未产生过则为 0） */
+    private double counter(String name, String channel, String mode, String result) {
+        return meterRegistry.get(name)
+                .tag("channel", channel)
+                .tag("mode", mode)
+                .tag("result", result)
+                .counter()
+                .count();
+    }
+
+    /** 直接调用 Controller 方法取 data 体（字段注入沿用项目既有写法，用反射装配） */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> channelData() {
+        CampusPaymentController controller = new CampusPaymentController();
+        ReflectionTestUtils.setField(controller, "paymentService", paymentService);
+        ReflectionTestUtils.setField(controller, "resolver", resolver);
+        AjaxResult result = controller.channel();
+        return (Map<String, Object>) result.get(AjaxResult.DATA_TAG);
     }
 }

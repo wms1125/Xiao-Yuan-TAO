@@ -5,13 +5,18 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,8 +28,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ruoyi.campus.domain.CampusMessage;
 import com.ruoyi.campus.domain.CampusOrder;
+import com.ruoyi.campus.domain.vo.CampusConversationPage;
 import com.ruoyi.campus.mapper.CampusMessageMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
+import com.ruoyi.campus.service.ICampusMessageService;
 import com.ruoyi.campus.service.impl.CampusMessageServiceImpl;
 import com.ruoyi.common.exception.ServiceException;
 
@@ -266,16 +273,89 @@ class CampusMessageServiceTest {
     @DisplayName("未读数与会话列表：直接委派 Mapper")
     void unreadAndConversationsDelegate() {
         when(messageMapper.countUnread(BUYER_ID)).thenReturn(5);
+        // total 必须大于 0，否则 offset(0) >= total(0) 会走"越界页短路"，分页查询不会发生
+        when(messageMapper.countConversations(BUYER_ID)).thenReturn(9L);
 
         assertEquals(5, messageService.countUnread(BUYER_ID));
-        messageService.selectConversations(BUYER_ID);
-        verify(messageMapper).selectConversations(BUYER_ID);
+        messageService.selectConversations(BUYER_ID, 1, 20);
+        verify(messageMapper).selectConversationsPaged(BUYER_ID, 0L, 20);
     }
 
     @Test
     @DisplayName("负向：未登录访问会话列表被拒绝")
     void conversationsRejectsNullUser() {
-        assertThrows(ServiceException.class, () -> messageService.selectConversations(null));
-        verify(messageMapper, never()).selectConversations(any());
+        assertThrows(ServiceException.class, () -> messageService.selectConversations(null, 1, 20));
+        verify(messageMapper, never()).selectConversationsPaged(any(), anyLong(), anyInt());
+        verify(messageMapper, never()).countConversations(any());
+    }
+
+    // ---------------- 会话列表分页 ----------------
+
+    @Test
+    @DisplayName("分页：pageNum/pageSize 换算成 offset/limit 交给 Mapper")
+    void conversationsPagedPassesOffsetAndLimit() {
+        when(messageMapper.countConversations(BUYER_ID)).thenReturn(37L);
+        List<Map<String, Object>> rows = Collections.singletonList(Collections.singletonMap("orderNo", ORDER_NO));
+        when(messageMapper.selectConversationsPaged(BUYER_ID, 20L, 20)).thenReturn(rows);
+
+        CampusConversationPage page = messageService.selectConversations(BUYER_ID, 2, 20);
+
+        // 第 2 页每页 20 条 → offset 必须从 20 开始，这是 off-by-one 最容易错的地方
+        verify(messageMapper).selectConversationsPaged(BUYER_ID, 20L, 20);
+        assertEquals(37L, page.getTotal());
+        assertEquals(rows, page.getRows());
+    }
+
+    @Test
+    @DisplayName("分页：总数与行数同源，翻到越界页仍返回真实 total 与空行")
+    void conversationsPagedOutOfRangeReturnsEmptyRowsButRealTotal() {
+        when(messageMapper.countConversations(BUYER_ID)).thenReturn(5L);
+
+        CampusConversationPage page = messageService.selectConversations(BUYER_ID, 99, 20);
+
+        // 越界页不查数据库：结果必然是空，没必要再多一次往返
+        verify(messageMapper, never()).selectConversationsPaged(any(), anyLong(), anyInt());
+        assertEquals(5L, page.getTotal());
+        assertTrue(page.getRows().isEmpty());
+    }
+
+    @Test
+    @DisplayName("分页：页码/每页条数非法时归一而非把脏值带进 SQL")
+    void conversationsPagedNormalizesBadParams() {
+        // total > 0 才能走到分页查询；否则会命中"越界页不查库"的短路
+        when(messageMapper.countConversations(BUYER_ID)).thenReturn(5L);
+
+        // pageNum=0 与负数归一为第 1 页；pageSize=0 归一为默认 20
+        messageService.selectConversations(BUYER_ID, 0, 0);
+        messageService.selectConversations(BUYER_ID, -5, -1);
+
+        // 两次调用都被归一成同一组 (offset=0, limit=DEFAULT_PAGE_SIZE)
+        verify(messageMapper, times(2))
+                .selectConversationsPaged(BUYER_ID, 0L, ICampusMessageService.DEFAULT_PAGE_SIZE);
+    }
+
+    @Test
+    @DisplayName("负向：每页条数超过上限直接报错，不静默截断")
+    void conversationsRejectsOversizedPage() {
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> messageService.selectConversations(BUYER_ID, 1, ICampusMessageService.MAX_PAGE_SIZE + 1));
+
+        // 报错必须说清上限是多少，否则调用方不知道该改什么
+        assertEquals("每页最多 " + ICampusMessageService.MAX_PAGE_SIZE + " 条会话", ex.getMessage());
+        verify(messageMapper, never()).countConversations(any());
+        verify(messageMapper, never()).selectConversationsPaged(any(), anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("负向：超大页码不会算成负数 offset")
+    void conversationsRejectsOverflowingPageNumber() {
+        when(messageMapper.countConversations(BUYER_ID)).thenReturn(3L);
+
+        CampusConversationPage page = messageService.selectConversations(BUYER_ID, Integer.MAX_VALUE, 100);
+
+        // (pageNum-1)*size 用 long 计算；否则会溢出成负数 offset 把 SQL 改成
+        // limit -xxx,yy，MySQL 直接报语法错。
+        assertEquals(3L, page.getTotal());
+        verify(messageMapper, never()).selectConversationsPaged(any(), anyLong(), anyInt());
     }
 }

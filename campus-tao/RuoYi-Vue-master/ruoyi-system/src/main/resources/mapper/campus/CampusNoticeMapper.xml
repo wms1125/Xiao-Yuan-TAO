@@ -28,6 +28,39 @@
         select <include refid="Base_Column_List"/> from campus_notice where notice_id = #{noticeId}
     </select>
 
+    <!--
+      我的通知（分页 + 按类型筛选）。
+
+      排序保持 is_read asc（未读在前）、create_time desc（新的在前），与原来无界版一致，
+      否则"未读置顶"的行为会随分页悄悄消失。
+
+      索引：where 命中 (user_id, is_read) 前缀，再加 create_time 排序。
+      原有的 idx_user_read(user_id, is_read) 能定位到该用户所有行，
+      但"未读 + 按时间倒序"在未读数很多时仍要回表排序。
+      本仓库另有 V6 迁移补的 (user_id, is_read, create_time) 联合索引，
+      使"只看未读"的常见场景直接按索引顺序取前 N 条，不再 filesort。
+    -->
+    <select id="selectListByUserPaged" resultMap="CampusNoticeResult">
+        select <include refid="Base_Column_List"/> from campus_notice
+        <where>
+            user_id = #{userId}
+            <if test="isRead != null">and is_read = #{isRead}</if>
+            <if test="type != null and type != ''">and type = #{type}</if>
+        </where>
+        order by is_read asc, create_time desc
+        limit #{offset}, #{limit}
+    </select>
+
+    <!-- 与列表同一筛选条件的总数；列表筛了 type 而总数没筛，翻页控件就会显示错的总页数 -->
+    <select id="countByUser" resultType="java.lang.Long">
+        select count(1) from campus_notice
+        <where>
+            user_id = #{userId}
+            <if test="isRead != null">and is_read = #{isRead}</if>
+            <if test="type != null and type != ''">and type = #{type}</if>
+        </where>
+    </select>
+
     <select id="selectListByUser" resultMap="CampusNoticeResult">
         select <include refid="Base_Column_List"/> from campus_notice
         <where>

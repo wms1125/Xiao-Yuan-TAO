@@ -89,7 +89,14 @@ export const ElTable = defineComponent({
   }
 })
 
-/** 列：按行调用 scoped slot，模拟真实表格的 scope 结构 */
+/**
+ * 列：按行调用 scoped slot，模拟真实表格的 scope 结构。
+ *
+ * 没有 #default 插槽时按 prop 取行内字段渲染——这正是 Element Plus 的行为：
+ * `<el-table-column prop="title" />` 会显示 row.title。替身若不做这件事，
+ * 所有"声明式列"（notifylog/notice 等页的标题、内容列）在测试里都是空的，
+ * 断言页面渲染出来的测试会全红，逼着人把每列都改写成 scoped slot。
+ */
 export const ElTableColumn = defineComponent({
   name: 'el-table-column',
   props: {
@@ -101,7 +108,7 @@ export const ElTableColumn = defineComponent({
     fixed: [String, Boolean],
     showOverflowTooltip: Boolean
   },
-  setup(_, { slots }) {
+  setup(props, { slots }) {
     const rowsOf = inject('elTableRows', () => [])
     return () => {
       const rows = rowsOf()
@@ -109,9 +116,14 @@ export const ElTableColumn = defineComponent({
         'div',
         { class: 'el-table-column-stub' },
         Array.isArray(rows)
-          ? rows.map((row, index) =>
-              slots.default ? slots.default({ row, $index: index, column: {}, store: {}, _self: {} }) : null
-            )
+          ? rows.map((row, index) => {
+              if (slots.default) {
+                return slots.default({ row, $index: index, column: {}, store: {}, _self: {} })
+              }
+              // 声明式列：真实组件取 row[prop]；值为 null/undefined 时渲染空串
+              const value = props.prop ? row?.[props.prop] : ''
+              return h('div', { class: 'el-table-column-stub__cell' }, value == null ? '' : String(value))
+            })
           : []
       )
     }
@@ -273,6 +285,27 @@ export const ElBadge = defineComponent({
   }
 })
 
+/**
+ * 提示条：把 title 渲染成文本、type 渲染成 data-type。
+ *
+ * 替身丢属性等于这条路径测不到——资金语义提示正是靠 title 与 type 表达的，
+ * 若替身只渲染一个空 div，那么"沙箱提示有没有出现、配色对不对"就无法断言。
+ */
+export const ElAlert = defineComponent({
+  name: 'el-alert',
+  inheritAttrs: false,
+  props: {
+    title: { type: String, default: '' },
+    type: { type: String, default: 'info' },
+    closable: Boolean,
+    showIcon: Boolean
+  },
+  setup(props, { attrs }) {
+    return () =>
+      h('div', { ...attrs, class: mergeStubClass(attrs, 'el-alert-stub'), 'data-type': props.type }, props.title)
+  }
+})
+
 /** 分页：页面通过 v-model:page + @pagination 联动，替身需如实透出这两个事件 */
 export const Pagination = defineComponent({
   name: 'Pagination',
@@ -281,6 +314,47 @@ export const Pagination = defineComponent({
   emits: ['update:page', 'update:limit', 'pagination'],
   setup(_, { attrs }) {
     return () => h('div', { ...attrs, class: mergeStubClass(attrs, 'pagination-stub') })
+  }
+})
+
+/**
+ * el-pagination：分页控件替身。
+ *
+ * 需要暴露三个事实供测试断言：total、当前页码、当前每页条数。
+ * 由于 props 不会出现在 attrs 里，这里刻意**不声明 props**，
+ * 让它们以 attr 形式落到根元素上，测试用 data-* 属性即可读回。
+ *
+ * 翻页动作用「下一页」按钮模拟：真实组件 next-click/current-change
+ * 回传的就是新页码（数字，不是对象），替身如实照搬这个签名。
+ */
+export const ElPagination = defineComponent({
+  name: 'el-pagination',
+  inheritAttrs: false,
+  emits: ['current-change', 'size-change'],
+  setup(_, { attrs, emit }) {
+    // 当前页码取自绑定值 currentPage；点击"下一页"即翻到 currentPage + 1，
+    // 与真实组件 current-change 回传新页码（数字）的签名一致。
+    const current = Number(attrs.currentPage) || 1
+    return () =>
+      h(
+        'div',
+        {
+          ...attrs,
+          class: mergeStubClass(attrs, 'el-pagination-stub'),
+          'data-total': attrs.total,
+          'data-page': current
+        },
+        [
+          h(
+            'button',
+            {
+              class: 'el-pagination__next-stub',
+              onClick: () => emit('current-change', current + 1)
+            },
+            'next'
+          )
+        ]
+      )
   }
 })
 
@@ -330,6 +404,8 @@ export function elementStubs() {
       'el-icon': ElIcon,
       'el-tooltip': ElTooltip,
       'el-badge': ElBadge,
+      'el-alert': ElAlert,
+      'el-pagination': ElPagination,
       pagination: Pagination,
       'right-toolbar': RightToolbar
     }

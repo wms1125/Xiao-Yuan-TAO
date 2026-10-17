@@ -2,7 +2,9 @@ package com.ruoyi.campus.payment.impl;
 
 import com.ruoyi.campus.domain.CampusOrder;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
+import com.ruoyi.campus.observability.CampusMetrics;
 import com.ruoyi.campus.payment.ICampusPaymentService;
+import com.ruoyi.campus.payment.IPaymentGateway;
 import com.ruoyi.campus.payment.PayCommand;
 import com.ruoyi.campus.payment.PayNotify;
 import com.ruoyi.campus.payment.PayResult;
@@ -30,9 +32,13 @@ public class CampusPaymentServiceImpl implements ICampusPaymentService {
     private static final int STATUS_WAIT_PAY = 0;
     private static final int STATUS_PAID = 1;
 
+    /** 渠道不可解析时的打标值，与 {@code CampusPaymentController.MODE_UNAVAILABLE} 同义 */
+    private static final String MODE_UNAVAILABLE = "unavailable";
+
     private final PaymentGatewayResolver resolver;
     private final PaymentChannelProperties props;
     private final CampusOrderMapper orderMapper;
+    private final CampusMetrics metrics;
 
     /**
      * 构造器注入：三个依赖里有两者（resolver / props）不是可 mock 的简单协作者，
@@ -41,20 +47,53 @@ public class CampusPaymentServiceImpl implements ICampusPaymentService {
     @Autowired
     public CampusPaymentServiceImpl(PaymentGatewayResolver resolver,
                                     PaymentChannelProperties props,
-                                    CampusOrderMapper orderMapper) {
+                                    CampusOrderMapper orderMapper,
+                                    CampusMetrics metrics) {
         this.resolver = resolver;
         this.props = props;
         this.orderMapper = orderMapper;
+        this.metrics = metrics;
     }
 
     @Override
     public PayResult pay(PayCommand cmd) {
-        return resolver.resolve().pay(cmd);
+        IPaymentGateway gateway;
+        try {
+            gateway = resolver.resolve();
+        } catch (RuntimeException e) {
+            // 渠道解析失败（未注册/未启用）同样计入失败：这是"用户根本付不出钱"的最直接原因。
+            // 若只在拿到网关之后打点，最该告警的场景反而没有任何数据。
+            metrics.payment(String.valueOf(props.getChannel()), MODE_UNAVAILABLE, false);
+            throw e;
+        }
+        boolean success = false;
+        try {
+            PayResult result = gateway.pay(cmd);
+            success = result.isSuccess();
+            return result;
+        } finally {
+            // finally 打点：渠道抛异常时也计为 failed，否则"渠道挂了"在指标上是空白
+            metrics.payment(gateway.channel(), gateway.mode(), success);
+        }
     }
 
     @Override
     public RefundResult refund(RefundCommand cmd) {
-        return resolver.resolve().refund(cmd);
+        IPaymentGateway gateway;
+        try {
+            gateway = resolver.resolve();
+        } catch (RuntimeException e) {
+            metrics.refund(String.valueOf(props.getChannel()), MODE_UNAVAILABLE, false);
+            throw e;
+        }
+        boolean success = false;
+        try {
+            RefundResult result = gateway.refund(cmd);
+            success = result.isSuccess();
+            return result;
+        } finally {
+            metrics.refund(gateway.channel(), gateway.mode(), success);
+        }
     }
 
     @Override

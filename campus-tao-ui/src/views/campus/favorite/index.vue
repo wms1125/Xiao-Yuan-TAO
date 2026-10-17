@@ -19,7 +19,10 @@
         <div class="campus-stat">
           <div class="campus-stat__label">收藏总数</div>
           <div class="campus-stat__value">{{ favoriteList.length }}</div>
-          <div class="campus-stat__hint">同一商品不会重复收藏</div>
+          <div class="campus-stat__hint">
+            <template v-if="atLimit">已达上限，需先取消部分收藏再添加</template>
+            <template v-else>同一商品不会重复收藏</template>
+          </div>
         </div>
         <div class="campus-stat">
           <div class="campus-stat__label">在售商品</div>
@@ -125,6 +128,9 @@ function goDetail(row) {
   router.push({ path: '/campus/mall/detail/' + row.productId })
 }
 
+/** 是否已达上限：达到后入口处直接提示，不再发一次注定失败的请求 */
+const atLimit = computed(() => favoriteList.value.length >= MAX_FAVORITES)
+
 async function getList() {
   loading.value = true
   try {
@@ -134,6 +140,13 @@ async function getList() {
     loading.value = false
   }
 }
+
+/**
+ * 收藏上限：与后端 ICampusFavoriteService.MAX_FAVORITES 保持一致。
+ * 上限是**服务端强制**的（超限接口直接报错），前端这里只是把边界显示出来，
+ * 让用户在看到提示时就知道为什么加不进去——不靠前端拦截成功率。
+ */
+const MAX_FAVORITES = 200
 
 /** 取消与请求统一包在 try 内：用户点取消时 confirm 的拒绝被 catch 吞掉，
  *  避免 `await confirm().catch(throw)` 把取消异常抛出 async 函数形成未处理的 Promise 拒绝。 */

@@ -8,12 +8,16 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.campus.domain.CampusMessage;
+import com.ruoyi.campus.domain.vo.CampusConversationPage;
 import com.ruoyi.campus.service.ICampusMessageService;
 
 import java.util.HashMap;
@@ -36,11 +40,28 @@ public class CampusMessageController extends BaseController {
     @Autowired
     private ICampusMessageService messageService;
 
-    /** 会话列表（我参与过的订单，带未读数） */
+    /**
+     * 会话列表（分页，最新在前）。
+     *
+     * <p>曾经这里是无界列表：用户参与过的订单越多，返回体越大、聚合越慢。
+     * 现在是标准的 {@link TableDataInfo}——与我的订单/售后列表保持一致，
+     * 且不再有任何"取全量"的入口。</p>
+     *
+     * @param pageNum 页码，从 1 开始；小于 1 归一为 1
+     * @param pageSize 每页条数，超过 {@link ICampusMessageService#MAX_PAGE_SIZE} 直接报错
+     */
     @PreAuthorize("@ss.hasPermi('campus:message:list')")
     @GetMapping("/list")
-    public AjaxResult list() {
-        return AjaxResult.success(messageService.selectConversations(SecurityUtils.getUserId()));
+    public TableDataInfo list(@RequestParam(defaultValue = "1") Integer pageNum,
+                              @RequestParam(defaultValue = "20") Integer pageSize) {
+        CampusConversationPage page = messageService.selectConversations(
+                SecurityUtils.getUserId(), pageNum, pageSize);
+        TableDataInfo rspData = new TableDataInfo();
+        rspData.setCode(HttpStatus.SUCCESS);
+        rspData.setMsg("查询成功");
+        rspData.setTotal(page.getTotal());
+        rspData.setRows(page.getRows());
+        return rspData;
     }
 
     /** 我的未读消息总数（侧边栏红点用） */

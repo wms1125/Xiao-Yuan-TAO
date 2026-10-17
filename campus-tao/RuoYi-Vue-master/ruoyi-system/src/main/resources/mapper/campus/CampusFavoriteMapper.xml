@@ -60,6 +60,20 @@
         values (#{userId}, #{productId})
     </insert>
 
+    <!--
+      带上限守卫的插入。
+
+      为什么不能只在 Service 里"先 count 再 insert"：两个并发请求可能同时通过
+      count 检查，然后都插入成功，收藏数就超了。这里把 count 判断塞进 INSERT 的
+      WHERE 子查询，整条语句由 InnoDB 原子执行，从根源上消掉这个窗口。
+      插入 0 行即代表已到上限，由调用方据此给出明确提示。
+    -->
+    <insert id="insertIfUnderLimit">
+        insert into campus_favorite (user_id, product_id)
+        select #{userId}, #{productId} from dual
+        where (select count(*) from campus_favorite where user_id = #{userId}) &lt; #{limit}
+    </insert>
+
     <!-- 带 user_id 条件：越权取消在 SQL 层即被拦住，返回 0 行而不报错 -->
     <delete id="deleteByUserAndProduct">
         delete from campus_favorite where user_id = #{userId} and product_id = #{productId}

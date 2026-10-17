@@ -26,8 +26,10 @@ ALLOW_NEW=("$@")
 # 迁移脚本写入的菜单种子：
 #   V2：3 个页面菜单(2011~2013) + 6 个按钮权限(2115~2120) = 9
 #   V3：3 个按钮权限(2121~2123) = 3
-#   合计 12。若仅写 9，V3 那 3 行会被误判为「非预期差异」。
-EXPECT_DELTA="${EXPECT_DELTA:-sys_menu=12 sys_role_menu=12}"
+#   V6：1 个通知中心菜单(notice) = 1
+#   合计 13。若仅写 12，V6 那 1 行会被误判为「非预期差异」。
+# 新增带 sys_menu 种子的迁移时，这里必须同步加账——这是本文件的既定约定。
+EXPECT_DELTA="${EXPECT_DELTA:-sys_menu=13 sys_role_menu=12}"
 # 运行期由应用写入的表（应用启动/调度会自然产生数据，与迁移无关）
 VOLATILE="${VOLATILE:-sys_job_log sys_logininfor sys_oper_log sys_notice_read qrtz_fired_triggers qrtz_scheduler_state qrtz_simple_triggers qrtz_triggers}"
 [ "${STRICT:-0}" = "1" ] && { EXPECT_DELTA=""; VOLATILE=""; }

@@ -27,6 +27,10 @@ vi.mock('@/api/campus/review', () => ({
   addReview: vi.fn()
 }))
 
+vi.mock('@/api/campus/payment', () => ({
+  getPaymentChannel: vi.fn()
+}))
+
 import { ElMessageBox } from 'element-plus'
 import {
   listOrder,
@@ -39,6 +43,7 @@ import {
   getLogisticsTrace
 } from '@/api/campus/order'
 import { addReview } from '@/api/campus/review'
+import { getPaymentChannel } from '@/api/campus/payment'
 import OrderPage from '@/views/campus/order/index.vue'
 import { elementStubs, clickButton, statValues, Pagination } from './support/element-stubs'
 
@@ -82,6 +87,10 @@ describe('校园淘 - 订单页（分页与概览联动）', () => {
     ElMessageBox.prompt.mockResolvedValue({ value: '' })
     getOrder.mockResolvedValue({ code: 200, data: orderRow() })
     getLogisticsTrace.mockResolvedValue({ code: 200, data: { providerEnabled: true, traces: [] } })
+    getPaymentChannel.mockResolvedValue({
+      code: 200,
+      data: { mode: 'sandbox', realMoney: false, notice: '沙箱演示环境：支付与退款仅记账于站内余额，不产生真实扣款' }
+    })
     stubApi()
   })
 
@@ -278,5 +287,40 @@ describe('校园淘 - 订单页（分页与概览联动）', () => {
       content: '成色很好'
     })
     expect(wrapper.vm.reviewOpen).toBe(false)
+  })
+
+  it('沙箱支付：页面显式提示「不产生真实扣款」，文案取自服务端', async () => {
+    const wrapper = await mountPage()
+
+    const alert = wrapper.find('.el-alert-stub')
+    expect(alert.exists()).toBe(true)
+    // 配色表达风险等级：沙箱是 info，不是 warning/error
+    expect(alert.attributes('data-type')).toBe('info')
+    expect(alert.text()).toContain('不产生真实扣款')
+  })
+
+  it('渠道不可用：提示条升级为 error 配色，避免用户以为能正常支付', async () => {
+    getPaymentChannel.mockResolvedValue({
+      code: 200,
+      data: {
+        mode: 'unavailable',
+        realMoney: false,
+        notice: '当前支付渠道不可用（未注册或商户参数未配置齐），支付与退款将无法完成'
+      }
+    })
+    const wrapper = await mountPage()
+
+    const alert = wrapper.find('.el-alert-stub')
+    expect(alert.attributes('data-type')).toBe('error')
+    expect(alert.text()).toContain('不可用')
+  })
+
+  it('负向：资金语义接口失败时不显示提示条，订单列表照常渲染（旁路不阻断主流程）', async () => {
+    getPaymentChannel.mockRejectedValue(new Error('network'))
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('.el-alert-stub').exists()).toBe(false)
+    expect(listOrder).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('二手自行车')
   })
 })

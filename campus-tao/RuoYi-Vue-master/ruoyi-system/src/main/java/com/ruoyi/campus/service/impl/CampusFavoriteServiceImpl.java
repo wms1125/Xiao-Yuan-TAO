@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+import static com.ruoyi.campus.service.ICampusFavoriteService.MAX_FAVORITES;
+
 /**
  * 商品收藏服务实现（校园淘）
  *
@@ -53,11 +55,24 @@ public class CampusFavoriteServiceImpl implements ICampusFavoriteService {
             favoriteMapper.deleteByUserAndProduct(userId, productId);
             return false;
         }
-        CampusFavorite favorite = new CampusFavorite();
-        favorite.setUserId(userId);
-        favorite.setProductId(productId);
-        favoriteMapper.insertCampusFavorite(favorite);
+        // 已到上限时先给明确提示：这条路径覆盖绝大多数情况，
+        // 不必等 INSERT 失败再回头查一遍。
+        if (favoriteMapper.countByUserId(userId) >= MAX_FAVORITES) {
+            throw new ServiceException(limitMessage());
+        }
+        // 竞态兜底：并发下 count 已通过但插入时又满了，insertIfUnderLimit 返回 0 行。
+        // 不能靠"再查一次 count"来判断——那时别人可能刚好取消了一条，count 又降下来，
+        // 会把真正的"已超限"误判成别的错误。
+        int inserted = favoriteMapper.insertIfUnderLimit(userId, productId, MAX_FAVORITES);
+        if (inserted == 0) {
+            throw new ServiceException(limitMessage());
+        }
         return true;
+    }
+
+    /** 超限提示必须说明上限值和下一步动作，否则用户不知道该干什么 */
+    private String limitMessage() {
+        return "收藏数量已达上限（最多 " + MAX_FAVORITES + " 个），请先取消部分收藏后再试";
     }
 
     @Override

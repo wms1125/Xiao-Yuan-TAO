@@ -29,6 +29,14 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- 业务指标 API（MeterRegistry / Counter / Gauge）：校园淘 CampusMetrics 在编译期依赖。
+             注册表实现（Prometheus）由 ruoyi-admin 的 micrometer-registry-prometheus 在运行时提供，
+             本模块只依赖核心 API，避免把具体注册表焊死在业务模块里。 -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+        </dependency>
+
         <!-- JSON 解析：campus 外呼通道与物流轨迹 Provider 解析网关响应；显式声明避免依赖传递被上游升级破坏 -->
         <dependency>
             <groupId>com.alibaba.fastjson2</groupId>
@@ -47,6 +55,31 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+          HTTP 层测试（CampusHttpLayerTest）需要：MockMvcBuilders.standaloneSetup 会实例化
+          DispatcherServlet，而 spring-boot-starter-test 只带 spring-test、不带 spring-webmvc。
+          若不加这条，测试会在 MockMvcBuilders:77 抛 NoClassDefFoundError，
+          表现为"测试跑不起来"而不是"测试失败"，容易被误判成环境问题。
+          只进 test 作用域：业务代码不依赖 MVC 框架的具体实现。
+        -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          Servlet API 显式声明为 provided：主代码 TraceIdFilter 直接实现 jakarta.servlet.Filter，
+          "编译期需要、运行期由容器提供"正是 provided 的语义。
+          此前靠 ruoyi-common 的 compile 作用域传递进来——能用，但属于隐式依赖：
+          上游把这一条删掉或改作用域，本模块会在主源码编译阶段炸掉，且报错指向业务代码而非 pom。
+          注意不能声明为 test：直接声明会覆盖传递依赖的作用域（Maven 就近优先），
+          实测把主源码编译打挂（TraceIdFilter 报"找不到 jakarta.servlet"）。
+        -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
 
     </dependencies>
 
@@ -59,12 +92,13 @@
               - check：绑定 verify 阶段，行覆盖率低于阈值即构建失败。
               阈值为"棘轮基线"：以实测值向下取整设定，只允许上调，不允许下调。
               历史：36.05% / 19.09% →（2026-10-16 补 service 层交易单测）55% / 40%
-                   →（2026-10-17 补商品/购物车 service 单测与支付网关用例）70% / 62%。
-              本次上调依据：jacoco.csv 独立实算 行 74.80%（1054/1409）、分支 67.32%（346/514），
-              阈值在实测值下方留出约 4~5 个百分点——余量只为吸收无关改动的正常抖动，
+                   →（2026-10-17 补商品/购物车 service 单测与支付网关用例）70% / 62%
+                   →（2026-10-17 补 HTTP 层测试与权限守护）71% / 63%。
+              本次上调依据：jacoco.csv 独立实算 行 76.02%（1119/1472）、分支 68.73%（367/534），
+              阈值在实测值下方留出约 5 个百分点——余量只为吸收无关改动的正常抖动，
               不再容纳"20 点级别的覆盖率塌方"。
               Controller 层与 DTO 层已 100% 覆盖；service 层交易链路（下单/支付/取消/
-              超时取消/售后审核）本轮补齐，剩余缺口在 notify/logistics 等外部网关适配层。
+              超时取消/售后审核）已补齐，剩余缺口在 notify/logistics 等外部网关适配层。
             -->
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -111,12 +145,12 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.70</minimum>
+                                            <minimum>0.71</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.62</minimum>
+                                            <minimum>0.63</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

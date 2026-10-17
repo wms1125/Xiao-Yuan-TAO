@@ -36,6 +36,16 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- 可观测性：Prometheus 抓取端点（/actuator/prometheus）
+             版本由 spring-boot-dependencies 的 micrometer-bom 统一管理，此处不写版本。
+             注意：本构件已同步进交付包的离线仓库 .tools/m2-repo，
+             否则 verify.bat 默认的 -o 离线构建会在干净机器上失败（v1.0.21 已踩过一次）。 -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
          <!-- Mysql驱动包 -->
         <dependency>
             <groupId>com.mysql</groupId>
@@ -84,6 +94,30 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
+        <!-- 单元测试：越权拦截的运行时断言（CampusAuthorizationTest）
+             放在 ruoyi-admin 而不是 ruoyi-system，是因为它需要「真实的」PermissionService
+             （ruoyi-framework 里的 @Service("ss")），而 framework 依赖 system，反向不可行。
+             spring-security-config 提供 @EnableMethodSecurity——即生产环境
+             SecurityConfig 上那个让 @PreAuthorize 真正生效的注解。
+             spring-boot-starter-test 只进 test 作用域，不改变发行包的依赖面。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          注意作用域：**不能写 test**。
+          spring-security-config 本来就通过 ruoyi-framework 的 spring-boot-starter-security
+          以 compile 作用域传递进来，而 ruoyi-framework 的 SecurityConfig 在运行期真的要加载
+          HeadersConfigurer$CacheControlConfig。直接声明成 test 会按"就近优先"把传递依赖降级，
+          发行 jar 里就少了这些类，启动即 NoClassDefFoundError（本仓库实测过一次）。
+          这里显式声明为 compile：既是"用到什么就声明什么"，也把这个坑钉在注释里。
+        -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-config</artifactId>
         </dependency>
 
     </dependencies>

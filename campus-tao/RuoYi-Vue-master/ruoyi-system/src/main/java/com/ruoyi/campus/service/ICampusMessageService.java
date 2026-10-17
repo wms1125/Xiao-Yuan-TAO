@@ -1,6 +1,7 @@
 package com.ruoyi.campus.service;
 
 import com.ruoyi.campus.domain.CampusMessage;
+import com.ruoyi.campus.domain.vo.CampusConversationPage;
 
 import java.util.List;
 import java.util.Map;
@@ -15,8 +16,22 @@ import java.util.Map;
  */
 public interface ICampusMessageService {
 
-    /** 会话列表（我参与过的订单，最新在前，带未读数） */
-    List<Map<String, Object>> selectConversations(Long userId);
+    /**
+     * 会话列表（分页）：我参与过的订单，最新在前，带未读数。
+     *
+     * <p><b>只提供分页版本</b>：会话数随订单线性增长，无界列表会让响应体与聚合耗时一起失控。
+     * {@code pageSize} 超过 {@link #MAX_PAGE_SIZE} 会被拒绝而不是静默截断——
+     * 静默截断会让调用方以为"这就是全部"。</p>
+     *
+     * @return 行与总数同源，前端可直接渲染分页控件
+     */
+    CampusConversationPage selectConversations(Long userId, int pageNum, int pageSize);
+
+    /** 默认每页条数 */
+    int DEFAULT_PAGE_SIZE = 20;
+
+    /** 每页条数硬上限（超过即报错，防止一次拉全量） */
+    int MAX_PAGE_SIZE = 100;
 
     /** 某订单会话的消息（双方可见，按时间正序） */
     List<CampusMessage> selectByOrderNo(String orderNo, Long userId);

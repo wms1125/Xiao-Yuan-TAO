@@ -1,10 +1,13 @@
 package com.ruoyi.campus;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
@@ -19,8 +22,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.ruoyi.campus.controller.CampusMessageController;
 import com.ruoyi.campus.controller.CampusMessageController.SendBody;
 import com.ruoyi.campus.domain.CampusMessage;
+import com.ruoyi.campus.domain.vo.CampusConversationPage;
 import com.ruoyi.campus.service.ICampusMessageService;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
+import com.ruoyi.common.exception.ServiceException;
 
 /**
  * Controller 层测试：站内信接口。
@@ -61,12 +68,55 @@ class CampusControllerMessageTest {
     }
 
     @Test
-    @DisplayName("会话列表：以登录用户为作用域")
+    @DisplayName("会话列表：以登录用户为作用域，按分页参数查询")
     void listUsesLoginUser() {
-        AjaxResult result = messageController.list();
+        when(messageService.selectConversations(STUDENT_ID, 1, 20))
+                .thenReturn(new CampusConversationPage(1L, Collections.emptyList()));
 
-        assertEquals(200, result.get(AjaxResult.CODE_TAG));
-        verify(messageService).selectConversations(STUDENT_ID);
+        TableDataInfo result = messageController.list(1, 20);
+
+        assertEquals(HttpStatus.SUCCESS, result.getCode());
+        verify(messageService).selectConversations(STUDENT_ID, 1, 20);
+    }
+
+    @Test
+    @DisplayName("会话列表：返回标准表格分页结构，total 与 rows 同源")
+    void listReturnsTableDataInfo() {
+        List<Map<String, Object>> rows = Collections.singletonList(
+                Collections.singletonMap("orderNo", ORDER_NO));
+        when(messageService.selectConversations(STUDENT_ID, 1, 20))
+                .thenReturn(new CampusConversationPage(7L, rows));
+
+        TableDataInfo result = messageController.list(1, 20);
+
+        assertEquals(HttpStatus.SUCCESS, result.getCode());
+        assertEquals(7L, result.getTotal());
+        // 行不能丢：total 与 rows 必须是同一次查询的结果
+        assertEquals(rows, result.getRows());
+    }
+
+    @Test
+    @DisplayName("会话列表：越界分页参数照样传服务端，由其归一后返回空行")
+    void listPassesOutOfRangePageDown() {
+        when(messageService.selectConversations(STUDENT_ID, 0, 0))
+                .thenReturn(new CampusConversationPage(0L, Collections.emptyList()));
+
+        assertEquals(0L, messageController.list(0, 0).getTotal());
+        // Controller 不自己"修正"参数——归一规则只有 Service 一处，避免两处漂移
+        verify(messageService).selectConversations(STUDENT_ID, 0, 0);
+    }
+
+    @Test
+    @DisplayName("负向：超大每页条数原样下传，由服务端拒绝（Controller 不静默截断）")
+    void listPassesOversizedPageSizeDown() {
+        when(messageService.selectConversations(STUDENT_ID, 1, ICampusMessageService.MAX_PAGE_SIZE + 1))
+                .thenThrow(new ServiceException("每页最多 " + ICampusMessageService.MAX_PAGE_SIZE + " 条会话"));
+
+        // 若 Controller 自行截断到 100，这里拿到的是"正常分页结果"，
+        // 调用方永远不知道自己的请求被改了——所以截断必须由服务端显式报错。
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> messageController.list(1, ICampusMessageService.MAX_PAGE_SIZE + 1));
+        assertEquals("每页最多 " + ICampusMessageService.MAX_PAGE_SIZE + " 条会话", ex.getMessage());
     }
 
     @Test

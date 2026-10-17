@@ -20,6 +20,14 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MIGRATION_DIR="$REPO_ROOT/ruoyi-admin/src/main/resources/db/migration"
 FULL_SQL="${FULL_SQL:-$REPO_ROOT/../sql/campus_tao_full.sql}"
 
+# 迁移数量与版本号**从迁移目录推导**，不写死。
+# 曾经写死 "Successfully applied 5 migrations" 和 "1,2,3,4,5"，
+# 每加一个 V* 这个门禁就假红一次，最后没人敢信它——推导才是可持续的。
+MIG_COUNT=$(find "$MIGRATION_DIR" -maxdepth 1 -name 'V*.sql' | wc -l | tr -d ' ')
+MIG_VERSIONS=$(find "$MIGRATION_DIR" -maxdepth 1 -name 'V*.sql' -printf '%f\n' \
+  | sed -E 's/^V([0-9]+)__.*/\1/' | sort -n | paste -sd, -)
+[ "$MIG_COUNT" -gt 0 ] || { echo "未在 $MIGRATION_DIR 找到任何迁移"; exit 1; }
+
 REF_DB="${REF_DB:-campus_tao_ref}"
 TEST_DB="${TEST_DB:-campus_tao_flyway}"
 DB_HOST="${DB_HOST:-127.0.0.1}"
@@ -66,20 +74,29 @@ fi
 
 # ---------- 1. 空库迁移 ----------
 echo
-echo "[1/5] 空库执行迁移（V1 + V2 + V3 + V4）"
+echo "[1/5] 空库执行迁移（共 $MIG_COUNT 个：$MIG_VERSIONS）"
 sql "DROP DATABASE IF EXISTS $TEST_DB; CREATE DATABASE $TEST_DB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
 out=$(flyway migrate)
-if echo "$out" | grep -q "Successfully applied 4 migrations"; then
-  ok "迁移成功：Successfully applied 4 migrations"
+if echo "$out" | grep -q "Successfully applied $MIG_COUNT migrations"; then
+  ok "迁移成功：Successfully applied $MIG_COUNT migrations"
 else
   bad "迁移未按预期完成"; echo "$out" | tail -8 | sed 's/^/      /'
 fi
 v=$(tsql "select group_concat(version order by installed_rank) from flyway_schema_history where success=1;")
-[ "$v" = "1,2,3,4" ] && ok "flyway_schema_history 记录 V1,V2,V3,V4" || bad "版本记录异常：$v"
+LAST_VER=${MIG_VERSIONS##*,}
+[ "$v" = "$MIG_VERSIONS" ] && ok "flyway_schema_history 记录 V1~V$LAST_VER（共 $MIG_COUNT 个）" || bad "版本记录异常：$v（期望 $MIG_VERSIONS）"
 t=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB';")
 [ "$t" = "47" ] && ok "迁移后表数 47（42 基线 + 4 新增 + 1 版本表）" || bad "迁移后表数异常：$t（期望 47）"
 i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name='idx_user_time'));")
 [ "$i" = "4" ] && ok "V4 复合索引已生效（4/4）" || bad "V4 索引缺失：$i（期望 4）"
+c=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB' and table_name like 'campus\\_%' and table_collation <> 'utf8mb4_0900_ai_ci';")
+[ "$c" = "0" ] && ok "V5 排序规则已统一（0 张非 0900 校园表）" || bad "仍有 $c 张校园表排序规则不一致"
+m=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and table_name='campus_message' and index_name='idx_from_user' and seq_in_index=1;")
+[ "$m" = "1" ] && ok "V6 idx_from_user 已生效（UNION ALL 分支的 from 侧索引）" || bad "V6 idx_from_user 缺失：$m"
+n=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and table_name='campus_notice' and index_name='idx_user_read_time' and seq_in_index=1;")
+[ "$n" = "1" ] && ok "V6 idx_user_read_time 已生效（通知中心排序索引）" || bad "V6 idx_user_read_time 缺失：$n"
+mn=$(tsql "select count(*) from sys_menu where parent_id=2000 and path='notice' and component='campus/notice/index';")
+[ "$mn" = "1" ] && ok "V6 通知中心菜单已注册" || bad "V6 菜单缺失：$mn"
 
 # ---------- 2. 逐表行数核对 ----------
 echo
@@ -97,7 +114,7 @@ fi
 
 # ---------- 3. 回滚 ----------
 echo
-echo "[3/5] 回滚到空库（V4 → V1）"
+echo "[3/5] 回滚到空库（V$MIG_VERSIONS → V1）"
 ( cd "$REPO_ROOT/db/rollback" && DB_NAME="$TEST_DB" DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" \
   DB_USERNAME="$DB_USERNAME" DB_PASSWORD="$DB_PASSWORD" bash rollback.sh 0 ) > /tmp/rb.txt 2>&1
 rc=$?
@@ -113,7 +130,7 @@ i=$(sql "select count(*) from information_schema.statistics where table_schema='
 echo
 echo "[4/5] 回滚后再次迁移（验证可重放）"
 out=$(flyway migrate)
-if echo "$out" | grep -q "Successfully applied 4 migrations"; then
+if echo "$out" | grep -q "Successfully applied $MIG_COUNT migrations"; then
   ok "再次迁移成功"
 else
   bad "再次迁移未按预期完成"; echo "$out" | tail -8 | sed 's/^/      /'

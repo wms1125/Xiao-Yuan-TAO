@@ -33,12 +33,24 @@
     </select>
 
     <!--
-      会话列表：我参与过的订单 = 我买过的订单 ∪ 我作为卖方参与的订单。
+      会话列表（分页）：我参与过的订单 = 我买过的订单 ∪ 我作为卖方参与的订单。
       "我作为卖方"通过 campus_order_item → campus_product.seller_id 推导
       （订单不按卖家拆单，一个订单可能跨多个卖家，故必须 distinct）。
-      商品被删除后该子查询取不到，属于可接受降级——至少买方视角始终完整。
+
+      **为什么把 `from_user_id = ? or to_user_id = ?` 拆成 UNION ALL**
+      原写法是单条 OR 查询。实测 EXPLAIN：优化器为了" GROUP BY 能直接吃
+      idx_order_time 的顺序、免建临时表"，选择整条扫 idx_order_time，
+      扫描量 = 全表消息数（当时 1019 行），filtered 只有 19%。
+      表长到百万级时，每一页都要全表扫一遍索引。
+      拆成 UNION ALL 后两支各走自己的索引（from 侧走 idx_from_user，
+      to 侧走 idx_to_read 的首列），EXPLAIN 的 type 从 index 变 ref，
+      读取量只与"该用户自己的消息数"相关，与表总量脱钩。
+
+      `i_am_receiver` 是人为加的标记列：第二支的消息就是"发给我的"，
+      未读数只在这支里数。用它而不是 `to_user_id = #{userId}`，
+      是因为 UNION ALL 之后外层看不到原表的列名。
     -->
-    <select id="selectConversations" resultType="java.util.Map">
+    <select id="selectConversationsPaged" resultType="java.util.Map">
         select t.order_no as orderNo,
                t.last_content as lastContent,
                t.last_time as lastTime,
@@ -50,19 +62,41 @@
                (select count(*) from campus_order_item oi
                  where oi.order_no = t.order_no) as itemCount
         from (
-            select order_no,
+            select x.order_no as order_no,
                    (select content from campus_message m2
-                     where m2.order_no = m.order_no
+                     where m2.order_no = x.order_no
                      order by m2.create_time desc, m2.message_id desc limit 1) as last_content,
-                   max(create_time) as last_time,
-                   sum(case when to_user_id = #{userId} and is_read = 0 then 1 else 0 end) as unread
-            from campus_message m
-            where from_user_id = #{userId} or to_user_id = #{userId}
-            group by order_no
+                   max(x.create_time) as last_time,
+                   sum(case when x.i_am_receiver = 1 and x.is_read = 0 then 1 else 0 end) as unread
+            from (
+                select order_no, create_time, is_read, 0 as i_am_receiver
+                from campus_message
+                where from_user_id = #{userId}
+                union all
+                select order_no, create_time, is_read, 1 as i_am_receiver
+                from campus_message
+                where to_user_id = #{userId}
+            ) x
+            group by x.order_no
+            order by last_time desc
+            limit #{offset}, #{limit}
         ) t
         left join campus_order o on o.order_no = t.order_no
         left join sys_user bu on bu.user_id = o.user_id
         order by t.last_time desc
+    </select>
+
+    <!--
+      会话总数。必须与上面用**同一套取数结构**（UNION 去重）：
+      若这里用 `or` 的 count(distinct order_no)，两边索引选择不同，
+      total 与 rows 可能不一致。UNION 会自动去重，正好等价于 distinct order_no。
+    -->
+    <select id="countConversations" resultType="java.lang.Long">
+        select count(*) from (
+            select order_no from campus_message where from_user_id = #{userId}
+            union
+            select order_no from campus_message where to_user_id = #{userId}
+        ) u
     </select>
 
     <select id="countUnread" resultType="java.lang.Integer">

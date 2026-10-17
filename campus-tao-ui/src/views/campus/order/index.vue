@@ -11,6 +11,17 @@
         </div>
       </div>
 
+      <!-- 资金语义提示：沙箱要说明"不扣真钱"，真实渠道要说明"会扣钱"，
+           渠道不可用更要说明——三种情形都不能让用户靠猜。 -->
+      <el-alert
+        v-if="payInfo"
+        class="pay-mode-alert"
+        :type="payAlertType"
+        :title="payInfo.notice"
+        :closable="false"
+        show-icon
+      />
+
       <!-- 状态筛选 -->
       <div class="status-filter">
         <button
@@ -305,6 +316,7 @@ import {
   syncLogisticsTrace
 } from '@/api/campus/order'
 import { addReview } from '@/api/campus/review'
+import { getPaymentChannel } from '@/api/campus/payment'
 
 const router = useRouter()
 
@@ -326,6 +338,15 @@ const reviewLoading = ref(false)
 const reviewForm = ref({ orderNo: '', orderId: null, items: [] })
 // 概览数字改由服务端按状态聚合（分页后不能再遍历当前页推导）
 const statusStats = ref({})
+// 支付资金语义：文案由服务端下发，前端只管展示与配色
+const payInfo = ref(null)
+// 不可用用 error、真实渠道用 warning、沙箱用 info——配色本身就是风险等级
+const payAlertType = computed(() => {
+  const mode = payInfo.value?.mode
+  if (mode === 'unavailable') return 'error'
+  if (mode === 'real') return 'warning'
+  return 'info'
+})
 
 const queryParams = reactive({
   pageNum: 1,
@@ -431,6 +452,18 @@ function getStats() {
 function refresh() {
   getList()
   getStats()
+}
+
+// 支付资金语义（沙箱/真实/不可用）。取不到就不提示——
+// 提示条是"知情"用的旁路信息，不能因为拿不到而挡住下单与支付。
+function loadPayInfo() {
+  getPaymentChannel()
+    .then((res) => {
+      payInfo.value = res.data || null
+    })
+    .catch(() => {
+      payInfo.value = null
+    })
 }
 
 function handleStatusFilter(status) {
@@ -577,10 +610,15 @@ function submitReview() {
 
 onMounted(() => {
   refresh()
+  loadPayInfo()
 })
 </script>
 
 <style lang="scss" scoped>
+.pay-mode-alert {
+  margin-bottom: 12px;
+}
+
 .status-filter {
   display: flex;
   flex-wrap: wrap;

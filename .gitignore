@@ -39,3 +39,17 @@ logs/
 *.swp
 .DS_Store
 Thumbs.db
+
+# ===== 浏览器 E2E 产物（Playwright）=====
+# 失败时的 trace/video/截图体积大且不可复现，只作为 CI 工件上传，不入库。
+campus-tao-ui/test-results/
+campus-tao-ui/playwright-report/
+campus-tao-ui/.pw-out/
+# ===== Playwright 证据目录（outputDir 可按 PW_OUTPUT_DIR 覆盖，全部不入库）=====
+campus-tao-ui/.pw-*/
+
+# ===== Python 缓存（tools/ 下的校验脚本会生成）=====
+__pycache__/
+
+# ===== 覆盖率报告按日期分目录时产生（避免与既有 coverage/ 规则冲突）=====
+campus-tao-ui/coverage-*/
