@@ -31,8 +31,8 @@
 ### 验证
 - 后端 `mvn -B -o clean verify` 通过（离线，覆盖率/Checkstyle/SpotBugs 门禁不降级）。
 - Flyway：空库 4 版本迁移 + U4 回滚 + 重放全部通过；交付库 `campus_tao` 已在 v4。
-- CI 六 job 全绿；新增的 `release-image` workflow 在 tag `v1.0.22` 上实跑，产出两镜像 digest。
-- 制品：Release `v1.0.22` 挂 `ruoyi-admin-v1.0.22.jar`、`campus-tao-ui-dist-v1.0.22.zip`、`campus-tao-sbom-v1.0.22.zip`、`SHA256SUMS.txt`，以及镜像清单 `campus-tao-images-v1.0.22.txt`。
+- CI 六 job 全绿；`release-image` 修正 `--repo` 后在 tag `v1.0.22` 上重跑，两镜像 job 与 `record` job 全部 success。
+- 制品：Release `v1.0.22`（已发布，Latest）挂 `ruoyi-admin-v1.0.22.jar`、`campus-tao-ui-dist-v1.0.22.zip`、`campus-tao-sbom-v1.0.22.zip`、`SHA256SUMS.txt`，以及镜像清单 `campus-tao-images-v1.0.22.txt`（含 backend / ui 两条 digest）。
 
 ### 未纳入本轮（如实记录）
 - **镜像仅推 GHCR、未做漏洞扫描与签名**（镜像层 CVE 与 cosign 签名留待后续）。
