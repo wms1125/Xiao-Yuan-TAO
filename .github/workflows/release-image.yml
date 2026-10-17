@@ -125,7 +125,7 @@ jobs:
 
       # 只扫描有修复版本的 CRITICAL/HIGH，避免「基础镜像里无法修复的漏洞」把发布永久卡红。
       - name: Trivy 扫描
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}@${{ steps.digest.outputs.digest }}
           format: json
