@@ -6,8 +6,10 @@ name: Release Images
 #   同时打 <version> 与 latest 两个 tag。
 # - 每个镜像的 digest 先作为 Actions artifact 归档；record job 再把汇总文件
 #   挂到同名 GitHub Release，使「取制品即用」覆盖到容器镜像层。
+# - scan job 按 digest 用 Trivy 扫描两个镜像的 CRITICAL/HIGH 漏洞（忽略无修复版本的），
+#   CRITICAL 即判失败；报告随 Release 一起归档，作为「镜像里到底有什么」的证据。
 # - 与 ci.yml 的 docker job 分工：ci.yml 只验证镜像能构建、能起栈；
-#   本 workflow 负责发布与归档，只在 tag 上运行。
+#   本 workflow 负责发布、扫描与归档，只在 tag 上运行。
 on:
   push:
     tags: ['v*']
@@ -94,16 +96,103 @@ jobs:
           name: digest-${{ matrix.image }}
           path: digest-${{ matrix.image }}.txt
 
+  scan:
+    name: 漏洞扫描 ${{ matrix.image }}
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: campus-tao-backend
+          - image: campus-tao-ui
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: digest-${{ matrix.image }}
+          path: digest
+
+      - name: 解析被测 digest
+        id: digest
+        run: |
+          d=$(grep -o 'sha256:[0-9a-f]\{64\}' digest/digest-*.txt | head -1)
+          test -n "$d" || { echo "::error::未从 digest 文件中解析到 sha256"; exit 1; }
+          echo "digest=$d" >> "$GITHUB_OUTPUT"
+          echo "被测镜像：${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}@$d"
+
+      # 只扫描有修复版本的 CRITICAL/HIGH，避免「基础镜像里无法修复的漏洞」把发布永久卡红。
+      - name: Trivy 扫描
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}@${{ steps.digest.outputs.digest }}
+          format: json
+          output: trivy-${{ matrix.image }}.json
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          scanners: vuln
+          exit-code: '0'
+
+      - name: 生成摘要并执行 CRITICAL 门禁
+        run: |
+          report="trivy-${{ matrix.image }}.json"
+          crit=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' "$report")
+          high=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' "$report")
+          summary="trivy-${{ matrix.image }}-summary.md"
+          {
+            echo "## ${{ matrix.image }}"
+            echo
+            echo "- 镜像：\`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}@${{ steps.digest.outputs.digest }}\`"
+            echo "- 范围：CRITICAL/HIGH，已忽略无修复版本（ignore-unfixed）"
+            echo
+            echo "| 严重度 | 数量 |"
+            echo "|---|---|"
+            echo "| CRITICAL | ${crit} |"
+            echo "| HIGH | ${high} |"
+            if [ "$crit" -gt 0 ] || [ "$high" -gt 0 ]; then
+              echo
+              echo '```'
+              jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL" or .Severity=="HIGH")]
+                     | sort_by(.Severity) | .[:15][]
+                     | "\(.Severity)\t\(.VulnerabilityID)\t\(.PkgName)\t\(.InstalledVersion)\t\(.FixedVersion // "-")"' "$report"
+              echo '```'
+            fi
+          } > "$summary"
+          cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$crit" -gt 0 ]; then
+            echo "::error::${{ matrix.image }} 存在 ${crit} 个可修复的 CRITICAL 漏洞"
+            exit 1
+          fi
+          echo "${{ matrix.image }}：CRITICAL=${crit}，HIGH=${high}"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-${{ matrix.image }}
+          path: |
+            trivy-${{ matrix.image }}.json
+            trivy-${{ matrix.image }}-summary.md
+
   record:
     name: 汇总 digest 并挂到 Release
-    needs: images
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [images, scan]
+    # 扫描失败也要让 digest 与报告落到 Release，红叉本身就是门禁结论
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: digests
           pattern: digest-*
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: scandata
+          pattern: trivy-*
           merge-multiple: true
 
       - name: 汇总 digest 文件
@@ -120,6 +209,31 @@ jobs:
           cat "$out"
           echo "ASSET=$out" >> "$GITHUB_ENV"
 
+      - name: 汇总扫描报告
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          out="campus-tao-security-scan-v${version}.md"
+          {
+            echo "# 校园淘 v${version} 容器镜像漏洞扫描"
+            echo
+            echo "- 扫描器：Trivy（severity=CRITICAL,HIGH，ignore-unfixed=true）"
+            echo "- 生成时间：$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            if ls scandata/*-summary.md > /dev/null 2>&1; then
+              for f in scandata/*-summary.md; do cat "$f"; echo; done
+            else
+              echo "> 本次未取得扫描报告（扫描 job 未成功执行），请查看 Actions 运行记录。"
+            fi
+          } > "$out"
+          for f in scandata/trivy-*.json; do
+            [ -e "$f" ] || continue
+            base=$(basename "$f" .json)
+            name=${base#trivy-}
+            cp "$f" "trivy-${name}-v${version}.json"
+          done
+          ls -l "$out" trivy-*-v"${version}".json 2>/dev/null || true
+          echo "SCAN_ASSET=$out" >> "$GITHUB_ENV"
+
       - name: 上传到 GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -127,10 +241,13 @@ jobs:
           # 本 job 未 checkout 仓库，gh 没有本地仓库上下文，必须显式 --repo；
           # 缺这一项时 gh release view 会以 "not a git repository" 静默失败并空转到超时。
           # Release 可能比镜像构建更晚创建，最多等待约 20 分钟
+          shopt -s nullglob
+          files=("$ASSET" "$SCAN_ASSET")
+          files+=(trivy-*-v*.json)
           for i in $(seq 1 80); do
             if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-              gh release upload "$GITHUB_REF_NAME" "$ASSET" --repo "$GITHUB_REPOSITORY" --clobber
-              echo "digest 已挂到 Release $GITHUB_REF_NAME"
+              gh release upload "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+              echo "digest 与扫描报告已挂到 Release $GITHUB_REF_NAME"
               exit 0
             fi
             echo "第 ${i} 次等待 Release $GITHUB_REF_NAME ..."
