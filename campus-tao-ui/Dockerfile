@@ -23,7 +23,10 @@ COPY . .
 RUN npm run build:prod
 
 # ---------- 阶段 2：运行 ----------
-FROM nginx:1.27-alpine
+# 基础镜像固定在受支持的 nginx stable 线：1.27 基于 Alpine 3.20，该分支已于
+# 2026-04 EOL，openssl 等包不再有安全修复，Trivy 会报出可修复的 CRITICAL。
+# 升级到当前 stable 分支（Alpine 3.2x，openssl/expat 均已带修复）后重建。
+FROM nginx:1.30.6-alpine
 
 ENV TZ=Asia/Shanghai
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
