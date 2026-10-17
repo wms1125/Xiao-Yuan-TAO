@@ -124,10 +124,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # 本 job 未 checkout 仓库，gh 没有本地仓库上下文，必须显式 --repo；
+          # 缺这一项时 gh release view 会以 "not a git repository" 静默失败并空转到超时。
           # Release 可能比镜像构建更晚创建，最多等待约 20 分钟
           for i in $(seq 1 80); do
-            if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-              gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
+            if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+              gh release upload "$GITHUB_REF_NAME" "$ASSET" --repo "$GITHUB_REPOSITORY" --clobber
               echo "digest 已挂到 Release $GITHUB_REF_NAME"
               exit 0
             fi

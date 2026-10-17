@@ -26,6 +26,7 @@
 - **`docker-compose.yml` 默认版本号漂移**：两处 `APP_VERSION:-1.0.17` 停在四个版本之前，不显式传 `.env` 时会拉到不存在的镜像 tag。已对齐为 `1.0.22`。
 - 同一文件内「`V1/V2` 迁移」的过期注释更正为「`V1~V4`」。
 - `application.yml` 的 `info.app.version` 同步升至 `1.0.22`（v1.0.21 曾因漏改导致发行 jar 内嵌旧版本，此次发布前先改）。
+- **`release-image.yml` 的 `record` job 空转到超时（首次实跑抓出）**：该 job 未 `checkout` 仓库，`gh` 没有本地仓库上下文，`gh release view v1.0.22` 持续以「not a git repository」失败，被 `2>/dev/null` 吞掉后表现为「反复等待 Release」。已显式补 `--repo "$GITHUB_REPOSITORY"`，并把失败原因写进注释——**这类缺陷只有真跑一次 tag 才会暴露，本地 YAML 检查与 CI 常规 job 都看不见**。
 
 ### 验证
 - 后端 `mvn -B -o clean verify` 通过（离线，覆盖率/Checkstyle/SpotBugs 门禁不降级）。
