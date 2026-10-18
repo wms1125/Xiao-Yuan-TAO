@@ -4,7 +4,6 @@ import com.ruoyi.campus.domain.CampusMessage;
 import com.ruoyi.campus.domain.vo.CampusConversationPage;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 站内信服务（校园淘）

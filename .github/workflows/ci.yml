@@ -404,7 +404,14 @@ jobs:
     name: 依赖漏洞扫描（前端 npm audit · 后端 osv-scanner）
     runs-on: ubuntu-latest
     steps:
+      # 必须拉全量历史：密钥一旦提交过，"后来删掉"并不算撤回。而 actions/checkout 的
+      # 默认浅克隆（depth=1）会让 gitleaks 的 `HEAD^..HEAD` 拿不到父提交、
+      # 直接报 unknown revision 而失败——结果是这一路扫描从落地起就没真正生效过，
+      # 却因为构建红着而让人以为它在干活。fetch-depth 只能写在 checkout 上：
+      # gitleaks-action 并不接受这个输入（写上去只会在日志里告警 Unexpected input）。
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: 设置 Node 22
         uses: actions/setup-node@v4
@@ -445,9 +452,6 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # 必须扫历史，见上方说明
-          fetch-depth: 0
 
   # ==========================================================================
   # 静态代码分析（CodeQL · Java + JavaScript/TypeScript）
