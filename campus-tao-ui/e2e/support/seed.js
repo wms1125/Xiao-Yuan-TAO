@@ -142,6 +142,27 @@ export function seedShippedOrder(request) {
   return seedOrder(request, { pay: true, ship: true })
 }
 
+/** 直付用例用的卖家收款码地址（演示环境不校验图片可访问性，只存 URL） */
+export const E2E_PAY_QR_URL = '/profile/upload/e2e/pay-qr.png'
+
+/**
+ * 保证卖家（ry）已上传收款码——C2C 直付用例的前置。
+ *
+ * 为什么不走「account 页 + ImageUpload」：那是真实文件上传弹窗（依赖后端 /common/upload
+ * 与本地文件选择），在 CI 里既慢又脆；播种阶段只负责"把前置数据摆好"，
+ * 页面上"收款码是否如实渲染"由用例本身断言（见 09-direct-pay.spec.js）。
+ * @returns {Promise<string>} 收款码 URL
+ */
+export async function ensureSellerPayQr(request, qrUrl = E2E_PAY_QR_URL) {
+  const token = await apiLogin(request, 'ry')
+  const res = await request.post(`${API_BASE}/campus/payqr`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { qrUrl }
+  })
+  await assertOk(res, '上传收款码')
+  return qrUrl
+}
+
 /**
  * 以指定账号在某个订单下发一条消息。
  * 站内信的会话列表是从 campus_message 里反查出来的（CampusMessageMapper 第 41-63 行），
