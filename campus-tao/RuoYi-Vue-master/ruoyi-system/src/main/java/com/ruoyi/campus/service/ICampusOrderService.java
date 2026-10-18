@@ -7,7 +7,8 @@ import java.util.List;
 
 /**
  * 订单服务（校园淘）
- * 状态机：0待付款 → 1已付款 → 2已发货 → 3已完成；4已取消；5退款中；6已退款
+ * 状态机：0待付款 → 1已付款 → 2已发货 → 3已完成；4已取消；5退款中；6已退款；
+ * 7待卖家确认收款（C2C 直付中间态：0 --买家已扫码付款--> 7 --卖家确认--> 1）
  */
 public interface ICampusOrderService {
 
@@ -19,7 +20,20 @@ public interface ICampusOrderService {
     /** 支付：扣沙箱余额，订单 0→1。余额不足返回 false */
     boolean payOrder(String orderNo, Long userId);
 
-    /** 取消：未付款回库存(状态→4)；已付款退款+回库存(状态→4) */
+    /**
+     * C2C 直付：买家声明已扫码付款给卖家，订单 0→7（待卖家确认收款）。
+     * 校验：订单归属、全部订单项同属一个卖家、卖家已上传收款码。
+     * @param payProofUrl 买家可选上传的付款截图
+     */
+    void initiateDirectPay(String orderNo, Long userId, String payProofUrl);
+
+    /**
+     * C2C 直付：卖家确认已收到买家转账，订单 7→1（写 pay_time）。
+     * 平台不经手资金，此动作仅是状态确认；仅订单 seller_id 本人可操作。
+     */
+    void confirmDirectPay(String orderNo, Long sellerId);
+
+    /** 取消：未付款/待卖家确认回库存(状态→4)；已付款退款+回库存(状态→4) */
     boolean cancelOrder(String orderNo, Long userId);
 
     /** 发货（管理端）：1→2，可录入物流单号 */

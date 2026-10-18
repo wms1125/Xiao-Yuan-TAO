@@ -149,3 +149,10 @@ Started RuoYiApplication in 10.387 seconds
 | 容器化是否已构建验证 | ❌ **未验证**——本机无 Docker，已在"未纳入本轮"如实记录，交由 CI `docker` job 验证 |
 | 买家侧功能缺口是否被夸大或掩盖 | ✅ 未掩盖——V2 只建了表与菜单，服务层/页面未实现，已在"未纳入本轮"逐项列明 |
 | 发现的问题是否都已修复 | ✅ 8 个坑全部修复，其中 3 个属"启动成功但行为静默错误"，均已写入本表并配套静态拦截或断言 |
+
+<!-- ai-log-meta
+ai_generated_ratio: 未追溯
+human_edits: 未追溯
+reviewer: 未追溯
+review_date: 未追溯
+-->

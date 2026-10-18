@@ -6,10 +6,12 @@ import com.ruoyi.campus.domain.CampusOrder;
 import com.ruoyi.campus.domain.CampusOrderItem;
 import com.ruoyi.campus.domain.CampusProduct;
 import com.ruoyi.campus.domain.vo.CampusStatusStat;
+import com.ruoyi.campus.domain.CampusUserPayQr;
 import com.ruoyi.campus.mapper.CampusCartMapper;
 import com.ruoyi.campus.mapper.CampusOrderItemMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
 import com.ruoyi.campus.mapper.CampusProductMapper;
+import com.ruoyi.campus.mapper.CampusUserPayQrMapper;
 import com.ruoyi.campus.payment.ICampusPaymentService;
 import com.ruoyi.campus.payment.PayCommand;
 import com.ruoyi.campus.payment.PayResult;
@@ -53,6 +55,8 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
     private ICampusNoticeService noticeService;
     @Autowired
     private ICampusAddressService addressService;
+    @Autowired
+    private CampusUserPayQrMapper payQrMapper;
 
     /** 订单状态常量 */
     public static final int STATUS_WAIT_PAY = 0;
@@ -62,6 +66,11 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
     public static final int STATUS_CANCELLED = 4;
     public static final int STATUS_REFUNDING = 5;
     public static final int STATUS_REFUNDED = 6;
+    /** C2C 直付中间态：买家已扫码付款，待卖家确认收款（V8） */
+    public static final int STATUS_AWAIT_SELLER_CONFIRM = 7;
+
+    /** 付款截图 URL 上限（与 pay_proof_url 列宽一致） */
+    private static final int PAY_PROOF_URL_MAX = 500;
 
     /**
      * 同秒内下单的递增序号。
@@ -204,6 +213,93 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         return true;
     }
 
+    /**
+     * C2C 直付：买家声明已扫码付款给卖家，订单 0→7。
+     *
+     * <p>三道前置校验缺一不可：
+     * <ol>
+     *   <li><b>单卖家</b>：一个收款码只能对应一个人，跨卖家订单（购物车混购）无法直付；</li>
+     *   <li><b>卖家已上传收款码</b>：没有码就没有支付标的，必须明确拒绝而非展示空图；</li>
+     *   <li><b>原子状态推进</b>：markAwaitSellerConfirm 带 status=0 条件，
+     *       与沙箱支付/取消/超时取消并发时只有一方生效。</li>
+     * </ol>
+     *
+     * <p>平台不经手资金：本方法不产生任何金额变动，仅做状态撮合。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void initiateDirectPay(String orderNo, Long userId, String payProofUrl) {
+        CampusOrder order = orderMapper.selectOrderByOrderNo(orderNo);
+        if (order == null || !order.getUserId().equals(userId)) {
+            throw new ServiceException("订单不存在");
+        }
+        if (order.getStatus() == STATUS_AWAIT_SELLER_CONFIRM) {
+            return; // 已发起过（买家重复点击），幂等返回
+        }
+        if (order.getStatus() != STATUS_WAIT_PAY) {
+            throw new ServiceException("订单状态异常，无法发起收款码直付");
+        }
+        String proof = payProofUrl == null ? "" : payProofUrl.trim();
+        if (proof.length() > PAY_PROOF_URL_MAX) {
+            throw new ServiceException("付款截图地址过长");
+        }
+        // 1) 单卖家校验：以商品表 sellerId 为准，逐项核对
+        Long sellerId = null;
+        for (CampusOrderItem item : orderItemMapper.selectByOrderNo(orderNo)) {
+            CampusProduct p = productMapper.selectCampusProductById(item.getProductId());
+            if (p == null || p.getSellerId() == null) {
+                throw new ServiceException("商品[" + item.getProductTitle() + "]缺少卖家信息，无法直付");
+            }
+            if (sellerId == null) {
+                sellerId = p.getSellerId();
+            } else if (!sellerId.equals(p.getSellerId())) {
+                throw new ServiceException("跨卖家订单暂不支持收款码直付，请分开下单");
+            }
+        }
+        // 2) 卖家必须已上传收款码
+        CampusUserPayQr qr = payQrMapper.selectByUserId(sellerId);
+        if (qr == null) {
+            throw new ServiceException("卖家尚未上传收款码，暂无法直付，可使用沙箱支付");
+        }
+        // 3) 原子推进 0→7（并发下与沙箱支付/取消只有一方生效）
+        int affected = orderMapper.markAwaitSellerConfirm(orderNo, proof, sellerId);
+        if (affected == 0) {
+            throw new ServiceException("订单状态已变化，请刷新后重试");
+        }
+        noticeService.push(sellerId, "order", "买家已扫码付款",
+                "订单 " + orderNo + " 买家已扫码付款 ¥" + order.getTotalAmount()
+                        + "，请核对本人收款后点击「确认已收款」。",
+                orderNo);
+    }
+
+    /**
+     * C2C 直付：卖家确认已收到买家转账，订单 7→1。
+     *
+     * <p>确认动作只允许订单 seller_id 本人执行；confirmPayIfAwaitConfirm 带 status=7
+     * 条件，与超时取消并发时不会把已取消订单「复活」为已付款。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmDirectPay(String orderNo, Long sellerId) {
+        CampusOrder order = orderMapper.selectOrderByOrderNo(orderNo);
+        if (order == null) {
+            throw new ServiceException("订单不存在");
+        }
+        if (order.getStatus() != STATUS_AWAIT_SELLER_CONFIRM) {
+            throw new ServiceException("订单不处于待确认收款状态");
+        }
+        if (order.getSellerId() == null || !order.getSellerId().equals(sellerId)) {
+            throw new ServiceException("仅订单卖家本人可确认收款");
+        }
+        int affected = orderMapper.confirmPayIfAwaitConfirm(orderNo, new Date());
+        if (affected == 0) {
+            throw new ServiceException("订单状态已变化（可能已被取消），请刷新后查看");
+        }
+        noticeService.push(order.getUserId(), "order", "卖家已确认收款",
+                "订单 " + orderNo + " 卖家已确认收到您的转账，订单已支付，等待发货。",
+                orderNo);
+    }
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean cancelOrder(String orderNo, Long userId) {
@@ -213,6 +309,15 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         }
         if (order.getStatus() == STATUS_WAIT_PAY) {
             // 未付款：仅回库存
+            returnStock(order);
+            order.setStatus(STATUS_CANCELLED);
+            order.setCancelTime(new Date());
+            orderMapper.updateCampusOrder(order);
+            return true;
+        } else if (order.getStatus() == STATUS_AWAIT_SELLER_CONFIRM) {
+            // 待卖家确认（C2C 直付）：买家撤回。
+            // 钱已由买家直接付给卖家、平台不经手，退款只能由双方线下协商；
+            // 此处仅做状态回退与库存释放，不产生任何资金动作。
             returnStock(order);
             order.setStatus(STATUS_CANCELLED);
             order.setCancelTime(new Date());
@@ -291,7 +396,7 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
             returnStock(order);
             cancelled++;
             noticeService.push(order.getUserId(), "order", "订单已自动取消",
-                    "订单 " + order.getOrderNo() + " 因超时未支付已被自动取消，占用库存已释放。",
+                    "订单 " + order.getOrderNo() + " 因超时未完成支付确认已被自动取消，占用库存已释放。",
                     order.getOrderNo());
         }
         return cancelled;
@@ -310,8 +415,42 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         CampusOrder order = orderMapper.selectOrderByOrderNo(orderNo);
         if (order != null) {
             order.setItems(orderItemMapper.selectByOrderNo(orderNo));
+            attachSellerPayQr(order);
         }
         return order;
+    }
+
+    /**
+     * 待付款(0)/待卖家确认(7)的订单详情附带卖家收款码，供买家扫码直付。
+     * 仅当订单项同属一个卖家且收款码已上传时附带；其他情形静默返回原样——
+     * 附带失败不应挡住详情查看。
+     */
+    private void attachSellerPayQr(CampusOrder order) {
+        Integer st = order.getStatus();
+        if (st == null || (st != STATUS_WAIT_PAY && st != STATUS_AWAIT_SELLER_CONFIRM)) {
+            return;
+        }
+        Long sellerId = order.getSellerId();
+        if (sellerId == null && order.getItems() != null && !order.getItems().isEmpty()) {
+            for (CampusOrderItem item : order.getItems()) {
+                CampusProduct p = productMapper.selectCampusProductById(item.getProductId());
+                if (p == null || p.getSellerId() == null) {
+                    return;
+                }
+                if (sellerId == null) {
+                    sellerId = p.getSellerId();
+                } else if (!sellerId.equals(p.getSellerId())) {
+                    return; // 跨卖家订单不展示收款码
+                }
+            }
+        }
+        if (sellerId == null || sellerId.equals(order.getUserId())) {
+            return;
+        }
+        CampusUserPayQr qr = payQrMapper.selectByUserId(sellerId);
+        if (qr != null) {
+            order.setSellerPayQrUrl(qr.getQrUrl());
+        }
     }
 
     @Override

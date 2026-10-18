@@ -80,6 +80,7 @@
                   <span class="order-cell__title">{{ mainTitle(scope.row.items) }}</span>
                   <span class="order-cell__meta">
                     <span class="campus-num">{{ scope.row.orderNo }}</span>
+                    <el-tag v-if="isOrderSeller(scope.row)" size="small" type="success" effect="plain">我卖出的</el-tag>
                   </span>
                 </div>
               </div>
@@ -112,15 +113,31 @@
                 type="success"
                 @click="handlePay(scope.row)"
                 v-hasPermi="['campus:order:edit']"
-                >支付</el-button
+                >沙箱支付</el-button
               >
               <el-button
-                v-if="scope.row.status === 0 || scope.row.status === 1"
+                v-if="scope.row.status === 0"
+                link
+                type="warning"
+                @click="handleDirectPay(scope.row)"
+                v-hasPermi="['campus:order:edit']"
+                >扫码直付</el-button
+              >
+              <el-button
+                v-if="scope.row.status === 0 || scope.row.status === 1 || scope.row.status === 7"
                 link
                 type="danger"
                 @click="handleCancel(scope.row)"
                 v-hasPermi="['campus:order:edit']"
                 >取消</el-button
+              >
+              <el-button
+                v-if="scope.row.status === 7 && isOrderSeller(scope.row)"
+                link
+                type="success"
+                @click="handleConfirmPay(scope.row)"
+                v-hasPermi="['campus:order:edit']"
+                >确认已收款</el-button
               >
               <el-button
                 v-if="scope.row.status === 1"
@@ -267,6 +284,41 @@
       </template>
     </el-dialog>
 
+    <!-- 扫码直付：展示卖家收款码，买家付款后自己声明已付款 -->
+    <el-dialog v-model="directPayOpen" title="扫码直付（付给卖家）" width="480px" append-to-body>
+      <div class="direct-pay" v-if="directPayForm.orderNo">
+        <div class="direct-pay__tip">
+          款项将直接付给<strong>卖家本人</strong>，平台不经手资金、不提供担保。
+          请扫码付款后核对金额，再点击「我已付款」。
+        </div>
+        <div class="direct-pay__body">
+          <div class="direct-pay__qr">
+            <img v-if="directPayForm.qrUrl" :src="directPayForm.qrUrl" alt="卖家收款码" />
+            <div v-else class="direct-pay__qr-empty">卖家收款码加载失败，请用「联系对方」沟通</div>
+          </div>
+          <div class="direct-pay__amount">
+            <div class="direct-pay__amount-label">应付金额</div>
+            <div class="direct-pay__amount-value campus-price">¥{{ money(directPayForm.amount) }}</div>
+            <div class="direct-pay__order campus-num">{{ directPayForm.orderNo }}</div>
+          </div>
+        </div>
+        <el-form label-width="90px">
+          <el-form-item label="付款截图">
+            <ImageUpload v-model="directPayForm.proof" :limit="1" />
+          </el-form-item>
+        </el-form>
+        <div class="campus-note">
+          <span>退款与纠纷需与卖家线下协商，平台仅记录订单状态。</span>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="directPayOpen = false">取 消</el-button>
+          <el-button type="primary" :loading="directPaySubmitting" @click="submitDirectPay">我已付款</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 发表评价 -->
     <el-dialog v-model="reviewOpen" title="发表评价" width="620px" append-to-body>
       <div class="review-dialog">
@@ -309,6 +361,8 @@ import {
   orderStats,
   getOrder,
   payOrder,
+  directPayOrder,
+  confirmPayOrder,
   cancelOrder,
   shipOrder,
   finishOrder,
@@ -317,8 +371,10 @@ import {
 } from '@/api/campus/order'
 import { addReview } from '@/api/campus/review'
 import { getPaymentChannel } from '@/api/campus/payment'
+import useUserStore from '@/store/modules/user'
 
 const router = useRouter()
+const userStore = useUserStore()
 
 /** 跳到站内信并直接进入该订单的会话 */
 function handleContact(row) {
@@ -371,7 +427,8 @@ const statusMap = {
   3: { text: '已完成', type: 'success' },
   4: { text: '已取消', type: 'info' },
   5: { text: '退款中', type: 'warning' },
-  6: { text: '已退款', type: 'info' }
+  6: { text: '已退款', type: 'info' },
+  7: { text: '待卖家确认收款', type: 'warning' }
 }
 
 const timelineNodes = computed(() => {
@@ -518,8 +575,80 @@ function handlePay(row) {
     .catch(() => {})
 }
 
+// ---------- C2C 扫码直付（付给卖家本人，平台不经手资金） ----------
+const directPayOpen = ref(false)
+const directPaySubmitting = ref(false)
+const directPayForm = ref({ orderNo: '', amount: 0, qrUrl: '', proof: '' })
+
+// 订单是否属于当前登录用户作为卖家（卖家视角才显示「确认已收款」）
+function isOrderSeller(row) {
+  const uid = userStore.id
+  return !!row.sellerId && !!uid && Number(row.sellerId) === Number(uid)
+}
+
+// 打开直付弹窗：取详情以拿到卖家收款码（详情接口仅在待付款/待确认时附带）
+function handleDirectPay(row) {
+  getOrder(row.orderNo).then((res) => {
+    const data = res.data || {}
+    if (data.status !== 0) {
+      ElMessage.warning('订单状态已变化，请刷新列表')
+      refresh()
+      return
+    }
+    directPayForm.value = {
+      orderNo: data.orderNo,
+      amount: data.totalAmount || 0,
+      qrUrl: data.sellerPayQrUrl || '',
+      proof: ''
+    }
+    directPayOpen.value = true
+  })
+}
+
+function submitDirectPay() {
+  const form = directPayForm.value
+  ElMessageBox.confirm(
+    '确认已向卖家付款 ¥' + money(form.amount) + '？卖家确认收款后订单才会进入已支付。',
+    '我已付款确认',
+    { type: 'warning' }
+  )
+    .then(() => {
+      directPaySubmitting.value = true
+      directPayOrder(form.orderNo, form.proof || '')
+        .then((res) => {
+          ElMessage.success(res.msg || '已通知卖家确认收款')
+          directPayOpen.value = false
+          directPaySubmitting.value = false
+          refresh()
+        })
+        .catch(() => {
+          directPaySubmitting.value = false
+        })
+    })
+    .catch(() => {})
+}
+
+// 卖家确认已收到买家转账（C2C 直付的最终确认）
+function handleConfirmPay(row) {
+  ElMessageBox.confirm(
+    '确认已收到订单「' + row.orderNo + '」买家转账 ¥' + money(row.totalAmount) + '？确认后订单进入已支付。',
+    '确认收款',
+    { type: 'warning' }
+  )
+    .then(() => {
+      confirmPayOrder(row.orderNo).then((res) => {
+        ElMessage.success(res.msg || '已确认收款')
+        refresh()
+      })
+    })
+    .catch(() => {})
+}
+
 function handleCancel(row) {
-  ElMessageBox.confirm('确认取消订单「' + row.orderNo + '」？已付款订单将退回沙箱余额。', '取消确认', {
+  // 直付订单的钱已直接付给卖家，平台不经手——取消语义必须如实告知
+  const tip =
+    row.status === 7 ? '款项已直接付给卖家，取消后需与卖家线下协商退款，平台仅记录状态。' : '已付款订单将退回沙箱余额。'
+  ElMessageBox.confirm('确认取消订单「' + row.orderNo + '」？' + tip, '取消确认', {
     type: 'warning'
   })
     .then(() => {
@@ -847,6 +976,66 @@ onMounted(() => {
 
 .review-row__label {
   font-size: 13px;
+  color: var(--c-ink-3);
+}
+
+/* 扫码直付弹窗 */
+.direct-pay__tip {
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c-warn, #e6a23c) 12%, transparent);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--c-ink-2);
+}
+
+.direct-pay__body {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.direct-pay__qr {
+  width: 180px;
+  height: 180px;
+  flex-shrink: 0;
+  border: 1px solid var(--c-line-soft);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-surface, #fff);
+}
+
+.direct-pay__qr img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.direct-pay__qr-empty {
+  padding: 12px;
+  font-size: 12.5px;
+  color: var(--c-ink-3);
+  text-align: center;
+}
+
+.direct-pay__amount-value {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 4px 0 8px;
+}
+
+.direct-pay__amount-label {
+  font-size: 13px;
+  color: var(--c-ink-3);
+}
+
+.direct-pay__order {
+  font-size: 12.5px;
   color: var(--c-ink-3);
 }
 </style>

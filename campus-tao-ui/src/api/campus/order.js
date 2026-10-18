@@ -20,6 +20,14 @@ export function createOrder(data) {
 export function payOrder(orderNo) {
   return request({ url: '/campus/order/pay/' + orderNo, method: 'post' })
 }
+// C2C 直付：买家声明已扫码付款给卖家（可附付款截图 URL）
+export function directPayOrder(orderNo, payProofUrl) {
+  return request({ url: '/campus/order/direct-pay/' + orderNo, method: 'post', data: { payProofUrl } })
+}
+// C2C 直付：卖家确认已收到买家转账
+export function confirmPayOrder(orderNo) {
+  return request({ url: '/campus/order/confirm-pay/' + orderNo, method: 'post' })
+}
 // 取消
 export function cancelOrder(orderNo) {
   return request({ url: '/campus/order/cancel/' + orderNo, method: 'post' })

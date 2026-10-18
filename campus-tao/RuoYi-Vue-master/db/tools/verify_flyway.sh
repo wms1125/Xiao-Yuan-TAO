@@ -68,7 +68,7 @@ else
   sql "DROP DATABASE IF EXISTS $REF_DB; CREATE DATABASE $REF_DB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
   grep -v "^CREATE DATABASE\|^USE \|^-- Current Database" "$FULL_SQL" | "${MYSQL[@]}" "$REF_DB" 2>/dev/null
   n=$(sql "select count(*) from information_schema.tables where table_schema='$REF_DB';")
-  if [ "$n" = "42" ]; then ok "参照库建库完成（42 张表）"; else bad "参照库表数异常：$n（期望 42）"; fi
+  if [ "$n" = "43" ]; then ok "参照库建库完成（43 张表）"; else bad "参照库表数异常：$n（期望 43）"; fi
   HAVE_REF=1
 fi
 
@@ -86,7 +86,7 @@ v=$(tsql "select group_concat(version order by installed_rank) from flyway_schem
 LAST_VER=${MIG_VERSIONS##*,}
 [ "$v" = "$MIG_VERSIONS" ] && ok "flyway_schema_history 记录 V1~V$LAST_VER（共 $MIG_COUNT 个）" || bad "版本记录异常：$v（期望 $MIG_VERSIONS）"
 t=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB';")
-[ "$t" = "47" ] && ok "迁移后表数 47（42 基线 + 4 新增 + 1 版本表）" || bad "迁移后表数异常：$t（期望 47）"
+[ "$t" = "48" ] && ok "迁移后表数 48（43 基线 + 4 新增 + 1 版本表）" || bad "迁移后表数异常：$t（期望 48）"
 i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name='idx_user_time'));")
 [ "$i" = "4" ] && ok "V4 复合索引已生效（4/4）" || bad "V4 索引缺失：$i（期望 4）"
 c=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB' and table_name like 'campus\\_%' and table_collation <> 'utf8mb4_0900_ai_ci';")
@@ -99,6 +99,10 @@ mn=$(tsql "select count(*) from sys_menu where parent_id=2000 and path='notice' 
 [ "$mn" = "1" ] && ok "V6 通知中心菜单已注册" || bad "V6 菜单缺失：$mn"
 o=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and table_name='campus_order' and seq_in_index=1 and index_name in ('idx_status_time','idx_status_ship');")
 [ "$o" = "2" ] && ok "V7 定时任务扫描索引已生效（2/2）" || bad "V7 索引缺失：$o（期望 2）"
+q=$(tsql "select count(*) from information_schema.columns where table_schema=DATABASE() and table_name='campus_order' and column_name in ('pay_type','seller_id','pay_proof_url');")
+[ "$q" = "3" ] && ok "V8 直付列已生效（pay_type/seller_id/pay_proof_url 3/3）" || bad "V8 直付列缺失：$q（期望 3）"
+p=$(tsql "select count(*) from information_schema.tables where table_schema=DATABASE() and table_name='campus_user_pay_qr';")
+[ "$p" = "1" ] && ok "V8 收款码表已建立" || bad "V8 收款码表缺失"
 
 # ---------- 2. 逐表行数核对 ----------
 echo
@@ -138,7 +142,7 @@ else
   bad "再次迁移未按预期完成"; echo "$out" | tail -8 | sed 's/^/      /'
 fi
 t=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB';")
-[ "$t" = "47" ] && ok "表数恢复为 47" || bad "表数异常：$t（期望 47）"
+[ "$t" = "48" ] && ok "表数恢复为 48" || bad "表数异常：$t（期望 48）"
 i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name in ('idx_user_time','idx_status_time','idx_status_ship')));")
 [ "$i" = "6" ] && ok "重放后 V4+V7 索引恢复（6/6）" || bad "重放后索引缺失：$i（期望 6）"
 

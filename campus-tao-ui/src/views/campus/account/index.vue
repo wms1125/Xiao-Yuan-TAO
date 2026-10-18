@@ -69,6 +69,33 @@
           </div>
         </el-col>
       </el-row>
+
+      <!-- C2C 直付收款码：买家扫码直接付给卖家本人，平台不经手资金 -->
+      <div class="campus-card pay-qr-card" v-hasPermi="['campus:account:edit']">
+        <div class="campus-card__head">
+          <span class="campus-card__title">我的收款码（C2C 直付）</span>
+          <el-tag size="small" type="warning" effect="plain">真实资金 · 请谨慎设置</el-tag>
+        </div>
+        <div class="campus-card__body">
+          <div class="pay-qr">
+            <div class="pay-qr__preview">
+              <img v-if="payQrUrl" :src="payQrUrl" alt="我的收款码" />
+              <div v-else class="pay-qr__empty">尚未上传收款码<br />上传后买家可在下单时扫码直付给你</div>
+            </div>
+            <div class="pay-qr__form">
+              <ImageUpload v-model="payQrInput" :limit="1" />
+              <div class="pay-qr__notes">
+                <ul class="account-notes">
+                  <li>收款码将展示给购买你商品的买家，扫码付款直接进入你的账户。</li>
+                  <li>买家点击「我已付款」后，你需在订单列表核对到账并点击「确认已收款」。</li>
+                  <li>平台不经手资金、不提供担保，退款与纠纷需与买家线下协商。</li>
+                </ul>
+              </div>
+              <el-button type="primary" :loading="payQrSaving" @click="submitPayQr">保存收款码</el-button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 充值对话框 -->
@@ -96,12 +123,18 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { parseTime } from '@/utils/ruoyi'
 import { getAccount, recharge } from '@/api/campus/account'
+import { getMyPayQr, saveMyPayQr } from '@/api/campus/payqr'
 
 const account = ref({})
 const loading = ref(true)
 const rechargeOpen = ref(false)
 const submitting = ref(false)
 const rechargeRef = ref()
+
+// C2C 直付收款码
+const payQrUrl = ref('')
+const payQrInput = ref('')
+const payQrSaving = ref(false)
 
 const quickAmounts = [50, 100, 200, 500]
 
@@ -151,8 +184,39 @@ function submitRecharge() {
   })
 }
 
+function getPayQrInfo() {
+  getMyPayQr()
+    .then((res) => {
+      const data = res.data || {}
+      payQrUrl.value = data.qrUrl || ''
+      payQrInput.value = payQrUrl.value
+    })
+    .catch(() => {
+      // 收款码加载失败不阻塞账户页，保持未上传态即可
+    })
+}
+
+function submitPayQr() {
+  const url = (payQrInput.value || '').trim()
+  if (!url) {
+    ElMessage.warning('请先上传收款码图片')
+    return
+  }
+  payQrSaving.value = true
+  saveMyPayQr(url)
+    .then(() => {
+      ElMessage.success('收款码已保存')
+      payQrUrl.value = url
+      payQrSaving.value = false
+    })
+    .catch(() => {
+      payQrSaving.value = false
+    })
+}
+
 onMounted(() => {
   getAccountInfo()
+  getPayQrInfo()
 })
 </script>
 
@@ -312,6 +376,58 @@ onMounted(() => {
   font-size: 11.5px;
   letter-spacing: 0.1em;
   color: var(--c-ink-4);
+}
+
+/* C2C 收款码卡片 */
+.pay-qr-card {
+  margin-top: 16px;
+}
+
+.pay-qr {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.pay-qr__preview {
+  width: 180px;
+  height: 180px;
+  flex-shrink: 0;
+  border: 1px dashed var(--c-line);
+  border-radius: var(--c-radius);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-card);
+}
+
+.pay-qr__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pay-qr__empty {
+  padding: 12px;
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--c-ink-4);
+  text-align: center;
+}
+
+.pay-qr__form {
+  flex: 1;
+  min-width: 260px;
+}
+
+.pay-qr__notes {
+  margin: 8px 0 14px;
+}
+
+.pay-qr__notes .account-notes {
+  margin-bottom: 0;
 }
 
 @media (max-width: 768px) {

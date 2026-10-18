@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * 订单（校园淘）
- * 状态：0待付款 1已付款 2已发货 3已完成 4已取消 5退款中 6已退款
+ * 状态：0待付款 1已付款 2已发货 3已完成 4已取消 5退款中 6已退款 7待卖家确认收款(C2C直付)
  */
 public class CampusOrder implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -17,6 +17,12 @@ public class CampusOrder implements Serializable {
     private String userName;
     private java.math.BigDecimal totalAmount;
     private Integer status;
+    /** 支付方式：0沙箱余额 1卖家收款码直付（V8） */
+    private Integer payType;
+    /** 卖家用户 ID（直付发起时写入；沙箱订单为 null） */
+    private Long sellerId;
+    /** 直付付款截图（买家可选上传） */
+    private String payProofUrl;
     private String receiverName;
     private String receiverPhone;
     private String address;
@@ -35,6 +41,9 @@ public class CampusOrder implements Serializable {
     /** 订单项（非表字段，查询时填充） */
     private List<CampusOrderItem> items;
 
+    /** 卖家收款码 URL（非表字段：待付款/待确认详情接口按需附带，供买家扫码直付） */
+    private String sellerPayQrUrl;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getOrderNo() { return orderNo; }
@@ -47,6 +56,14 @@ public class CampusOrder implements Serializable {
     public void setTotalAmount(java.math.BigDecimal totalAmount) { this.totalAmount = totalAmount; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
+    public Integer getPayType() { return payType; }
+    public void setPayType(Integer payType) { this.payType = payType; }
+    public Long getSellerId() { return sellerId; }
+    public void setSellerId(Long sellerId) { this.sellerId = sellerId; }
+    public String getPayProofUrl() { return payProofUrl; }
+    public void setPayProofUrl(String payProofUrl) { this.payProofUrl = payProofUrl; }
+    public String getSellerPayQrUrl() { return sellerPayQrUrl; }
+    public void setSellerPayQrUrl(String sellerPayQrUrl) { this.sellerPayQrUrl = sellerPayQrUrl; }
     public String getReceiverName() { return receiverName; }
     public void setReceiverName(String receiverName) { this.receiverName = receiverName; }
     public String getReceiverPhone() { return receiverPhone; }

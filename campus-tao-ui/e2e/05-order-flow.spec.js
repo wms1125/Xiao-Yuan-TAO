@@ -88,7 +88,7 @@ test.describe('路径 5：下单 → 支付 → 发货 → 确认收货', () => 
     await expect(orderRow).toContainText('待付款')
 
     // ---- 支付 ----
-    await orderRow.getByRole('button', { name: '支付', exact: true }).click()
+    await orderRow.getByRole('button', { name: '沙箱支付', exact: true }).click()
     await page.locator('.el-message-box').getByRole('button', { name: '确定', exact: true }).click()
     await expect(page.locator('.el-message').first()).toContainText('支付成功')
     await expect(orderRow).toContainText('已付款')
