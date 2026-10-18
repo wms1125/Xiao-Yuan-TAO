@@ -56,6 +56,38 @@ public class CampusOrderController extends BaseController {
         return AjaxResult.success("支付成功");
     }
 
+    /** 收款码直付请求体：买家可选上传付款截图 */
+    public static class DirectPayDTO {
+        /** 付款截图 URL（可空，经 /common/upload 上传得到） */
+        private String payProofUrl;
+
+        public String getPayProofUrl() { return payProofUrl; }
+        public void setPayProofUrl(String payProofUrl) { this.payProofUrl = payProofUrl; }
+    }
+
+    /**
+     * C2C 直付：买家声明已扫码付款给卖家（0→待卖家确认收款）。
+     * 平台不经手资金，此处仅是状态撮合；卖家确认后才进入已付款。
+     */
+    @PreAuthorize("@ss.hasPermi('campus:order:edit')")
+    @Log(title = "校园淘订单", businessType = BusinessType.UPDATE)
+    @PostMapping("/direct-pay/{orderNo}")
+    public AjaxResult directPay(@PathVariable String orderNo,
+                                @RequestBody(required = false) DirectPayDTO body) {
+        orderService.initiateDirectPay(orderNo, SecurityUtils.getUserId(),
+                body == null ? null : body.getPayProofUrl());
+        return AjaxResult.success("已通知卖家确认收款");
+    }
+
+    /** C2C 直付：卖家确认已收到买家转账（待卖家确认→已付款） */
+    @PreAuthorize("@ss.hasPermi('campus:order:edit')")
+    @Log(title = "校园淘订单", businessType = BusinessType.UPDATE)
+    @PostMapping("/confirm-pay/{orderNo}")
+    public AjaxResult confirmPay(@PathVariable String orderNo) {
+        orderService.confirmDirectPay(orderNo, SecurityUtils.getUserId());
+        return AjaxResult.success("已确认收款");
+    }
+
     @PreAuthorize("@ss.hasPermi('campus:order:edit')")
     @Log(title = "校园淘订单", businessType = BusinessType.UPDATE)
     @PostMapping("/cancel/{orderNo}")
@@ -107,12 +139,14 @@ public class CampusOrderController extends BaseController {
         return AjaxResult.success(orderService.countGroupByStatus(order));
     }
 
-    /** 订单详情：仅订单归属人（或管理员）可查看 */
+    /** 订单详情：仅订单归属人（买家/卖家，V8 直付后卖家需核对付款）或管理员可查看 */
     @GetMapping("/{orderNo}")
     public AjaxResult detail(@PathVariable String orderNo) {
         Long userId = SecurityUtils.getUserId();
         CampusOrder order = orderService.selectWithItems(orderNo);
-        if (order == null || (!userId.equals(order.getUserId()) && !SecurityUtils.isAdmin(userId))) {
+        boolean owner = order != null
+                && (userId.equals(order.getUserId()) || userId.equals(order.getSellerId()));
+        if (order == null || (!owner && !SecurityUtils.isAdmin(userId))) {
             return AjaxResult.error("无权查看该订单");
         }
         return AjaxResult.success(order);

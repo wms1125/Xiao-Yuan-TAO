@@ -10,6 +10,9 @@
         <result property="userName" column="user_name"/>
         <result property="totalAmount" column="total_amount"/>
         <result property="status" column="status"/>
+        <result property="payType" column="pay_type"/>
+        <result property="sellerId" column="seller_id"/>
+        <result property="payProofUrl" column="pay_proof_url"/>
         <result property="receiverName" column="receiver_name"/>
         <result property="receiverPhone" column="receiver_phone"/>
         <result property="address" column="address"/>
@@ -31,8 +34,8 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, order_no, user_id, user_name, total_amount, status, receiver_name, receiver_phone,
-        address, remark, pay_time, ship_time, logistics_no, address_snapshot,
+        id, order_no, user_id, user_name, total_amount, status, pay_type, seller_id, pay_proof_url,
+        receiver_name, receiver_phone, address, remark, pay_time, ship_time, logistics_no, address_snapshot,
         finish_time, cancel_time, create_time, update_time
     </sql>
 
@@ -55,6 +58,9 @@
         update campus_order
         <set>
             <if test="status != null">status = #{status},</if>
+            <if test="payType != null">pay_type = #{payType},</if>
+            <if test="sellerId != null">seller_id = #{sellerId},</if>
+            <if test="payProofUrl != null">pay_proof_url = #{payProofUrl},</if>
             <if test="receiverName != null">receiver_name = #{receiverName},</if>
             <if test="receiverPhone != null">receiver_phone = #{receiverPhone},</if>
             <if test="address != null">address = #{address},</if>
@@ -76,10 +82,12 @@
         select <include refid="Base_Column_List"/> from campus_order where id = #{id}
     </select>
 
-    <!-- 列表与概览共用同一筛选条件，避免两处 where 漂移 -->
+    <!-- 列表与概览共用同一筛选条件，避免两处 where 漂移。
+         V8 直付后订单带 seller_id：卖家也要能查到自己卖出的订单，
+         否则直付订单停在「待卖家确认收款」时卖家无入口确认。 -->
     <sql id="Filter_Where">
         <where>
-            <if test="userId != null">and user_id = #{userId}</if>
+            <if test="userId != null">and (user_id = #{userId} or seller_id = #{userId})</if>
             <if test="status != null">and status = #{status}</if>
             <if test="orderNo != null and orderNo != ''">and order_no like concat('%', #{orderNo}, '%')</if>
         </where>
@@ -103,10 +111,10 @@
         select count(1) from campus_order where user_id = #{userId}
     </select>
 
-    <!-- 超时未支付订单：仅取待付款(0)且创建时间早于 deadline -->
+    <!-- 超时未支付订单：待付款(0)与待卖家确认(7)均占库存，一并纳入超时取消 -->
     <select id="selectTimeoutWaitPayOrders" resultMap="CampusOrderResult">
         select <include refid="Base_Column_List"/> from campus_order
-        where status = 0 and create_time &lt; #{deadline}
+        where status in (0, 7) and create_time &lt; #{deadline}
         order by create_time asc
     </select>
 
@@ -118,9 +126,22 @@
         <if test="limit != null">limit #{limit}</if>
     </select>
 
-    <!-- 原子取消：仅当仍为待付款时才置为已取消，避免与用户支付/取消并发冲突 -->
+    <!-- 原子取消：仅当仍为待付款(0)/待卖家确认(7)时才置为已取消，避免与用户支付/取消并发冲突 -->
     <update id="cancelWaitPayOrderIfStillWaitPay">
         update campus_order set status = 4, cancel_time = #{cancelTime}
+        where order_no = #{orderNo} and status in (0, 7)
+    </update>
+
+    <!-- C2C 直付：买家标记已付款，原子置为待卖家确认(7)，仅待付款(0)可发起 -->
+    <update id="markAwaitSellerConfirm">
+        update campus_order
+        set pay_type = 1, pay_proof_url = #{payProofUrl}, seller_id = #{sellerId}, status = 7
         where order_no = #{orderNo} and status = 0
+    </update>
+
+    <!-- C2C 直付：卖家确认收款，原子置为已付款(1)并写支付时间 -->
+    <update id="confirmPayIfAwaitConfirm">
+        update campus_order set status = 1, pay_time = #{payTime}
+        where order_no = #{orderNo} and status = 7
     </update>
 </mapper>

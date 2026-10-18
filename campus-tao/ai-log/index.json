@@ -1,8 +1,8 @@
 {
   "generated_at": "2026-10-18",
   "generator": "campus-tao/tools/ai_log_index.py",
-  "count": 26,
-  "meta_reviewed": 1,
+  "count": 27,
+  "meta_reviewed": 2,
   "meta_policy": "001~025 为历史篇目，四项字段如实标注「未追溯」；自 026 起新篇目必须填写（AI 生成占比为撰写者自估值，签核人与日期须人工填写）。",
   "logs": [
     {
@@ -16,7 +16,7 @@
         "验证证据",
         "涉及文件"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -35,7 +35,7 @@
         "验证证据",
         "涉及文件"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -54,7 +54,7 @@
         "验证证据",
         "涉及文件"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -73,7 +73,7 @@
         "验证证据",
         "涉及文件"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -92,7 +92,7 @@
         "验证证据",
         "涉及文件"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -111,7 +111,7 @@
         "验证证据",
         "涉及文件"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -131,7 +131,7 @@
         "补充加固（P0 / P1 收尾）",
         "涉及文件"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -150,7 +150,7 @@
         "验证证据",
         "未覆盖 / 后续建议"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -169,7 +169,7 @@
         "验证证据",
         "未覆盖 / 后续建议"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -188,7 +188,7 @@
         "设计落地",
         "验证证据"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -207,7 +207,7 @@
         "设计落地",
         "验证证据"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -226,7 +226,7 @@
         "验证证据",
         "遗留与后续"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -245,7 +245,7 @@
         "验证证据",
         "遗留与后续"
       ],
-      "git_last_commit_date": "2026-10-15",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -264,7 +264,7 @@
         "验证证据",
         "遗留与后续"
       ],
-      "git_last_commit_date": "2026-10-16",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -283,7 +283,7 @@
         "验证证据",
         "遗留与后续"
       ],
-      "git_last_commit_date": "2026-10-16",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -302,7 +302,7 @@
         "验证证据",
         "未纳入本轮（如实记录）"
       ],
-      "git_last_commit_date": "2026-10-16",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -321,7 +321,7 @@
         "验证证据",
         "未纳入本轮（如实记录）"
       ],
-      "git_last_commit_date": "2026-10-16",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -342,7 +342,7 @@
         "涉及文件",
         "人工复核结论"
       ],
-      "git_last_commit_date": "2026-10-16",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -363,7 +363,7 @@
         "涉及文件",
         "人工复核结论"
       ],
-      "git_last_commit_date": "2026-10-16",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -383,7 +383,7 @@
         "5. 未纳入本轮（如实记录）",
         "6. 追加"
       ],
-      "git_last_commit_date": "2026-10-16",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -403,7 +403,7 @@
         "5. 未纳入本轮（如实记录）",
         "6. 方法论小结"
       ],
-      "git_last_commit_date": "2026-10-16",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -423,7 +423,7 @@
         "5. 未纳入本轮（如实记录）",
         "6. 方法论小结"
       ],
-      "git_last_commit_date": "2026-10-17",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -443,7 +443,7 @@
         "5. 未纳入本轮",
         "6. 方法论小结"
       ],
-      "git_last_commit_date": "2026-10-17",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -463,7 +463,7 @@
         "5. 未纳入本轮（如实记录）",
         "6. 方法论小结"
       ],
-      "git_last_commit_date": "2026-10-17",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -481,7 +481,7 @@
         "3. 首次实跑抓到的真实缺陷",
         "4. 验证"
       ],
-      "git_last_commit_date": "2026-10-17",
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "未追溯",
         "human_edits": "未追溯",
@@ -500,10 +500,28 @@
         "4. 验证证据",
         "5. 未纳入本轮（如实记录）"
       ],
-      "git_last_commit_date": null,
+      "git_last_commit_date": "2026-10-18",
       "meta": {
         "ai_generated_ratio": "0.95",
         "human_edits": "任务方向、优先级与验收标准由用户逐轮确定；实施、验证与文档由 AI 完成",
+        "reviewer": "待人工签核",
+        "review_date": "待签核"
+      }
+    },
+    {
+      "id": "027",
+      "file": "027-C2C卖家收款码直付.md",
+      "title": "C2C 卖家收款码直付（P0-1 过渡落地）",
+      "sections": [
+        "1. 目标与结论",
+        "2. 关键实现",
+        "3. 验证与负向验证",
+        "4. 遗留与边界（如实登记）"
+      ],
+      "git_last_commit_date": null,
+      "meta": {
+        "ai_generated_ratio": "0.95",
+        "human_edits": "支付方案由用户在三个选项中选定 C2C 卖家收款码直付；实施、验证与文档由 AI 完成",
         "reviewer": "待人工签核",
         "review_date": "待签核"
       }

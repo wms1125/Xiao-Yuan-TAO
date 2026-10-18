@@ -31,6 +31,12 @@ vi.mock('@/api/campus/payment', () => ({
   getPaymentChannel: vi.fn()
 }))
 
+// V8 直付：订单页引入 useUserStore 判断「我是卖家」，其默认导出会拉起
+// store→router→@/layout 全链。替身只保留组件用到的字段。
+vi.mock('@/store/modules/user', () => ({
+  default: () => ({ id: 2, name: 'tester' })
+}))
+
 import { ElMessageBox } from 'element-plus'
 import {
   listOrder,
