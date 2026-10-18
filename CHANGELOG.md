@@ -4,6 +4,42 @@
 
 开发过程留痕见 `campus-tao/ai-log/001~026`，里程碑文档见 `campus-tao/M1~M5`。
 
+## [1.0.25] - 2026-10-18
+
+修掉四个"门禁看起来在工作、实际什么都没干"的缺陷。全部由 PR #2 的真实 CI 失败暴露——
+它们都不在业务代码里，因此此前所有本地绿灯都没有意义。
+
+### 修复（门禁失效）
+- **gitleaks 密钥扫描从未扫过历史**：`actions/checkout` 用默认浅克隆（`depth=1`），
+  gitleaks 的 `HEAD^..HEAD` 拿不到父提交，直接 `unknown revision`。更关键的是
+  `fetch-depth` 原先写在 gitleaks 步骤上——那不是该 action 支持的输入，只会被忽略
+  （日志里只留下 `Unexpected input` 告警）。改为写在 checkout 上，并移除无效输入。
+  这一路扫描从落地起就是空转，而本仓库第一次真正跑 gitleaks 就抓到过真实结果。
+- **CodeQL 的 Java 分析同样空转**：自动构建器只扫仓库根目录找构建文件，而本仓库是
+  多模块工程、根 pom 在 `campus-tao/RuoYi-Vue-master/`，根目录一个 pom.xml 都没有。
+  于是 finalize 阶段报 `could not process any code written in Java/Kotlin`，
+  上传的 SARIF 变成 configuration error。改为 `build-mode: manual` + 同一 job 内显式
+  `mvn -B -DskipTests compile`（javac 被 tracer 观察到，Java 数据库才有内容）。
+  注意 backend job 里的 `mvn -B verify` 能跑，靠的是它自己的
+  `defaults.run.working-directory`——那是 run 步骤的默认值，CodeQL 的自动构建器不认。
+- **spotless 门禁的判定取决于开发者的操作系统**：门禁没配 `lineEnding`，走
+  `GIT_ATTRIBUTES` 语义，对没写 `eol` 的 `text=auto` 规则会退回平台换行符。
+  同一份 LF 源码在 Windows 上被判"要改成 CRLF"、在 Linux 上通过。
+  修复：`.gitattributes` 显式声明 `*.java text eol=lf`（全仓库 411 个 Java 文件在
+  HEAD 中本就无 CR，纯声明、无重写），并把本地工作区 406 个 CRLF 文件归一为 LF。
+- 归档 OpenAPI 契约未同步：P2-8 新增的 `GET /campus/notice/page` 只进了运行时，没进
+  `campus-tao/docs/openapi/campus-tao-openapi.json`，契约门禁如实拦下。
+  人工确认差异仅此一个接口后重新导出，现 195 path / 219 操作与运行时逐一匹配。
+
+### 顺带清理
+- 删除 2 个未使用的 import（`ICampusMessageService` 的 `java.util.Map`、
+  `CampusFavoriteServiceTest` 的 `ArgumentCaptor`），是上一轮 CI 报出的 spotless 违规。
+
+### 验证
+- `mvn -o -B verify` 本地 BUILD SUCCESS：335 用例 0 失败，spotless 0 violations。
+- `python campus-tao/tools/verify_openapi.py` 全 OK（195 path / 219 操作）。
+- ci.yml 用 pyyaml 解析通过，7 个 job 结构正确。
+
 ## [1.0.24] - 2026-10-18
 
 按《校园淘-企业级评估报告-v1.0.23》给出的 P2 功能项顺序实施（P2-7 站内信分页 / P2-8 通知中心 / P2-9 收藏上限），

@@ -493,8 +493,21 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: java, javascript-typescript
+          # 手动构建：autobuild 在"根目录没有构建文件"的仓库里一行 Java 都提取不到，
+          # 见下方构建步骤的说明。
+          build-mode: manual
 
-      # 自动构建本项目（根 pom 是 Maven 工程）；codeql-action 的 autobuild
-      # 会调用 mvn 完成增量编译，Java 分析才有可查询的数据库。
+      # 为什么必须自己构建而不是交给 autobuild：本仓库是多模块工程，Maven 的
+      # 根 pom 在 campus-tao/RuoYi-Vue-master/，仓库根目录没有任何构建描述文件。
+      # CodeQL 的自动构建器只扫根目录，于是找不到可构建的内容，finalize 阶段报
+      # "CodeQL could not process any code written in Java/Kotlin"，上传的 SARIF
+      # 变成 configuration error——日志里没有任何告警，却等于什么都没扫。
+      # build-mode: manual + 显式 mvn 后，javac 调用过程被 tracer 观察到，
+      # Java 数据库才有可查询的源码与类型信息。
+      # 跳过测试：编译产物已足够提取，跑用例是 backend job 的职责，这里不重复。
+      - name: 构建后端供 CodeQL 追踪（根 pom 在子目录）
+        working-directory: campus-tao/RuoYi-Vue-master
+        run: mvn -B -DskipTests compile
+
       - name: 分析（CodeQL）
         uses: github/codeql-action/analyze@v3
