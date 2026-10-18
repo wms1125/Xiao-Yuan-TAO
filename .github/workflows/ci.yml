@@ -216,6 +216,16 @@ jobs:
         working-directory: campus-tao-ui
         run: npm ci
 
+      # 为什么必须显式安装而不能依赖 runner 镜像预装：
+      # 镜像里确实有一份 Playwright 浏览器，但构建号与本仓库 package.json 的版本
+      # 不一定对得上——实测过 ffmpeg-1013 缺失导致所有用例在 newPage() 阶段就挂，
+      # 报的是 `Executable doesn't exist .../ffmpeg-linux`（ffmpeg 供录屏用，
+      # 缺它连浏览器都起不来）。显式安装把版本与依赖都锁到本仓库声明的这一份。
+      # --with-deps 同时装系统库，换 runner 镜像时不会因为缺 .so 而挂。
+      - name: 安装 Playwright 浏览器与系统依赖（版本与本仓库对齐）
+        working-directory: campus-tao-ui
+        run: npx playwright install --with-deps chromium
+
       - name: 浏览器 E2E（Playwright · 真实 Chrome · headless）
         working-directory: campus-tao-ui
         run: npx playwright test
@@ -475,10 +485,17 @@ jobs:
       security-events: write
       contents: read
       actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # 为什么按语言拆：两种语言需要的 build-mode 互斥，写在一个 job 里只能有一个值。
+        # JS/TS 只支持 none（它本来就不需要构建），Java 需要 manual 才能让 javac 被
+        # tracer 观察到；把两者塞进同一个 init 会直接 fatal error 退出。
+        language: [java, javascript-typescript]
     steps:
       - uses: actions/checkout@v4
 
-      # CodeQL 的 Java 分析需要可用 JDK（自动构建会调用 mvn）
+      # CodeQL 的 Java 分析需要可用 JDK（手动构建会调用 mvn）
       - name: 设置 JDK 17
         uses: actions/setup-java@v4
         with:
@@ -489,13 +506,15 @@ jobs:
             campus-tao/RuoYi-Vue-master/pom.xml
             campus-tao/RuoYi-Vue-master/*/pom.xml
 
-      - name: 初始化 CodeQL
+      - name: 初始化 CodeQL（${{ matrix.language }}）
         uses: github/codeql-action/init@v3
         with:
-          languages: java, javascript-typescript
-          # 手动构建：autobuild 在"根目录没有构建文件"的仓库里一行 Java 都提取不到，
-          # 见下方构建步骤的说明。
-          build-mode: manual
+          languages: ${{ matrix.language }}
+          # Java 用 manual（依赖下面的显式构建），JS/TS 用 none（不支持 manual）。
+          # 也别退回 autobuild：本仓库是多模块工程、根 pom 在子目录，自动构建器只扫
+          # 仓库根目录，一行 Java 都提取不到，finalize 直接报
+          # "could not process any code written in Java/Kotlin"。
+          build-mode: ${{ matrix.language == 'java' && 'manual' || 'none' }}
 
       # 为什么必须自己构建而不是交给 autobuild：本仓库是多模块工程，Maven 的
       # 根 pom 在 campus-tao/RuoYi-Vue-master/，仓库根目录没有任何构建描述文件。
@@ -506,8 +525,9 @@ jobs:
       # Java 数据库才有可查询的源码与类型信息。
       # 跳过测试：编译产物已足够提取，跑用例是 backend job 的职责，这里不重复。
       - name: 构建后端供 CodeQL 追踪（根 pom 在子目录）
+        if: matrix.language == 'java'
         working-directory: campus-tao/RuoYi-Vue-master
         run: mvn -B -DskipTests compile
 
-      - name: 分析（CodeQL）
+      - name: 分析（CodeQL · ${{ matrix.language }}）
         uses: github/codeql-action/analyze@v3

@@ -15,13 +15,21 @@
   `fetch-depth` 原先写在 gitleaks 步骤上——那不是该 action 支持的输入，只会被忽略
   （日志里只留下 `Unexpected input` 告警）。改为写在 checkout 上，并移除无效输入。
   这一路扫描从落地起就是空转，而本仓库第一次真正跑 gitleaks 就抓到过真实结果。
-- **CodeQL 的 Java 分析同样空转**：自动构建器只扫仓库根目录找构建文件，而本仓库是
+- **CodeQL 的 Java 分析同样空转**（static-analysis job 失败）：自动构建器只扫仓库根目录找构建文件，而本仓库是
   多模块工程、根 pom 在 `campus-tao/RuoYi-Vue-master/`，根目录一个 pom.xml 都没有。
   于是 finalize 阶段报 `could not process any code written in Java/Kotlin`，
   上传的 SARIF 变成 configuration error。改为 `build-mode: manual` + 同一 job 内显式
   `mvn -B -DskipTests compile`（javac 被 tracer 观察到，Java 数据库才有内容）。
   注意 backend job 里的 `mvn -B verify` 能跑，靠的是它自己的
   `defaults.run.working-directory`——那是 run 步骤的默认值，CodeQL 的自动构建器不认。
+  - 第二轮修正：`build-mode` 是整个 job 一个值，而 JS/TS 只支持 `none`、不支持 `manual`，
+    合并写会让 init 直接 fatal error。改为按语言矩阵拆分（`java` 用 `manual`、
+    `javascript-typescript` 用 `none`），构建步骤加 `if: matrix.language == 'java'`。
+- **Playwright 浏览器 E2E 从未真正跑起来**（e2e job 失败）：CI 里只有 `npm ci`、没有
+  `playwright install`，一直吃 runner 镜像预装的浏览器。镜像那份构建号与本仓库
+  `package.json` 声明的不一定对得上——实测 `ffmpeg-1013` 缺失，15 个用例全在 `newPage()`
+  阶段挂（报 `Executable doesn't exist .../ffmpeg-linux`；ffmpeg 供录屏用，缺它连浏览器
+  都起不来）。补 `npx playwright install --with-deps chromium`，把版本与系统依赖锁到本仓库这份。
 - **spotless 门禁的判定取决于开发者的操作系统**：门禁没配 `lineEnding`，走
   `GIT_ATTRIBUTES` 语义，对没写 `eol` 的 `text=auto` 规则会退回平台换行符。
   同一份 LF 源码在 Windows 上被判"要改成 CRLF"、在 Linux 上通过。
