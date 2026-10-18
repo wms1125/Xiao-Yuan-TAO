@@ -392,24 +392,54 @@ class CampusOrderServiceTest {
         CampusOrder order = order(ORDER_NO, BUYER_ID, 0, "60.00");
         when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
 
-        ServiceException ex = assertThrows(ServiceException.class, () -> orderService.shipOrder(ORDER_NO, "SF001"));
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> orderService.shipOrder(ORDER_NO, "SF001", SELLER_ID));
 
         assertEquals("订单状态异常，无法发货", ex.getMessage());
     }
 
     @Test
-    @DisplayName("发货：置为已发货、物流单号去空格并向买家推送通知")
+    @DisplayName("发货：卖家本人置为已发货、物流单号去空格并向买家推送通知")
     void shipOrderSuccess() {
         CampusOrder order = order(ORDER_NO, BUYER_ID, 1, "60.00");
+        order.setSellerId(SELLER_ID);
         when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
         when(orderMapper.updateCampusOrder(any())).thenReturn(1);
 
-        assertEquals(1, orderService.shipOrder(ORDER_NO, "  SF001  "));
+        assertEquals(1, orderService.shipOrder(ORDER_NO, "  SF001  ", SELLER_ID));
 
         assertEquals(Integer.valueOf(2), order.getStatus());
         assertEquals("SF001", order.getLogisticsNo());
         assertNotNull(order.getShipTime());
         verify(noticeService).push(eq(BUYER_ID), eq("ship"), anyString(), anyString(), eq(ORDER_NO));
+    }
+
+    @Test
+    @DisplayName("发货：非卖家本人且非管理员拒绝（越权负向）")
+    void shipOrderRejectsNonSeller() {
+        CampusOrder order = order(ORDER_NO, BUYER_ID, 1, "60.00");
+        order.setSellerId(SELLER_ID);
+        when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
+
+        // 买家自己点发货：既不是卖家也不是管理员，归属校验必须拒绝
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> orderService.shipOrder(ORDER_NO, "SF001", BUYER_ID));
+
+        assertEquals("仅订单卖家本人或管理员可发货", ex.getMessage());
+        verify(orderMapper, never()).updateCampusOrder(any());
+        verify(noticeService, never()).push(any(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("发货：管理员(admin)可代任意订单发货")
+    void shipOrderAllowsAdmin() {
+        CampusOrder order = order(ORDER_NO, BUYER_ID, 1, "60.00");
+        order.setSellerId(SELLER_ID);
+        when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
+        when(orderMapper.updateCampusOrder(any())).thenReturn(1);
+
+        // 管理员 id=1，非本单卖家，仍可代发
+        assertEquals(1, orderService.shipOrder(ORDER_NO, "SF002", 1L));
     }
 
     @Test

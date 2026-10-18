@@ -39,7 +39,20 @@ META_RE = re.compile(r"<!--\s*ai-log-meta\s*(.*?)-->", re.S)
 H1_RE = re.compile(r"^#\s+(.+?)\s*$", re.M)
 H1_ID_RE = re.compile(r"^(?:0*)?(\d+)\s*[·•]\s*(.+)$")
 H2_RE = re.compile(r"^##\s+(.+?)\s*$", re.M)
-PENDING = "未追溯"
+
+# 「占位符」不等于「已签核」：早期篇目补不出真值用「未追溯」，自 026 起待人工填写的
+# 稿件写「待人工签核/待签核」。二者都是 **尚未签核**——若把它们算进签核覆盖，等于
+# 用未签核的稿件虚增数字。签核覆盖只统计真人真日期都已落地的篇目。
+PENDING_PLACEHOLDERS = ("未追溯", "待人工签核", "待签核", "待补", "TBD")
+
+
+def is_signed(meta):
+    """reviewer 与 review_date 均为真人真值时才计入签核覆盖（任一为占位符即未签核）。"""
+    reviewer = (meta.get("reviewer") or "").strip()
+    review_date = (meta.get("review_date") or "").strip()
+    if not reviewer or not review_date:
+        return False
+    return reviewer not in PENDING_PLACEHOLDERS and review_date not in PENDING_PLACEHOLDERS
 
 
 def git_last_date(path):
@@ -129,7 +142,7 @@ def main():
         for p in problems:
             failures.append("%s: %s" % (fname, p))
 
-    filled = sum(1 for e in logs if e["meta"]["reviewer"] and e["meta"]["reviewer"] != PENDING)
+    filled = sum(1 for e in logs if is_signed(e["meta"]))
     result = {
         "generated_at": date.today().isoformat(),
         "generator": "campus-tao/tools/ai_log_index.py",

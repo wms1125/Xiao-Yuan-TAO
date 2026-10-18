@@ -140,11 +140,11 @@
                 >确认已收款</el-button
               >
               <el-button
-                v-if="scope.row.status === 1"
+                v-if="scope.row.status === 1 && (isOrderSeller(scope.row) || isAdminUser())"
                 link
                 type="primary"
                 @click="handleShip(scope.row)"
-                v-hasRole="['admin']"
+                v-hasPermi="['campus:order:edit']"
                 >发货</el-button
               >
               <el-button
@@ -584,6 +584,13 @@ const directPayForm = ref({ orderNo: '', amount: 0, qrUrl: '', proof: '' })
 function isOrderSeller(row) {
   const uid = userStore.id
   return !!row.sellerId && !!uid && Number(row.sellerId) === Number(uid)
+}
+
+// 管理员（admin 角色或超级管理员 id=1）可代任意订单发货；卖家本人只能发自己的货。
+// 后端 ship 接口同样做归属校验，前端隐藏仅是体验优化，不是权限边界。
+function isAdminUser() {
+  const roles = userStore.roles
+  return (Array.isArray(roles) && roles.includes('admin')) || Number(userStore.id) === 1
 }
 
 // 打开直付弹窗：取详情以拿到卖家收款码（详情接口仅在待付款/待确认时附带）
