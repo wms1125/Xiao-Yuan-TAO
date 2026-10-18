@@ -214,6 +214,21 @@ AI 声称"已完成"时，必须同时给出以下**三类证据**，缺一不�
 | 依赖安全 | 新增依赖须过 `npm audit`（生产依赖 0 告警）与 `osv-scanner`（后端），豁免项须留据 |
 | 鉴权 | 涉及数据归属的操作，**身份一律取自登录态**，不接受前端传入的身份参数（如 `sellerId`、`handler`） |
 | 越权 | 前端隐藏不等于后端放行；接口须有 `@PreAuthorize` 兜底并有越权断言覆盖 |
+| 静态分析 | GitHub CodeQL（`security-and-quality`）对 `main` 全量扫描；**自研 `campus` 模块须保持 0 告警**（见 8.1） |
+
+### 8.1 CodeQL 基线（自研代码零告警）
+
+CodeQL 默认查询集在每次推送 `main` 时运行，结果见仓库 `Security → Code scanning`。
+
+- **基线（v1.0.26 复核）**：14 条 open 告警（10 high + 4 medium）**全部位于若依上游文件**
+  （`ruoyi-common` 的 `FileUtils`×5 / `FileUploadUtils`×3 / `HttpUtils`×2、`ruoyi-framework` 的
+  `SecurityConfig`、前端 `login.vue` / `utils/ruoyi.js`），**自研 `com.ruoyi.campus` 模块 0 条**。
+- **处置原则**：上游既有、修复成本高且实际风险可控的，走 GitHub `dismiss` 并**写明理由**形成决策记录；
+  能以低风险方式（如删除死代码）直接消除的，出修复 PR 消除。
+- **回归要求**：自研 `campus` 代码一旦出现**新增** CodeQL 告警，视为门禁失败，须在合入前消除或
+  逐条 dismiss 并留据；不得静默忽略。
+- **与其它扫描的边界**：CodeQL 负责**代码级数据流/污点**分析，与 `osv-scanner`（依赖漏洞）、
+  `npm audit`（前端依赖）互补，三者不可相互替代。
 
 ---
 
