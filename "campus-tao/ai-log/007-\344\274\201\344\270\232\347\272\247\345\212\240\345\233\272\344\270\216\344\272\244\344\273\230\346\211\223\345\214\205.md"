@@ -1,0 +1,108 @@
+# ai-log 007 · 企业级加固与交付打包
+
+> 里程碑：M4（企业级能力加固）+ M5（交付打包） ｜ 主题：六维加固、fat-jar 原地重编译与交付验证 ｜ 记录方式：AI 辅助留痕
+
+## 里程碑目标
+
+在 M3 业务闭环之上完成企业级加固，并产出可交付的发行包：
+
+- 从安全、一致性、可靠性、性能、工程化、运维六个维度加固，覆盖任务书「≥6 项企业级能力」要求；
+- 在**交付机无 Maven、无本地 `~/.m2` 仓库**的条件下完成代码改动的重新编译与打包；
+- 交付 Windows 绿色一体化发行包 `campus-tao-dist` 并完成端到端回归。
+
+## 关键决策与取舍
+
+| 决策点 | 选择 | 备选方案 | 取舍理由 |
+|--------|------|----------|----------|
+| 安全加固 | Spring Security + JWT；写接口 `@PreAuthorize`；身份取服务端 `SecurityUtils`；归属校验 | 仅前端菜单控制 | 后端二次校验，前端无法篡改归属人，越权返回 403 |
+| 验证码策略 | 开关读自 `sys_config`，演示环境置 false | 硬编码/命令行参数 | 符合若依实际读取位置，演示便捷、生产可开 |
+| 一致性加固 | 关键动作统一 `@Transactional(rollbackFor = Exception.class)` | 分散事务 | 库存与订单、退款与回补同事务，杜绝半完成 |
+| 可靠性加固 | 乐观锁防超卖、支付幂等、账户原子扣款、状态机约束 | 仅应用层校验 | 数据库原子判断，并发下不超卖、不超扣 |
+| 工程化加固 | 业务异常统一抛框架 `ServiceException`；另加全局异常处理器兜底未预期异常 | 直接抛堆栈 | 统一返回 code/msg，避免堆栈泄露 |
+| 重编译方式 | **fat-jar 原地重编译** | 安装 Maven 重新构建 | 交付机无 Maven、无 `~/.m2`，原地重编译最可行 |
+| 内层 jar 重打 | 使用保留目录条目的方式重打 `ruoyi-system` 内层 jar | 直接压缩文件列表 | 保留 zip 目录 entry 才能让 Spring Boot 正确解析嵌套 jar |
+
+改动与验证要点：新增 `CampusGlobalExceptionHandler`（`@RestControllerAdvice`，兜底未预期的 `RuntimeException`）；业务异常统一由框架 `ServiceException` 处理；`payOrder` 增加幂等判断；JWT 密钥支持 `${JWT_SECRET:演示默认值}` 注入。
+
+## 踩坑与解决
+
+| 现象 | 根因 | 解决 |
+|------|------|------|
+| 交付机无 Maven 无法重新构建 | 无 Maven、无本地 `~/.m2` 仓库 | 采用 fat-jar 原地重编译：解包 `ruoyi-admin.jar` → 用 `javac` 增量编译改动类（classpath 指向 `BOOT-INF/lib` 下全部 jar）→ 重打 `ruoyi-system` 内层 jar → 替换进 fat jar |
+| **启动报 `ISysConfigService` bean 缺失** | 重打内层 jar 时一度丢失了目录条目（zip 目录 entry），导致 Spring Boot 嵌套 jar 包资源解析失效、组件扫描扫不到类 | 补回目录条目后重新打包，启动成功。这是典型的嵌套 jar 打包陷阱 |
+| E2E 单账号无法跑通 | `createOrder` 有「不能购买自己发布的商品」拦截；普通用户 `ry` 若无校园淘菜单权限会返回 403 | 必须先补菜单/角色 SQL，再将 E2E 由单账号改造为**双账号**（admin 卖家 / ry 买家） |
+| 命令行改验证码开关无效 | 开关在数据库 `sys_config`，不在 yml | 直接更新 `sys_config.sys.account.captchaEnabled` |
+| 上传路径失效 | 绝对路径 `D:/ruoyi` 不存在 | 改相对路径 `./uploadPath`，并刷新 jar 内 `application.yml` |
+| 接口 500：`Name for argument of type [java.lang.Long] not specified` | 手工 `javac` 未带 `-parameters`，`@PathVariable`/`@RequestParam` 的参数名在 class 中丢失（Spring 6+ 不再从调试信息推断） | 一律加 `-parameters` 重编译，与 Maven 构建默认行为对齐 |
+| **启动失败：`NoClassDefFoundError: com/ruoyi/common/core/controller/BaseController`** | 补丁 class 被 `jar uf` 写到了 fat jar **根目录** `com/ruoyi/...`，而 Spring Boot 只从 `BOOT-INF/classes/` 与 `BOOT-INF/lib/*.jar` 装载类，根目录条目不在类路径上，引发类加载紊乱 | 补丁类必须写入 `BOOT-INF/classes/`（该目录优先于 `BOOT-INF/lib` 下的模块 jar，从而覆盖模块 jar 中的同名类）；重打包改用 Python `zipfile` 逐条保留原 `compress_type`，确保嵌套 jar 仍为 STORED |
+| 明文口令随仓库留痕 | DB 口令与 Druid 控制台口令硬编码在 `application-druid.yml` | 改为环境变量占位符（`${DB_PASSWORD:...}`、`${DRUID_LOGIN_PASSWORD:...}` 等）并同步刷新 jar 内该 yml；仓库尚无远程、历史仅一条提交，故重建根提交以清除明文 |
+| **源码树无法 Maven 构建（164 处编译错误）** | 首次 `mvn clean package` 失败：`ruoyi-system/pom.xml` 从未声明编译期 `jakarta.validation` 依赖，而 campus DTO/Controller 与 `SysConfig`/`SysNotice`/`SysPost`/`SysUserServiceImpl` 都在用该 API | 补入 `spring-boot-starter-validation`（编译作用域），与运行时既有 Hibernate Validator 9.1.0 对齐；此前"能跑现成 jar"掩盖了该缺陷，说明**必须实际执行一次完整构建**才能暴露此类问题 |
+| **`<script setup>` 裸标识符导致页面白屏** | 系统管理/系统监控页面点击后内容区全白，但组件文件存在、Vite 编译无报错、后端菜单与权限均正常。根因：`main.js` 只把 `useDict` 挂在 `app.config.globalProperties`，而视图在 `<script setup>` 中**裸调用** `useDict(...)`——模板能解析 `globalProperties`，脚本块不能，必须由构建期自动导入提供。auto-import 配置恰好漏了该项，运行时 `ReferenceError: useDict is not defined` 让 setup 中断（页面壳与侧边栏仍在） | 补全自动导入配置。教训：①**模板可用的全局方法在 `<script setup>` 里必须显式导入**；②排查白屏应先看 console 的 setup 异常，而非先怀疑路由/权限；③用"取字典/不取字典"分组二分定位，可快速锁定影响面 |
+| **批处理文件行尾为 LF，被 cmd 逐字拆碎** | 四个 `.bat`（含三个交付用一键脚本）均为 LF 行尾。cmd 解析批处理时按字节偏移续读，行尾错误会让 `call` 与括号块错位，出现 `'t' is not recognized`、`'TH' is not recognized` 之类碎片化报错。此前从未在 Windows 上实跑过这些脚本，缺陷一直未被发现 | 全部转为 CRLF，并新增 `.gitattributes`（`*.bat text eol=crlf`）防复发。教训：**"一键脚本"必须在本目标平台实跑一次**，仅阅读源码看不出行尾问题 |
+| **校验脚本误报 jar 被占用（探针选型踩坑）** | 首次为 `verify.bat` 写占用预检时用了纯批处理惯用法 `(>>"%JAR%" call) 2>nul \|\| set LOCKED=1`。实测在**未占用**的文件上同样返回 LOCKED（已用独立探针脚本复现并证伪） | 改用 PowerShell 以 `FileShare=None` 独占打开探测（`[IO.File]::Open(path,'Open','Write','None')`），实测对未占用文件正确返回 `unlocked`。教训：批处理的错误检测惯用法不可轻信，涉及文件锁应使用语义明确的 API |
+| **`verify.bat` 失败实为环境锁而非构建问题** | 停止后端前运行脚本报 BUILD FAILURE：`clean` 无法删除 `ruoyi-admin/target/ruoyi-admin.jar`——**后端进程正运行该 jar，文件被占用**。报错指向 Maven，真实原因在运行环境 | 脚本加入占用预检：命中即给出"请先停止后端"的明确提示并跳过后端阶段，避免将环境问题误读为构建失败。操作约定：**跑 `verify.bat` 前先停后端** |
+| **npm 指向已停用的本地代理源，装包 `ECONNREFUSED`** | 安装 vitest 时 npm 报 `ECONNREFUSED 127.0.0.1:24081`——`npm config get registry` 指向一个本地代理源且该端口未监听 | 本次安装显式加 `--registry=https://registry.npmjs.org/`（`registry.npmjs.org` 实测 200）绕过，未改动全局配置。教训：装包失败先查 `npm config get registry` 是否指向本地代理 |
+
+## 验证证据
+
+1. 重编译后启动成功：
+
+```
+Started RuoYiApplication
+Tomcat started on port 8080
+```
+
+2. 六维加固回归：E2E 全链路执行 `python e2e_business.py`，输出：
+
+```
+RESULT = ALL_PASS
+```
+
+覆盖双账号登录 → 充值 500 → 发布商品（伪造 sellerId=99 被改写为 1）→ 加购 → 下单 → 支付（余额 500→440，扣 60）→ 发货 → 收货 → 评价 → 申请售后 → 审核通过（**伪造 handler=forged-hacker 被忽略，库中审核人=admin**；退款，余额回 500，库存回补 5）→ 防超卖（库存 1 下单 2 件被拦截）→ 权限收敛（ry 调商品发布 403、ry 调售后审核 403）。
+
+3. 单元测试：JUnit 5 位于 `ruoyi-system/src/test/java/com/ruoyi/campus/`，两个测试类共 15 个用例全部通过（11 个 DTO 参数校验用例 + 4 个账户原子扣款 JDBC 用例）。可在无 Maven 环境下用 JUnit Platform Console Standalone 运行；接入 Maven 后 `mvn test` 可执行。
+
+4. 健康检查：若依原生未引入 Actuator，存活探针以 `curl http://localhost:8080/captchaImage` 返回 200 为准；启动期打印端口与内嵌 Redis 状态。
+
+5. 交付打包：`campus-tao/`（源码、SQL、文档）与 `campus-tao-ui/` 归入发行包 `campus-tao-dist`，配合三步脚本可开箱运行。
+
+## 补充加固（P0 / P1 收尾）
+
+在初版加固之后，针对评审发现的缺口做了第二轮加固，均为「先改源码 → 用 JDK 17 重编译 → 注入 `BOOT-INF/classes/` → 重启验证」的同一流程：
+
+| 项目 | 改动 | 验证 |
+|------|------|------|
+| 横向越权（IDOR） | 购物车改数量/勾选/删除校验归属；商品修改/上下架/删除校验「卖家本人或管理员」；商品编辑改字段白名单，不再接收 `sellerId/sellerName` | 双账号实测：ry 改他人购物车被拒（500），admin 购物车数量不变；夹带 `sellerId=999` 编辑商品后落库仍为 1；`GET /campus/product/{id}` 200 |
+| 审核归属防伪造 | 审核人改取 `SecurityUtils.getUsername()`；`CampusAftersaleAuditDTO` 移除 `handler`；前端不再传该值 | E2E 新增断言：传 `handler=forged-hacker` → 库中仍为 `admin`，全链路 `RESULT: ALL_PASS` |
+| 密钥外部化 | DB 账号口令、Druid 控制台口令改环境变量占位符，源码内无明文 | 重启后 Druid 数据源初始化成功、接口 200（默认值回退生效），jar 内该条目与源码哈希一致 |
+| 版本控制 | `git init -b main`，`.gitignore` 排除内置 JDK/MySQL、`node_modules`、`target`、`uploadPath`、日志；重建根提交清除明文口令 | 仓库 711 个文件入库，`git grep` 校验 HEAD 无明文口令 |
+| 交付包卫生 | 删除 fat jar 解包残留（`BOOT-INF`/`META-INF`/`org`，98.9MB/175 文件）与 `mysql_test.log` | 外层目录仅剩交付根 |
+| C2C 卖方权限 | 为角色 2（学生）补授 `campus:product:add/edit/remove`（2100~2102），并同步写回交付 SQL `sql/campus_tao_full.sql` 的 `sys_role_menu` 插入行 | 重新登录后 ry 发布商品 200、卖家强制为本人（伪造 `sellerId=99` 被忽略）；售后审核仍 403；e2e 全链路 `RESULT: ALL_PASS` |
+| Maven 纯净重建 | 修复 `ruoyi-system/pom.xml` 缺失的编译期 `jakarta.validation` 依赖（补入 `spring-boot-starter-validation`，移除冗余 test 作用域 `hibernate-validator`）；用 Maven 3.9.9 + JDK 17 执行 `mvn -DskipTests clean package` | BUILD SUCCESS；`mvn test` 15/15 全绿；新 jar 外层**零**手工注入 class、改动类进内层 `BOOT-INF/lib/ruoyi-system-3.9.2.jar`；jar 内配置为外部化占位符；以新 jar 启动后 E2E `RESULT: ALL_PASS` |
+| 前端页面白屏修复 | `vite/plugins/auto-import.js` 补全 `@/utils/dict`→`useDict`、`@/utils/ruoyi`→`selectDictLabel`/`selectDictLabels` 的自动导入 | 浏览器全菜单走查：系统管理 10 项 + 系统监控 6 项全部正常渲染、无 console error；Vite 输出模块检查确认 17 个受影响页面/子页面均已注入 `utils/dict` |
+| 删除若依官网菜单 | 删除 `sys_menu` menu_id=4（外链 http://ruoyi.vip）及 `sys_role_menu` 中的 `(2,4)`，并同步交付 SQL `sql/campus_tao_full.sql` | 重新登录后侧边栏无该项；交付 SQL 的 menu 元组与 role 映射均已移除，重建库不再出现 |
+| CI 流水线与本地校验脚本 | 新增 `.github/workflows/ci.yml`（后端打包+单测、前端单测+构建、Maven/npm 缓存、jar 产物上传）与 `verify.bat`（本地等价校验，含 jar 占用预检与 Maven 自动定位）；新增 `.gitattributes` 固化 bat 行尾 | `verify.bat` 实跑退出码 0：后端打包 ✓、后端单测 15/15 ✓、前端单测 37/37 ✓、前端 `build:prod` ✓，末行 `ALL PASS`；`2-启动后端.bat` 实跑后端 8080 返回 200，确认 CRLF 修复后一键脚本可用。CI 端到端回归（e2e）因需 MySQL 未纳入，仍本地执行 |
+| 依赖清单（SBOM）与许可合规 | 后端用 CycloneDX Maven 插件产出 `backend-bom.json`（1.6，156 组件）；前端用离线脚本 `tools/sbom-frontend.py` 扫描 `node_modules` 产出 `frontend-dependencies.csv`（461 包）；说明与风险提示写入 `sbom/SBOM.md` | BOM 覆盖度与发行 jar 内 `BOOT-INF/lib` 的 141 个依赖 jar 逐一对照无缺失；前端未知许可 0、copyleft 0；无 AGPL/SSPL 等阻断分发的强传染组件。缺口如实记录：未做 CVE 扫描、前端未输出 CycloneDX、上游 6 个自研模块 pom 未声明 `<licenses>` |
+| 交付包内置构建工具链 | 将 Maven 3.9.9 与离线依赖仓库随交付包内嵌（`.tools/maven`、`.tools/m2-repo`，2361 文件 / 153MB；复制后剔除 `_remote.repositories` 与 `*.lastUpdated` 以免离线解析失败）；`verify.bat` 默认 `-o` 强制离线并指向内置仓库，定位顺序 `MVN_CMD` → `.tools\maven` → `%TEMP%` → `PATH` | 以 `-o` 强制离线跑 `verify.bat`：后端 BUILD SUCCESS、后端单测 15/15、前端单测 37/37、`build:prod` 通过，末行 `ALL PASS`；构建全程未访问任何远程仓库 |
+| 前端单元测试 | 接入 vitest（`vitest.config.js` 独立于构建配置，避免把压缩/图标插件带入测试；`tests/unit/` 覆盖通用工具函数与校园淘订单/商品/购物车接口封装，共 37 用例），新增 `npm run test:unit`；CI 与 `verify.bat` 均纳入该阶段 | `npm run test:unit` 37/37 全绿。首轮 2 例断言与实际实现不符（`isEmpty(0)` 因宽松比较为 true、`validURL` 不接受无点域名如 `localhost`），**修正断言而非改动产品代码** |
+
+> 说明（构建链路沿革）：P0/P1 阶段的改动曾以 `javac -parameters` 重编译后注入 `BOOT-INF/classes/` 的方式落进 jar，运行时优先于 `BOOT-INF/lib/ruoyi-system-3.9.2.jar` 中的同名类。该方式只是**交付机上无 Maven 时的过渡手段**，现已由 Maven 纯净重建取代：发行 jar 完全由源码构建产出，外层无任何手工 class，构建过程可重现。
+
+## 涉及文件
+
+- `campus-tao/RuoYi-Vue-master/ruoyi-system/src/main/java/com/ruoyi/campus/exception/CampusGlobalExceptionHandler.java`
+- `.../campus/service/`（订单支付幂等等服务改动）
+- `ruoyi-admin/src/main/resources/application.yml`（JWT 密钥注入、devtools 关闭、上传路径）
+- `ruoyi-system/src/test/java/com/ruoyi/campus/`（15 个 JUnit 用例）
+- `campus-tao/e2e_business.py`（双账号全链路 + 专项）
+- `campus-tao/RuoYi-Vue-master/ruoyi-admin/target/ruoyi-admin.jar`（fat-jar 重编译产物）
+- `campus-tao/M4-企业级能力加固.md`、`campus-tao/M5-测试报告与交付物.md`
+- `.github/workflows/ci.yml`、`verify.bat`、`.gitattributes`、`CHANGELOG.md`
+- `campus-tao-ui/vitest.config.js`、`campus-tao-ui/tests/unit/`（前端单元测试）、`campus-tao/sbom/` 与 `campus-tao/tools/sbom-frontend.py`（SBOM）
+
+<!-- ai-log-meta
+ai_generated_ratio: 未追溯
+human_edits: 未追溯
+reviewer: 未追溯
+review_date: 未追溯
+-->

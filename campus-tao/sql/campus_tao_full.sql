@@ -280,7 +280,9 @@ CREATE TABLE `campus_order` (
   UNIQUE KEY `uk_order_no` (`order_no`),
   KEY `idx_user` (`user_id`),
   KEY `idx_status` (`status`),
-  KEY `idx_user_time` (`user_id`,`create_time`)
+  KEY `idx_user_time` (`user_id`,`create_time`),
+  KEY `idx_status_time` (`status`,`create_time`),
+  KEY `idx_status_ship` (`status`,`ship_time`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='订单';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

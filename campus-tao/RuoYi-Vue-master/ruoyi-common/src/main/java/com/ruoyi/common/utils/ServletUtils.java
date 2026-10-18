@@ -138,9 +138,25 @@ public class ServletUtils
      */
     public static void renderString(HttpServletResponse response, String string)
     {
+        renderString(response, string, 200);
+    }
+
+    /**
+     * 将字符串渲染到客户端，并显式指定 HTTP 状态码
+     *
+     * <p>两参版本把状态码写死为 200，历史上认证失败只能靠 body 里的 code=401 表达，
+     * HTTP 层的语义完全丢了：网关、监控、axios 错误分支全都看不见这次失败。
+     * 需要"真状态码"的调用方（认证入口点）改用本重载，其余调用方行为不变。</p>
+     *
+     * @param response 渲染对象
+     * @param string 待渲染的字符串
+     * @param status HTTP 状态码
+     */
+    public static void renderString(HttpServletResponse response, String string, int status)
+    {
         try
         {
-            response.setStatus(200);
+            response.setStatus(status);
             response.setContentType("application/json");
             response.setCharacterEncoding("utf-8");
             response.getWriter().print(string);

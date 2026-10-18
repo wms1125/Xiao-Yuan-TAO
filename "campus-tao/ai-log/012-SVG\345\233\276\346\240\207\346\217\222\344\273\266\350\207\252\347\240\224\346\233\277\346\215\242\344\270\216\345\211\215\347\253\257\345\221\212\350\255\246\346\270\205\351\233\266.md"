@@ -1,0 +1,75 @@
+# ai-log 012 · SVG 图标插件自研替换与前端构建告警清零
+
+> 里程碑：M8（依赖面收敛） ｜ 主题：前端 5 项 high 告警清零、SVG sprite 插件自研、图标渲染回归 ｜ 记录方式：AI 辅助留痕
+
+## 里程碑目标
+
+v1.0.6 的 CVE 专项把前端告警从 16 项压到 5 项 high，剩余 5 项**当时被判定为"可接受的残余风险"**并写进了 `sbom/SBOM.md` 第四.4.2 节。本次不再接受这条残余：
+
+- **先取证**：把 5 项的真实包名与依赖路径从 `npm audit --json` 里**跑出来**，而不是沿用上一次的结论；
+- **再定方案**：能升则升；升不了就**移除依赖链**，而不是继续"书面接受"；
+- **后验证**：换掉构建插件必须证明**图标仍然画得出来**（尺寸非零、内容被真正引用），否则就是"告警清零但功能退化"。
+
+## 关键决策与取舍
+
+| 决策点 | 选择 | 备选方案 | 取舍理由 |
+|--------|------|----------|----------|
+| 5 项 high 的根因判定 | 以 `npm audit --json` + `npm ls` 实测取证 | 沿用 v1.0.6 记录的"`braces` 上游无补丁"结论 | 上次结论方向正确，但**不能当事实用**：本次实测依赖路径为 `vite-plugin-svg-icons → svg-baker → micromatch → braces`，且 `npm view braces dist-tags` 显示 **latest 仍为 3.0.3**（通告区间 `<=3.0.3`）——即 `overrides` 无论固定到哪个版本都无法命中修复版本，这是"必须换实现"的硬证据 |
+| 清零手段 | **移除依赖链**：自研零依赖 sprite 插件 | ① `overrides` 强制升级；② 接受残余风险；③ 换 `unplugin-icons` | ① 无版本可升（已证）；② 本次明确不接受；③ `unplugin-icons` 需改写 **22 个文件共 103 处** `<svg-icon icon-class="…">` 用法，并为图标引入新的图标集依赖，改动面与回归风险都远大于"换插件实现" |
+| 保留哪一层契约 | 只替换**构建插件**，保留 `virtual:svg-icons-register` 与 `#icon-{iconClass}` 契约 | 顺带把组件 API 现代化（改写成 `<i-icon>` 等） | `SvgIcon` 组件与全部页面代码依赖 `icon-class`；**契约不变 ⇒ 103 处用法与 22 个文件零改动**，回归面收敛到"一个插件文件" |
+| 是否内置 `svgo` 压缩 | 不内置（牺牲约 +15 KB） | 把 `svgo` 显式加回来 | 本次的目标是**收敛依赖面**，为省体积再引入一个（含 7 个传递依赖的）压缩工具，与目标相反；体积增量 gzip 后仅约 +5 KB，可接受并如实记录 |
+| 假修复的处理 | 明确不采纳 npm 的降级建议 | 按 npm 提示把 `vite-plugin-svg-icons` 降到 0.1.0 | `0.1.0` 是**旧版本**，降级会丢功能且破坏图标管线，属"用功能退化换扫描绿灯"，比残余风险更差 |
+
+## 踩坑与解决
+
+| 现象 | 根因 | 解决 |
+|------|------|------|
+| `npm audit` 在 npmmirror 上报 **404 `NOT_IMPLEMENTED /-/npm/v1/security/*`** | 镜像站**未实现** advisories 批量查询接口，安装包能走镜像，但**漏洞查询接口没有** | 安装用 `--registry=https://registry.npmmirror.com`，**审计必须显式** `--registry=https://registry.npmjs.org`；这条已写进 `SBOM.md` 的复核命令，避免下一个人重复踩 |
+| 浏览器复检一度报"图标渲染 0×0、27 条 console error" | 两件事叠加：① 页面是在 **Vite 因配置变更重启的窗口期**加载的，模块请求与 WebSocket 连接被掐断，留下大量假报错；② 测量方法不当——**折叠/隐藏的菜单项**其 `getBoundingClientRect()` 与 `getBBox()` 天然为 0 | 改用 Playwright 直接量：**只量可见元素**，并同时取 `use.getBBox()`（前者证明 CSS 尺寸，后者证明 **sprite symbol 内容被真正引用**，两者都为非零才算通过）；复检时 console error 与失败请求均为 **0** |
+| `node -e`/PowerShell 传 `-Dserver.port=8080` 启动后端失败（报 `ClassNotFoundException: /port=8080`） | PowerShell 会把 `-Dserver.port=8080` 当**自身参数**解析并吞掉 `-Dserver` 段 | 原生命令的每个 `-D` 参数必须**加引号**：`"-Dserver.port=8080"`。重启后端时照此执行 |
+| 自研插件生成的 sprite 与旧产物不完全一致（体积 +20 KB） | 旧链路默认开启 `svgo`（`svgoOptions: true`），自研实现刻意不引入压缩依赖 | 先量化再决策：实测 90 个图标 raw 121.9 KB / svgo 后 **86.5 KB（gzip 32.5 KB）**，自研产物 **106.9 KB（gzip 39.2 KB）**——增量 gzip 后仅约 +7 KB，**不值得为省这点体积再引入一个（含 19 个包）的压缩工具**；同时逐项确认 SVG 中**不存在 `url(#…)` 引用**（否则 symbol 内的 id 需做前缀处理），故直接内联内部图形内容即可 |
+| `svgo` 在测量脚本里对 `button.svg` 直接抛 `Unexpected close tag` | 该源文件本身畸形：结尾重复了一个 `</path>` | 旧链路遇到同一问题时会**回退为原文**（本次复现确认 `svgo_fallback = ["button.svg"]`）；自研实现走**纯正则切分、不做 XML 解析**，天然不受影响。为该图标单测：symbol 正常解析、`getBBox()` = 11.1×14.4（外框 16×16）、**0 报错**，且该 icon-class 在全项目中**未被使用**，故未改动源文件（避免顺手扩大改动面） |
+
+## 验证证据
+
+1. **漏洞扫描对照**（`npm audit`，官方 registry）：
+   ```
+   处置前 : 5 项 high（braces / micromatch / svg-baker / vite-plugin-svg-icons / fast-glob）
+   处置后 : 0 项（全量）   ｜ 0 项（--omit=dev 生产依赖树）
+   npm ls braces micromatch fast-glob svg-baker vite-plugin-svg-icons  →  （空）
+   ```
+
+2. **依赖面收敛**：前端包总数 **398 → 243**（`npm install` 移除 159 个包）；`overrides` 由 5 条缩为 `quill` / `postcss` 2 条；生产依赖树（167 个包）**未受影响**。
+   ```
+   python campus-tao\tools\sbom-frontend.py
+   → packages_total 243 ｜ unknown_license_count 0 ｜ copyleft_candidates []
+   ```
+
+3. **图标渲染实测**（Playwright / Chromium / headless，直连 `http://localhost:8088`）：
+   ```
+   登录页 : sprite 容器 __svg__icons__dom__ 存在，含 90 个 <symbol>
+            #icon-user   rect 15×15 px，use.getBBox() = 15×15   ← 内容确被引用
+            #icon-password rect 15×15 px，use.getBBox() = 12×13
+   登录后 : svg-icon 实例 39 个；侧边栏 #icon-dashboard / #icon-system 均 14×14 px 且 getBBox 非零
+   console error 0 条 ｜ 失败请求 0 条 ｜ 截图核对侧边栏与顶栏图标显示正常
+   ```
+
+4. **交付前校验**：`verify.bat` 离线 5 步 **ALL PASS**（后端 `clean package` BUILD SUCCESS、后端单测 **23/23**、前端单测 **44/44**、前端 `build:prod` 通过），退出码 0。
+   后端重启后 `/actuator/health` = **UP**、`/actuator/info` 版本 = **1.0.9**（与 `application.yml` 的 `info.app.version` 一致）。
+
+5. **产物体积（如实记录）**：sprite 实测 **106.9 KB**（gzip **39.2 KB**），原链路（svgo 压缩后）**86.5 KB**（gzip 32.5 KB），
+   增量约 **20 KB**（gzip 约 **+7 KB**）；构建产物中实测含 **90** 个 `<symbol id="icon-…">`，与图标文件数一致。
+   `npm ci` 亦实测通过（锁文件与 `package.json` 同步），保证 CI 的 `npm ci` 路径可用。
+
+## 遗留与后续
+
+- **剩余可选任务**：交付收尾打包「校园淘-实验四.zip」及配套 PPT/录屏。
+- **口径提醒**：`npm audit` 结果依赖漏洞库时效性，本次结论是"截至今日、针对当前版本集合"的；建议 CI 定期重扫（前端 `npm audit`、后端 `osv-scanner`）。
+- **经验沉淀**：本项目的"残余风险"栏不是终点——只要根因是**依赖链本身**，就应评估"移除/替换实现"这一选项；本次的判据链条（取证 → 无补丁 → 评估三条路线 → 换实现 → 用 `getBBox` 证明功能未退化）可作为后续同类告警的处置模板。
+
+<!-- ai-log-meta
+ai_generated_ratio: 未追溯
+human_edits: 未追溯
+reviewer: 未追溯
+review_date: 未追溯
+-->

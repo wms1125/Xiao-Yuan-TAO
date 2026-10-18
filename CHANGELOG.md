@@ -9,6 +9,36 @@
 修掉四个"门禁看起来在工作、实际什么都没干"的缺陷。全部由 PR #2 的真实 CI 失败暴露——
 它们都不在业务代码里，因此此前所有本地绿灯都没有意义。
 
+**CI 里程碑：PR #2 八项检查全绿合并**（run 39121486137：后端 / 前端 / Flyway / Docker /
+gitleaks / CodeQL java+js / 浏览器 E2E 15 例 / 契约门禁 219 操作）——本仓库第一次有
+完整 CI 真实运行，此前 `git push` 被 502 拦截、CI 从未执行。
+
+### 修复：认证失败返回真实 HTTP 401（#29）
+- `ServletUtils.renderString` 把状态码写死 200，认证失败只能靠 body code=401 表达——
+  axios 错误分支看不见、网关与监控统计不到、前端重登录弹窗只在部分场景生效。
+- 后端加三参重载 `(response, string, status)`（两参委托 200，其余调用方不变），
+  认证入口点改用之；前端 `request.js` 抽 `handleSessionExpired()`，错误分支的真实 401
+  与成功分支的 body code=401 汇入同一弹窗（isRelogin 防重入）。
+- 新测：`AuthenticationEntryPointStatusTest`（Mock Servlet 断言终态 401，负向验证
+  注回旧码抓红）+ `request.401.test.js` 4 例；真机验证未登录/过期 → 401、有效 → 200。
+
+### 新增：P2-10 百万行订单索引复测（报告 `docs/perf-report-v1.0.25.md`）
+- 隔离库造 100 万订单 / 150 万订单项复测 Mapper 真实 SQL：主链路 `idx_user_time`
+  零退化；**两条定时任务扫描在量级下暴露 filesort**（30 万 / 24.8 万行）——
+  5 万行基准（v1.0.21）无感，百万行现形。
+- V7 迁移落地 `(status,create_time)` / `(status,ship_time)`（幂等 + U7 回滚 +
+  全量脚本同步 + verify_flyway.sh 扩展，19/19 通过）；复测确认 filesort 消除、
+  物流同步按索引序凑满 limit 即停（0.0039s）。
+- 订单号 `LIKE '%..%'` 前置通配符不可索引，如实登记为产品决策不处理。
+
+### 新增：P2-11 ai-log 结构化元数据
+- `tools/ai_log_index.py`：解析全部篇目（编号/标题/章节/git 日期/元数据块），
+  结构校验（编号一致、元数据齐全、章节完整，不合规退出码 1），产出 `ai-log/index.json`。
+- 每篇末尾新增机器可读的 `ai-log-meta` 块（AI 生成占比 / 人工修改概述 / 签核人 / 日期）；
+  历史篇目 001~025 如实标注「未追溯」——宁可缺失可见，不可编造填充；
+  自 026 起必填（026 已填，签核人如实写「待人工签核」）。
+- 规范文档同步：章节编号修正为 001~026，元数据块要求入规。
+
 ### 修复（门禁失效）
 - **gitleaks 密钥扫描从未扫过历史**：`actions/checkout` 用默认浅克隆（`depth=1`），
   gitleaks 的 `HEAD^..HEAD` 拿不到父提交，直接 `unknown revision`。更关键的是

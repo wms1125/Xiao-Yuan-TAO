@@ -1,0 +1,100 @@
+# ai-log 013 · 工程流水线加固与覆盖率门禁
+
+> 里程碑：M9（工程流水线） ｜ 主题：覆盖率门禁（后端 jacoco / 前端 v8）、Controller 层测试补齐、CI 补齐、生产部署路径 ｜ 记录方式：AI 辅助留痕
+
+## 里程碑目标
+
+企业级评估中「工程化开发规范度」得分最低（72/100），短板不在"有没有测试"，而在**测试的量与质无从度量**，以及**没有生产部署路径**：
+
+- 后端虽有 23 个用例，但**跑得通 ≠ 覆盖到位**——此前没有任何覆盖率数字，也就无从判断测试是在保护核心逻辑还是在测边角；
+- 前端 44 个用例同样只有"全绿"这一个结论，覆盖盲区不可见；
+- `ci.yml` 里写的是"package + test"两步，**没有覆盖率、没有依赖漏洞扫描**；
+- 前端生产接口前缀是 `/prod-api`，但交付包里**没有任何反向代理配置**——真按生产方式部署会直接 404。
+
+本轮把这三件事补齐：**让流水线"会拦人"**、**让测试有数字**、**让部署有据可依**。
+
+## 关键决策与取舍
+
+| 决策点 | 选择 | 备选方案 | 取舍理由 |
+|--------|------|----------|----------|
+| 覆盖率阈值怎么定 | **棘轮基线**：以实测值向下取整设定，只允许上调 | ① 直接按行业惯例设 60%；② 不设阈值只看数字 | ① 当前缺口全部在 `service/**` 与 `notify/**`（依赖 Spring 容器与 MySQL，属集成测试范畴，需要 Testcontainers/H2 方案才能系统性提升），强行设 60% 会逼出"为凑覆盖率写无断言测试"的劣化；② 不设阈值的覆盖率报告**不会拦人**，等于没做。棘轮基线的价值在于**任何新增代码低于阈值都会让流水线红掉**，同时数字是诚实的 |
+| 统计口径 | 后端限定 `com/ruoyi/campus/**` 并**排除 `domain/**` 与 `mapper/**`**；前端限定 `src/api/campus/**` + `src/utils/**` | 全量统计整个 `ruoyi-system` | `domain/**` 是纯 POJO（getter/setter）、`mapper/**` 是 MyBatis 接口代理，两者字节码占比极大却**无逻辑价值**，计入分母会把真实覆盖率稀释到 8% 左右（实测原口径仅 8.57%），指标随即失去意义。**限定口径不是美化数字，而是让指标指向真正需要被保护的代码** |
+| 缺口怎么补 | 补 **Controller 层 + 异常兜底**测试（52 个新用例） | 补 Service 层测试 | Controller 层此前覆盖率为 **0**，且它承载本项目最关键的安全约定——"身份/归属一律取自登录态、前端伪造的 `sellerId`/`handler` 必须被丢弃"。这部分用 Mockito 单测即可完整覆盖、无需数据库，投入产出比最高；Service 层留给集成测试方案（已列入后续） |
+| 覆盖率不达标的后果 | **构建失败**（`jacoco:check` 绑定 `verify` 阶段） | 只生成报告、不阻断 | 报告无人看的概率极高；绑定 `verify` 后与"交付前校验"天然对齐——`verify.bat` 跑的就是 `mvn -B verify` |
+| `verify.bat` 第 3 步怎么改 | 由 `mvn -B test` 改为 `mvn -B verify` | 加一步单独跑 `jacoco:check` | `verify` 是 Maven 生命周期里"测试 + 检查"的标准阶段，一条命令即同时完成单测与门禁；单独加步骤反而容易出现"有人只跑 test 不跑 check"的绕过路径 |
+| 是否本轮引入 ESLint/Prettier | **不引入** | 引入 flat config 并让 CI 卡 lint | 项目此前没有任何 lint 配置，RuoYi 上游既有代码存在大量风格问题。直接接入会让 CI **一次性红掉数百处**，处置只有两条路：全量格式化（改动面巨大、污染 diff 与 blame）或把 lint 设为 non-blocking（**形同虚设**）。正确顺序是"先做一次基线格式化，再上 CI 门禁"，已列为 P1 |
+| 是否本轮引入 Flyway/Liquibase | **不引入** | 把 `migration-*.sql` 收编为版本化迁移 | 会改变现有"全量脚本 + 增量脚本"的初始化策略，对已交付的基线库（`campus_tao_full.sql` 含一整套演示数据）有回归风险。这属于"策略变更"，需先与用户确认是否纳入，不宜在流水线加固里顺手做掉 |
+| 生产部署路径怎么给 | 交付 `deploy/nginx.conf` + `启动说明.md` 新增第十一章 | 只写一段文字说明 | 前端 `VITE_APP_BASE_API=/prod-api` 是**代码里的事实**，没有配置文件兜底就等于"交付了跑不起来的生产包"。给可用的配置文件比给说明书更可靠；同时把"证书路径、域名、root"这些必须按环境替换的点在文件头显式标注 |
+
+## 踩坑与解决
+
+| 现象 | 根因 | 解决 |
+|------|------|------|
+| 加入 jacoco 后**离线构建会失败**（`-o` 模式下找不到 `org.jacoco` 插件） | 交付包的 `.tools/m2-repo` 是 v1.0.7 时固化的离线仓库，**从未包含 jacoco** | 先用**联网模式**（不带 `-o`，仅指定同一个 `repo.local`）跑一次 `mvn test` 把 `org/jacoco` 拉进离线仓库，再执行 `mvn -o verify` 验证离线可用——`verify.bat` 默认就是离线，不验证等于没做 |
+| 拉完插件后离线仓库里出现 `_remote.repositories` / `*.lastUpdated` | 联网解析时 Maven 会写下载来源标记 | 沿用项目既有经验（离线构建前必须清理这些标记文件）：本轮全仓清理 **6** 个（jacoco 相关），然后实测 `mvn -o verify` 通过 |
+| 新增测试首次编译失败（Mockito 数组参数匹配器找不到） | `aryEq` 不在 `org.mockito.ArgumentMatchers` 而在 `org.mockito.AdditionalMatchers` | 修正 static import；同时确认 `spring-boot-starter-test` 已自带 Mockito，**不需要新增任何依赖**（后端 SBOM 组件数不变） |
+| 前端覆盖率在只统计 `src/utils/**` + `src/api/**` 时数字偏低 | `src/utils/generator/**` 是代码生成器的运行期工具（非业务运行时路径），却占了不少可执行行 | 在 `coverage.exclude` 中排除，与后端的口径理由一致：**指标要指向真正需要被保护的代码** |
+| 覆盖率门禁"配好了但不知道会不会真的拦人" | 阈值是通过的，构建自然也是通过的——**正向通过不能证明门禁有效** | 补**负向验证**：临时把后端行阈值抬到 99% 执行 `jacoco:check`，实测报 `Rule violated for bundle ruoyi-system: lines covered ratio is 0.36, but expected minimum is 0.99` 并构建失败；前端同样抬到 99% 后失败。验证完立即恢复真实阈值。**只做正向验证的门禁等于没有验证** |
+| `verify.bat` 改完后必须重新归一化行尾 | 编辑工具写入的是 LF | 用 .NET 重写为 CRLF（实测 `CRLF=108, loneLF=0`）——项目既有经验：Windows 批处理脚本必须 CRLF，否则命令解析错位 |
+| 覆盖率报告目录会被误提交 | `coverage/`、`jacoco.exec` 不在 `.gitignore` 中 | 补入 `.gitignore`（前端 `coverage/`、后端 `**/target/` 已在忽略列表，另加 `jacoco.exec` 兜底） |
+| 前端依赖总数从 243 变 252，需要确认没有夹带 | 安装 `@vitest/coverage-v8` 会带入 istanbul 系列传递依赖 | 用 `python campus-tao\tools\sbom-frontend.py` 重新生成清单，并与旧清单做**差集比对**：新增 9 个 (name,version) 全部来自覆盖率链路（`@bcoe/v8-coverage`、`ast-v8-to-istanbul`、`istanbul-lib-*`、`istanbul-reports`、`magicast` 等），**移除 0 个**，UNKNOWN 0、copyleft 0；生产依赖树仍为 167 个包 |
+
+## 验证证据
+
+1. **后端覆盖率（口径：`com/ruoyi/campus/**` 排除 `domain/**`、`mapper/**`）**：
+   ```
+   补测试前 : 行  8.57% ｜ 分支  4.53%（含 POJO/mapper，指标失真）
+   补测试后 : 行 36.05% ｜ 分支 19.09%（Controller 层与 DTO 层均 100%）
+   门禁阈值 : 行 ≥35% ｜ 分支 ≥18%（棘轮基线，只允许上调）
+   ```
+
+2. **后端单元测试**：`Tests run: 75, Failures: 0, Errors: 0, Skipped: 0`（原 23 例，新增 52 例）。
+   ```
+   CampusControllerAccountCartNoticeTest  14 例
+   CampusControllerCatalogTest            12 例
+   CampusControllerOrderTradeTest         24 例
+   CampusGlobalExceptionHandlerTest        2 例
+   CampusDtoValidationTest / CampusAccountAtomicSqlTest / CampusNotifyLogisticsTest  23 例（既有）
+   ```
+
+3. **前端覆盖率（口径：`src/api/campus/**` + `src/utils/**`，排除 `src/utils/generator/**`）**：
+   ```
+   实测 : 语句 24.25% ｜ 分支 23.61% ｜ 函数 32.65% ｜ 行 25.24%
+   门禁 : 语句 ≥24   ｜ 分支 ≥23   ｜ 函数 ≥32   ｜ 行 ≥25
+   用例 : 44/44 全绿（3 个测试文件）
+   ```
+
+4. **门禁有效性（负向验证，关键证据）**：
+   ```
+   后端 : 阈值临时抬至 0.99 → BUILD FAILURE
+          Rule violated for bundle ruoyi-system: lines covered ratio is 0.36, but expected minimum is 0.99
+          （验证后恢复 0.35）
+   前端 : 行阈值临时抬至 99   → 失败，提示行覆盖率未达阈值（验证后恢复 25）
+   ```
+
+5. **交付前离线校验**：`verify.bat`（默认 `-o` 离线、内置 `.tools/maven` + `.tools/m2-repo`）5 步 **ALL PASS**，退出码 **0**：
+   ```
+   [通过] 后端打包                    （mvn -B -DskipTests clean package）
+   [通过] 后端单元测试/覆盖率门禁      （mvn -B verify → 75/75 + jacoco check）
+   [通过] 前端单元测试/覆盖率门禁      （npm run test:coverage → 44/44 + v8 thresholds）
+   [通过] 前端构建                    （npm run build:prod）
+   校验结果：ALL PASS
+   ```
+
+6. **依赖面与漏洞**：`npm audit` 全量 **0 项**、`--omit=dev` **0 项**；前端包总数 243 → **252**（新增 9 个，移除 0 个，全为 devDependency）；生产依赖树 167 个包不变；UNKNOWN 许可 0、copyleft 0。
+
+7. **后端服务**：重启后 `/actuator/health` = **UP**、`/actuator/info` 版本 = **1.0.10**（与 `application.yml` 的 `info.app.version` 一致）。
+
+## 遗留与后续
+
+- **P1（已识别，未纳入本轮）**：ESLint + Prettier + `.editorconfig`（需先做一次基线格式化再上 CI 门禁）；后端 spotless/checkstyle；Service 层覆盖率提升（需 Testcontainers 或 H2 方案）。
+- **P0 未完成项（需用户输入）**：**CI 真正跑起来**。仓库当前为本地库、无远程，`.github/workflows/ci.yml` 从未被执行过。工作流已与本地 `verify.bat` 等价流程对齐并实测，但"推送到 GitHub / GitLab 后是否 100% 绿"仍属**未验证状态**——需要远程仓库地址与凭据才能确认。
+- **待确认项**：Flyway/Liquibase 版本化迁移是否纳入（会改变现有一"全量脚本 + 增量脚本"初始化策略，对已交付基线库有回归风险）。
+- **口径提醒**：覆盖率数字是"截至今日、针对当前代码"的快照。棘轮基线的纪律是**只允许上调**——后续任何一次补测试都应同步抬高阈值，否则本次设定会在几个月后变成"装饰性阈值"。
+
+<!-- ai-log-meta
+ai_generated_ratio: 未追溯
+human_edits: 未追溯
+reviewer: 未追溯
+review_date: 未追溯
+-->

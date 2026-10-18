@@ -11,6 +11,32 @@ let downloadLoadingInstance
 // 是否显示重新登录
 export let isRelogin = { show: false }
 
+// 会话过期统一处理。历史上认证失败返回 HTTP 200 + body code=401，只有响应拦截器的
+// 成功分支看得见；后端改为真实 HTTP 401 后请求会走进 axios 的 error 分支——
+// 两路必须汇到同一个弹窗，否则"过期了却没有任何引导重新登录"的场景会回来。
+function handleSessionExpired() {
+  if (isRelogin.show) {
+    return
+  }
+  isRelogin.show = true
+  ElMessageBox.confirm('登录状态已过期，您可以继续留在该页面，或者重新登录', '系统提示', {
+    confirmButtonText: '重新登录',
+    cancelButtonText: '取消',
+    type: 'warning'
+  })
+    .then(() => {
+      isRelogin.show = false
+      useUserStore()
+        .logOut()
+        .then(() => {
+          location.href = '/index'
+        })
+    })
+    .catch(() => {
+      isRelogin.show = false
+    })
+}
+
 axios.defaults.headers['Content-Type'] = 'application/json;charset=utf-8'
 // 创建axios实例
 const service = axios.create({
@@ -87,25 +113,7 @@ service.interceptors.response.use(
       return res.data
     }
     if (code === 401) {
-      if (!isRelogin.show) {
-        isRelogin.show = true
-        ElMessageBox.confirm('登录状态已过期，您可以继续留在该页面，或者重新登录', '系统提示', {
-          confirmButtonText: '重新登录',
-          cancelButtonText: '取消',
-          type: 'warning'
-        })
-          .then(() => {
-            isRelogin.show = false
-            useUserStore()
-              .logOut()
-              .then(() => {
-                location.href = '/index'
-              })
-          })
-          .catch(() => {
-            isRelogin.show = false
-          })
-      }
+      handleSessionExpired()
       return Promise.reject('无效的会话，或者会话已过期，请重新登录。')
     } else if (code === 500) {
       ElMessage({ message: msg, type: 'error' })
@@ -122,6 +130,13 @@ service.interceptors.response.use(
   },
   (error) => {
     console.log('err' + error)
+    // 后端认证失败现在是真实 HTTP 401（此前是 200 + body code=401），落在这里。
+    // 必须先于通用错误映射处理：否则用户只会看到一句"系统接口401异常"，
+    // 没有任何重新登录的引导。
+    if (error.response?.status === 401) {
+      handleSessionExpired()
+      return Promise.reject(new Error('无效的会话，或者会话已过期，请重新登录。'))
+    }
     let { message } = error
     if (message == 'Network Error') {
       message = '后端接口连接异常'

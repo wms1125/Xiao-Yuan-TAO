@@ -29,6 +29,9 @@ public class AuthenticationEntryPointImpl implements AuthenticationEntryPoint, S
     {
         int code = HttpStatus.UNAUTHORIZED;
         String msg = StringUtils.format("请求访问：{}，认证失败，无法访问系统资源", request.getRequestURI());
-        ServletUtils.renderString(response, JSON.toJSONString(AjaxResult.error(code, msg)));
+        // 必须把状态码真正设到 HTTP 层：此前 renderString 把状态码写死 200，
+        // 认证失败只能靠 body 里的 code=401 表达——axios 的错误分支根本看不到，
+        // 前端"会话过期请重新登录"的弹窗只在部分场景生效，网关与监控也统计不到 401。
+        ServletUtils.renderString(response, JSON.toJSONString(AjaxResult.error(code, msg)), code);
     }
 }

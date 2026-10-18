@@ -1,0 +1,283 @@
+# 021 · 抽取 `IPaymentGateway` 支付网关抽象层
+
+> 对应版本 **1.0.18** · 《提升评分行动计划》P0-1
+> 输入：企业级评估报告 v1.0.17 给出的最高优先级缺口——「支付能力耦合在 `ICampusAccountService` 里，接微信支付必须改业务代码」。
+
+---
+
+## 1. 目标与结论
+
+**目标**：把"用哪种方式收钱"从订单/售后业务逻辑里彻底摘掉。业务代码只依赖接口，渠道靠配置切换，新增渠道 = 新增一个实现类 + 改一行配置。
+
+**结论**：已完成并验证通过。186 → **188 用例全绿**，行覆盖 65.49% / 分支 53.76%（双升），e2e 27 断言全 PASS。
+
+**验收口径（实现前先钉死）**：
+
+| # | 验收项 | 判定 |
+|---|--------|------|
+| 1 | 业务代码（订单 / 售后）不再出现 `ICampusAccountService` | ✅ |
+| 2 | 切换渠道只改配置、不改代码 | ✅（`campus.payment.channel` 环境变量） |
+| 3 | 渠道名写错 / 渠道未启用**显式失败**，不静默回落 | ✅ |
+| 4 | 余额不足 ≠ 系统失败，两者业务语义不同 | ✅（`PayResult` 三态） |
+| 5 | 回调**必须验签**，验签失败两层都拒 | ✅ |
+| 6 | 回调幂等（渠道会重推），且金额与订单核对 | ✅ |
+| 7 | 沙箱逻辑保留为正式实现，行为不回退 | ✅ |
+| 8 | 全量门禁 + e2e 回归不下降 | ✅ |
+| 9 | 负向验证覆盖"无签名体系 ≠ 不校验就放行" | ✅ |
+
+---
+
+## 2. 关键实现
+
+### 2.1 那道缝：`IPaymentGateway`
+
+```java
+public interface IPaymentGateway {
+    String channel();
+    boolean enabled();
+    PayResult pay(PayCommand cmd);
+    RefundResult refund(RefundCommand cmd);
+    PayNotify parseNotify(Map<String, String> params);
+}
+```
+
+`PaymentGatewayResolver` 只做"选哪个"——所有实现注册为 Spring Bean，注入 `List<IPaymentGateway>` 后按 `channel()` 建索引。因此：
+
+- 接微信支付 = 写一个 `WechatPayGateway` 实现 + 配置商户参数，**业务代码一行不改**；
+- 业务代码里不再有 `if (channel == "sandbox") ... else ...` 这类分支——这类分支一旦写进订单逻辑，每加一个渠道都要回来改一遍，是典型的耦合信号。
+
+### 2.2 `PayResult` 为什么是三态而不是布尔
+
+原实现 `accountService.pay()` 返回 `boolean`，"余额不足"和"渠道失败"共用一个 `false`，业务层只能一律返回"支付失败"。这两种情况的正确处理方式完全不同：
+
+- **余额不足**：订单应保持待付款，提示用户充值——用户再付一次是正常操作；
+- **渠道失败**：可能钱已扣、只是回调没到。此时必须抛异常触发回滚，**绝不能把订单静默留在待付款**——那会让用户以为没付成、实际钱已扣，是最难排查的资金不一致。
+
+拆成三态后，业务层的分支意图是自明的：
+
+```java
+PayResult r = paymentService.pay(PayCommand.of(userId, order.getOrderNo(), order.getTotalAmount()));
+if (r.getStatus() == PayResult.Status.INSUFFICIENT_BALANCE) return false;   // 业务性拒绝
+if (!r.isSuccess()) throw new ServiceException("支付失败：" + r.getFailReason());  // 系统性失败
+```
+
+### 2.3 失败要显式，绝不静默回落
+
+```java
+public IPaymentGateway resolve() {
+    IPaymentGateway gw = byChannel.get(props.getChannel());
+    if (gw == null) throw new ServiceException("未配置的支付渠道: " + channel + ...);
+    if (!gw.enabled()) throw new ServiceException("支付渠道未启用: " + channel + ...);
+    return gw;
+}
+```
+
+**为什么不给"默认回落到沙箱"**：静默回落会让"以为在用微信、实际走的沙箱"这类资金错配极难排查——用户看到的支付页是微信、实际扣的是站内余额，而日志里毫无异常。渠道名写错就应当天炸掉，而不是悄悄跑错。
+
+### 2.4 回调端点：匿名可访问，所以安全全押在验签上
+
+回调必须 `@Anonymous`（第三方服务器来调，带不了我们的登录态），这等于把入口敞开了。因此安全性完全依赖验签，且**做两层**：
+
+1. `gateway.parseNotify(params)` 验签失败 → `PayNotify.signValid = false` → Controller 直接拒绝；
+2. `CampusPaymentServiceImpl.handlePaidNotify` 再拦一次：`if (!notify.isSignValid()) throw`。
+
+两层冗余的理由：将来新增渠道时，若某个实现忘了写验签，第一层会失守，第二层仍能兜住——避免"某个渠道没写验签"变成"回调不校验就放行"的系统性漏洞。
+
+**沙箱渠道的处理是关键决策**：沙箱根本没有签名体系，最容易顺手写成"直接返回 `signValid = true`"。这里选择一律判失败：
+
+```java
+@Override
+public PayNotify parseNotify(Map<String, String> params) {
+    // 沙箱没有第三方签名体系，任何回调请求都无法验证来源。
+    // 宁可一律拒绝，也不能让"没有签名体系"变成"不校验就放行"的漏洞。
+    return PayNotify.invalidSign();
+}
+```
+
+### 2.5 回调幂等与金额核对
+
+渠道会重试推送，重复推送不得重复改状态；且回调金额必须与订单金额一致：
+
+```java
+if (order.getStatus() != STATUS_WAIT_PAY) return false;              // 幂等闸门
+if (notify.getAmount() != null && expected != null
+        && notify.getAmount().compareTo(expected) != 0)
+    throw new ServiceException("回调金额与订单金额不一致，已拒绝处理");
+```
+
+金额核对这条容易被忽略：没有它，伪造一个"已支付 1 元"的回调就能把 60 元的订单推进到已付款。
+
+---
+
+## 3. 本轮抓到的三个真实缺陷
+
+### 3.1 取消订单"先回库存、后退款"——顺序错误（我新引入的）
+
+负向用例 `cancelOrderAbortsWhenRefundFails` 断言"退款失败时不得回补库存"，结果是：
+
+```
+productMapper.increaseStock(<any long>, <any integer>);
+Never wanted here:
+But invoked here:
+-> at ...CampusOrderServiceImpl.returnStock(CampusOrderServiceImpl.java:301)
+```
+
+**根因**：我改造 `cancelOrder` 时把 `returnStock(order)` 留在了退款之前。
+
+**为什么这是真缺陷**（而不是"有事务兜底所以没事"）：退款是不可逆的外部动作，先回库存再退款，退款失败时只能靠 `@Transactional` 回滚来撤销库存增量。这个正确性**依赖了事务边界**——一旦将来 `returnStock` 被标注 `REQUIRES_NEW`（例如为了独立提交库存流水），或事务被移除，就会立刻留下"库存已回补、钱却没退"的不一致。改成先退款后回库存，退款失败时天然无副作用需要撤销，正确性不再依赖任何外部机制。
+
+对照发现：`CampusAftersaleServiceImpl` 的售后审核路径本来就是先退款后回库存——两条路径本该一致，是我改订单路径时改错了顺序。**一个正向用例全绿、只有负向用例能暴露的问题。**
+
+### 3.2 `availableChannels` 的语义会被前端误读
+
+运行时验证拿到 `{"available": ["sandbox", "wechat"]}`——微信明明没填商户参数（`enabled() == false`），却出现在"可用渠道"里。前端若直接渲染这个列表，会把"选了走不通"的渠道当成可用选项展示给用户。
+
+**修法**：区分"已注册"与"可用"，接口同时返回两个字段：
+
+```java
+data.put("registered", resolver.availableChannels());  // 已注册（含未启用），用于运维排查
+data.put("enabled",   resolver.enabledChannels());     // 已注册且 enabled()，用于前端展示
+```
+
+补了两个用例把语义钉死，其中一条是负向的：`enabledChannels_excludesUnconfigured` 断言微信未配置时**不得**出现在 `enabledChannels` 中。
+
+### 3.3 测试侧耦合：既有用例挂在旧接缝上
+
+重构后既有 `CampusOrderServiceTest` / `CampusAftersaleServiceTest` 有 4 例报 `paymentService is null`——它们 mock 的是 `ICampusAccountService`，而生产类已换成依赖 `ICampusPaymentService`。
+
+**处理方式不是简单换 mock**。顺带把断言强度提上去了：原来只断言 `accountService.pay(...)` 被调用过（"调用了吗"），现在捕获 `PayCommand` / `RefundCommand` 并校验 `userId` / `orderNo` / `amount` 三个字段（"传对了吗"）。
+
+```java
+ArgumentCaptor<PayCommand> cmdCaptor = ArgumentCaptor.forClass(PayCommand.class);
+verify(paymentService).pay(cmdCaptor.capture());
+PayCommand sent = cmdCaptor.getValue();
+assertEquals(BUYER_ID, sent.getUserId());
+assertEquals(ORDER_NO, sent.getOrderNo());
+assertEquals(0, new BigDecimal("60.00").compareTo(sent.getAmount()));
+```
+
+差别在于：传错订单号（钱记到别的单上）这类 bug，旧断言看不见，新断言能抓住。
+
+### 3.4 两个 `UnnecessaryStubbing` 教会的事
+
+补负向用例时我顺手 stub 了 `orderItemMapper.selectByOrderNo(...)`，Mockito 报 `UnnecessaryStubbing`。**这个报错本身就是有价值的信息**：它说明生产代码在退款失败前并没有去查订单明细——也就是没有做回库存的准备。若 stub 是"必要的"，反而证明生产代码又回到了先回库存的顺序。
+
+于是我在两个负向用例里留了注释说明这一点，让这条信息在测试代码里长期可读：
+
+```java
+// 注意：此处**不** stub orderItemMapper——退款失败发生在查订单明细之前，
+// 若 stub 了反而说明生产代码先准备了回库存（顺序错误）。
+```
+
+---
+
+## 4. 验证（自述不算证据）
+
+### 4.1 后端全量门禁
+
+```
+mvn -B verify
+[INFO] Tests run: 188, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+[INFO] Total time:  24.385 s
+```
+
+各测试文件：AccountAtomicSql 4 / AddressService 19 / AftersaleService 11 / ControllerAccountCartNotice 14 / ControllerAddress 8 / ControllerCatalog 12 / ControllerOrderTrade 24 / DtoValidation 19 / GlobalExceptionHandler 2 / MapperSqlIntegration 9 / NotifyLogistics 8 / **OrderService 28** / **PaymentGateway 22** / ReviewService 8。
+
+### 4.2 覆盖率（取自 JaCoCo 报告 CSV 实测，非自述）
+
+统计范围 `com.ruoyi.campus/**`，排除 `domain/**` 与 `mapper/**`（与门禁口径一致）：
+
+```
+LINE   : 799/1220 = 65.49%   （门禁 ≥55%）
+BRANCH : 229/426  = 53.76%   （门禁 ≥40%）
+INSTR  : 3231/5047 = 64.02%
+METHOD : 283/420  = 67.38%
+```
+
+较上轮（行 64.85% / 分支 50.81%）**双升**。`payment` 包 10 个类的行覆盖明细在报告中，其中 `WechatPayGateway` 的未覆盖部分是 `NOT_IMPLEMENTED` 的返回路径（骨架，接入时才有意义）。
+
+### 4.3 端到端业务回归
+
+```
+CAMPUS_BASE_URL=http://localhost:8081 python e2e_business.py
+PASS=27  FAIL=0
+RESULT: ALL_PASS
+```
+
+支付链路已走通新抽象层，关键断言：
+
+```
+=== 7) ry 支付（原子扣款，应扣60）===
+PASS 支付扣款金额正确(60)
+=== 14) 断言：余额回滚、库存回滚 ===
+PASS 余额回滚一致
+PASS 库存回滚一致(5)
+```
+
+### 4.4 运行时负向验证（对运行中的后端发真实请求）
+
+单测验的是逻辑，运行时验的是装配（Spring 是否真的把 Bean 织进来了、配置是否真的读到了）。四条负向 + 一条正向，全部符合预期：
+
+| 请求 | 结果 |
+|------|------|
+| `GET /campus/payment/channel`（未登录） | `401 认证失败` |
+| `POST /campus/payment/notify/notexist` | `支付渠道不存在或未启用: notexist` |
+| `POST /campus/payment/notify/sandbox`（无验签） | **`回调验签失败，已拒绝处理`** |
+| `POST /campus/payment/notify/wechat`（未配置） | `支付渠道不存在或未启用: wechat` |
+| `GET /campus/payment/channel`（已登录） | `{"channel":"sandbox","registered":["sandbox","wechat"],"enabled":["sandbox"]}` |
+
+第三条是本次安全设计的核心断言：**沙箱没有签名体系，但绝不等于"不校验就放行"**。
+
+### 4.5 YAML 重复键检查
+
+新增 `campus.payment` 配置块后复验（此前踩过重复键导致启动失败的坑）：
+
+```
+--- application.yml ---        OK：无重复键
+--- application-druid.yml ---  OK：无重复键
+```
+
+配置块全部走环境变量注入，无明文密钥：
+
+```yaml
+payment:
+  channel: ${CAMPUS_PAYMENT_CHANNEL:sandbox}
+  wechat:
+    enabled: ${CAMPUS_WECHAT_PAY_ENABLED:false}
+    app-id: ${CAMPUS_WECHAT_APP_ID:}
+    ...
+```
+
+### 4.6 一个环境侧的坑（非代码问题）
+
+首次启动后端报 `Could not resolve placeholder 'JWT_SECRET'`——我手动 `java -jar` 时漏了 `2-启动后端.bat` 里的环境变量清单（`DB_USERNAME` / `DB_PASSWORD` / `JWT_SECRET` / `DRUID_LOGIN_*`）。**教训**：手动启动不等于照抄了启动脚本的约定，交付包的"一键启动"脚本里那些 `if not defined ... set ...` 不是冗余，是接口约定。
+
+另有一次 `mvn verify` 在 `ruoyi-admin` 阶段失败，原因是运行中的后端进程占用了 `target/ruoyi-admin.jar` 文件锁，Spring Boot repackage 无法覆盖。属构建环境问题，停掉进程后即通过。
+
+---
+
+## 5. 未纳入本轮（如实记录）
+
+- **微信支付 V3 的真实对接**：签名、验签、退款、对账 API 均未实现。`WechatPayGateway` 是显式失败骨架（`pay()` 返回 `PayResult.failed(NOT_IMPLEMENTED)`），商户参数到位后填实现即可，业务代码无需改动。**刻意不留"看起来能跑"的假实现**——半成品静默降级比明确失败危险得多。
+- **`channelTradeNo` 未落库**：沙箱渠道的交易号目前不持久化。真实渠道接入时需在 `campus_order` 增加对应列，并纳入对账流程。
+- **前端结算页未接入**：后端接口已具备，前端尚未展示/选择支付渠道。
+- **双退风险窗口**：`cancelOrder` 有入口状态校验（待付款/已付款才可取消），但若退款成功后、事务提交前进程崩溃，重试时订单仍为已付款 → 会再次退款。彻底解决需要渠道侧幂等键（退款请求带 `orderNo` 作幂等键），属真实渠道接入时的必修项，本轮未做。
+- **分支覆盖率 53.76%** 仍低于企业级常见 60% 线，已列入后续 P1 任务。
+
+---
+
+## 6. 方法论小结
+
+本轮最值得记住的一点：**正向用例全绿时，缺陷可能刚被我写进去**。
+
+3.1 的顺序缺陷就是例子——把 `returnStock` 留在退款前，所有正向用例（支付成功、取消成功、退款成功）全部照常通过，因为它们都走"退款也成功"的路径。只有一条断言"退款失败时不该动库存"的**负向用例**才把它暴露出来。
+
+这印证了项目规范里「负向验证为强制动作」不是形式要求：**正向用例证明"顺的时候对"，只有负向用例能证明"不顺的时候不会错得更离谱"。** 前者容易写，后者才是防线。
+
+<!-- ai-log-meta
+ai_generated_ratio: 未追溯
+human_edits: 未追溯
+reviewer: 未追溯
+review_date: 未追溯
+-->

@@ -1,0 +1,79 @@
+# ai-log 008 · 可观测性与运营侧能力
+
+> 里程碑：M6（可观测性 + 运营侧能力） ｜ 主题：Actuator 健康检查、关键操作审计、订单超时自动取消、物流单号、站内通知 ｜ 记录方式：AI 辅助留痕
+
+## 里程碑目标
+
+在 M5 交付闭环之上补齐两类"生产可用性"能力：
+
+- **可观测性**：让运维能回答"服务活着吗、这单是谁操作的"。落地健康检查端点与关键操作审计，且不得因引入监控端点而扩大攻击面。
+- **运营侧能力**：让平台能自我运转——未支付订单不无限占库存、发货有物流单号可追溯、用户能收到与自己相关的业务消息。
+
+## 关键决策与取舍
+
+| 决策点 | 选择 | 备选方案 | 取舍理由 |
+|--------|------|----------|----------|
+| 健康检查 | 引入 `spring-boot-starter-actuator`，仅开放 `health`/`info` | 沿用 `curl /captchaImage` 200 作为存活探针；自研健康接口 | 业务接口当探针语义不准确（它依赖 DB/Redis 才能答 200，无法区分"进程活"与"依赖挂了"）；Actuator 是标准做法，且 `health` 自带 liveness/readiness 分组 |
+| 端点暴露面 | `access.default: none` + 白名单 `include: health,info` + 安全配置仅放行这两个路径 | 直接 `exposure.include: '*'` | `/actuator/env`、`/beans`、`/heapdump` 会泄露配置与内存；默认全关、按需开放更安全。实测 `/actuator/env` 返回 401 |
+| 健康详情 | `show-details: never` | `always` | 组件级细节（DB 连通、磁盘水位）属内部信息，仅返回 UP/DOWN 足够探活 |
+| 审计实现 | 复用框架 `@Log` 注解 + `LogAspect` + `sys_oper_log` | 自建审计表与切面 | 框架已有完整链路（含 IP、耗时、异常），自建属重复造轮子；审计结果是框架既有的"操作日志"页面可直接检索 |
+| 定时任务载体 | 复用 Quartz（`sys_job` + 定时任务 UI），任务类放 `com.ruoyi.quartz.task` | `@Scheduled` 注解硬编码 | 走 Quartz 可复用"系统监控 → 定时任务"界面做启停/改 cron/手工触发，无需重启进程；且 `scheduleConfig` 类中**框架白名单只允许 `com.ruoyi.quartz.task` 包下的类**，放错包会在界面报"目标字符串不在白名单内" |
+| 超时取消的一致性 | 原子 UPDATE：`where order_no=? and status=0` | 先查再改 | 先查后改存在竞态：用户恰在此刻支付，会把已支付订单误取消。原子 UPDATE 影响行数为 0 即代表"订单已被他人动作抢先处理"，直接跳过，天然幂等 |
+| 站内通知存储 | 新建 `campus_notice` 表 | 复用框架 `sys_notice` | `sys_notice` 是**全员广播**的公告（面向所有人、由管理员发布），而业务消息是**点对点**（某用户的下单/发货/售后结果），语义与读态模型都不同；混用会把广播公告的已读数据与个人消息串在一起 |
+| 通知接口鉴权 | 不设 `@PreAuthorize`，但强制登录，所有查询以 `userId = SecurityUtils.getUserId()` 为条件 | 复用某个菜单按钮权限 | 通知是"我的消息"，属自助数据，不该由角色授权决定能否查看；安全边界靠**服务端强制归属过滤**（标记已读的 SQL 也带 `user_id` 条件）而非权限字符串 |
+| 物流单号 | 订单表加 `logistics_no`，发货时可选录入 | 单独建物流轨迹表 | 需求只到"可记录可追溯单号"，独立表 + 承运商对接属过度设计；留 `varchar(64)` 单字段，后续接轨迹查询时再加表 |
+| 表结构变更 | `campus_tao_full.sql` 为唯一建库源 + 提供 `migration-v1.0.5.sql` 增量脚本 | 只改运行库 | 交付包要能被别人一键重建；同时对"已经建过库"的场景给出可执行的加列/建表脚本，避免只能删库重来 |
+
+## 踩坑与解决
+
+| 现象 | 根因 | 解决 |
+|------|------|------|
+| **`/actuator/health` 返回 DOWN** | `RedisHealthIndicator` 要读 `INFO`，而发行包内嵌的 Windows 版 `redis-server` 把自身可执行文件完整路径写进 `INFO`（形如 `C 盘 Users 目录下的 redis-server-*.exe`）。Lettuce 收到后交给 `java.util.Properties.load` 处理，`\U` 序列被当作 Unicode 转义 → `IllegalArgumentException: Malformed \uxxxx encoding`（与 `CacheController` 的 500 是**同一个根因**） | 显式关闭 Redis 健康指示器 `management.health.redis.enabled=false` 并在 yml 写明原因。Redis 真实性由业务链路验证（验证码/令牌/字典缓存都依赖它，无 Redis 则启动即失败），探活不必再问一次 |
+| **Java 源码注释里的路径把编译打挂** | 写 `CacheController` 的修复注释时写了 `C:\Users\...`，Java 的词法分析**在注释中同样处理 `\u` 转义**，编译直接报"非法 Unicode 转义" | 注释里不写反斜杠路径（改写成"形如 C 盘 Users 目录下的 ..."）。教训：Java 里 `\u` 是**词法级**转义，注释和字符串一样会被解析 |
+| 编译报"lambda 引用的本地变量必须是 final" | 原方法内 `Properties commandStats` 在 try 与 catch 中分别赋值，两处赋值即非 effectively final，无法被后续 lambda 捕获 | 把 `forEach` 改回普通 `for` 循环，避开捕获约束（改动更小，也不改变行为） |
+| 缓存监控页整页 500（`Cannot read Redis info`） | 同上述 `INFO` 解析问题，`getInfo()` 直接 `Properties info = connection.info()`，异常冒泡到全局异常处理器 | `getInfo()` 捕获异常后降级返回空统计，保证页面可渲染；**如实记录**：降级后"基本信息"卡片部分字段为空（Redis 版本/端口等读不到） |
+
+## 验证证据
+
+1. **离线重建**：`verify.bat`（`-o` 强制离线，内置 `.tools/maven` 与 `.tools/m2-repo`）5 步全绿，末行 `ALL PASS`。
+   > 本次新增了 `spring-boot-starter-actuator`，为此**先联网**跑了一次构建把新依赖灌进 `.tools/m2-repo`，随后清掉 10 个 `_remote.repositories`/`*.lastUpdated` 标记文件，再以 `-o` 复跑，确认离线仓库自洽。
+
+2. **Actuator 实测**（匿名访问）：
+   ```
+   /actuator/health -> 200 {"groups":["liveness","readiness"],"status":"UP"}
+   /actuator/info   -> 200 {"app":{"name":"campus-tao","description":"校园淘 校园二手交易平台","version":"1.0.5"}}
+   /actuator/env    -> 401 认证失败，无法访问系统资源      ← 敏感端点如期关闭
+   /actuator/beans  -> 401
+   ```
+
+3. **关键操作审计**：`e2e_business.py` 断言通过——操作日志标题出现「校园淘商品 / 校园淘订单 / 校园淘账户」。
+
+4. **超时自动取消专项**（SQL 辅助脚手架，非交付物）：
+   ```
+   下单(stock 4→3, status 0) → 回拨 create_time 2 小时 → 触发任务
+   状态 0→4、库存 3→4、买家未读 3→4、通知「订单 CT... 因超时未支付已被自动取消」
+   重复触发：库存仍为 4（幂等）   已支付订单：仍为 status=1（不受影响）
+   ```
+   **自动调度验证**：另一笔回拨订单**不做任何手工触发**，51 秒后由调度器自行取消并回补库存 → 证明任务是真的按 cron 在跑（而非只有"执行一次"按钮能跑）。
+
+5. **前端 UI 实测**（Playwright，Chromium，`pageerror` 全程为空）：
+   - admin 登录 → 订单列表 4 行；
+   - 「已付款」订单点发货 → 弹出录入物流单号提示框 → 填 `SF999888777` → 提示「已发货」、行状态「已发货」、详情弹窗「物流单号 SF999888777」，与库中 `logistics_no` 一致；
+   - 铃铛未读徽标 `4`，下拉标题「消息通知」，条目标签含「消息/通知/公告」；
+   - `/monitor/cache` 正常渲染，无「Cannot read Redis info」报错。
+
+6. **单元测试**：前端 vitest **41/41**（新增 4 例：物流单号随发货传参、站内通知列表/铃铛/已读接口的 URL 与 method 断言）；后端 `mvn test` 15/15。
+
+## 未覆盖 / 后续建议
+
+- 站内通知目前**只在用户主动拉取**（顶部铃铛、进入页面）时可见，未做服务端推送（SSE/WebSocket）——演示环境够用，生产可加 SSE。
+- 超时阈值读自配置且**每分钟全表扫描**未支付订单。当前数据量下无压力；数据量大时应给 `campus_order(status, create_time)` 建联合索引并考虑分页处理。**本次未加索引**（避免为假想规模提前优化），仅在此记录。
+- 物流仅为单号记录，未对接承运商轨迹查询接口。
+- CVE 扫描仍未接入（`[未发布]` 中保留）。
+
+<!-- ai-log-meta
+ai_generated_ratio: 未追溯
+human_edits: 未追溯
+reviewer: 未追溯
+review_date: 未追溯
+-->
