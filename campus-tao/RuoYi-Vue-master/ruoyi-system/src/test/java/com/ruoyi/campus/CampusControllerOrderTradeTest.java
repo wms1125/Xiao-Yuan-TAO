@@ -136,12 +136,12 @@ class CampusControllerOrderTradeTest {
     }
 
     @Test
-    @DisplayName("发货：物流单号透传")
+    @DisplayName("发货：物流单号与操作者(登录态)透传")
     void shipOrderPassesLogisticsNo() {
         AjaxResult result = orderController.ship(ORDER_NO, "SF123456789");
 
         assertEquals(HttpStatus.SUCCESS, result.get(AjaxResult.CODE_TAG));
-        verify(orderService).shipOrder(ORDER_NO, "SF123456789");
+        verify(orderService).shipOrder(ORDER_NO, "SF123456789", STUDENT_ID);
     }
 
     @Test

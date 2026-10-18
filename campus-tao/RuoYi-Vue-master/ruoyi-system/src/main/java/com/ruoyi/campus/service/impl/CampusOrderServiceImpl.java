@@ -22,6 +22,7 @@ import com.ruoyi.campus.service.ICampusCartService;
 import com.ruoyi.campus.service.ICampusNoticeService;
 import com.ruoyi.campus.service.ICampusOrderService;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -345,10 +346,16 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public int shipOrder(String orderNo, String logisticsNo) {
+    public int shipOrder(String orderNo, String logisticsNo, Long operatorId) {
         CampusOrder order = orderMapper.selectOrderByOrderNo(orderNo);
         if (order == null || order.getStatus() != STATUS_PAID) {
             throw new ServiceException("订单状态异常，无法发货");
+        }
+        // 归属校验：C2C 直付下由卖家本人发货，管理员可代发；
+        // 二者之外（如买家、其他卖家）一律拒绝，前端隐藏不等于后端放行。
+        boolean isSeller = operatorId != null && operatorId.equals(order.getSellerId());
+        if (!isSeller && !SecurityUtils.isAdmin(operatorId)) {
+            throw new ServiceException("仅订单卖家本人或管理员可发货");
         }
         order.setStatus(STATUS_SHIPPED);
         order.setShipTime(new Date());

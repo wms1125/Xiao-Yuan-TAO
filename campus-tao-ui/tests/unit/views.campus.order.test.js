@@ -208,7 +208,10 @@ describe('校园淘 - 订单页（分页与概览联动）', () => {
   it('发货与确认收货：按订单状态出现对应操作并调用接口', async () => {
     shipOrder.mockResolvedValue({ code: 200 })
     finishOrder.mockResolvedValue({ code: 200 })
-    stubApi({ rows: [orderRow({ orderNo: 'S1', status: 1 }), orderRow({ orderNo: 'S2', status: 2 })] })
+    // sellerId=2 与 userStore.id 一致：当前登录者即卖家本人，才看得到「发货」
+    stubApi({
+      rows: [orderRow({ orderNo: 'S1', status: 1, sellerId: 2 }), orderRow({ orderNo: 'S2', status: 2 })]
+    })
     const wrapper = await mountPage()
 
     await clickButton(wrapper, '发货')
@@ -218,6 +221,15 @@ describe('校园淘 - 订单页（分页与概览联动）', () => {
     await clickButton(wrapper, '确认收货')
     await flushPromises()
     expect(finishOrder).toHaveBeenCalledWith('S2')
+  })
+
+  it('发货按钮仅卖家本人或管理员可见（越权负向）', async () => {
+    // 已付款订单，但卖家是别人（sellerId=99 ≠ 登录者 id=2），发货入口必须隐藏
+    stubApi({ rows: [orderRow({ orderNo: 'S1', status: 1, sellerId: 99 })] })
+    const wrapper = await mountPage()
+
+    const texts = wrapper.findAll('.el-button-stub').map((node) => node.text())
+    expect(texts.some((text) => text.includes('发货'))).toBe(false)
   })
 
   it('列表请求失败时不抛出未处理异常，加载态归位', async () => {

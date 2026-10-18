@@ -96,12 +96,12 @@ public class CampusOrderController extends BaseController {
         return AjaxResult.success("已取消");
     }
 
-    /** 发货（管理端，可录入物流单号） */
+    /** 发货（卖家本人或管理员；可录入物流单号）。操作者取自登录态并做归属校验 */
     @PreAuthorize("@ss.hasPermi('campus:order:edit')")
     @Log(title = "校园淘订单", businessType = BusinessType.UPDATE)
     @PostMapping("/ship/{orderNo}")
     public AjaxResult ship(@PathVariable String orderNo, @RequestParam(required = false) String logisticsNo) {
-        orderService.shipOrder(orderNo, logisticsNo);
+        orderService.shipOrder(orderNo, logisticsNo, SecurityUtils.getUserId());
         return AjaxResult.success("已发货");
     }
 

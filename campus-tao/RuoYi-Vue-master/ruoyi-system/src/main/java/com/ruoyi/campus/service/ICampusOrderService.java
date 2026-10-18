@@ -36,8 +36,12 @@ public interface ICampusOrderService {
     /** 取消：未付款/待卖家确认回库存(状态→4)；已付款退款+回库存(状态→4) */
     boolean cancelOrder(String orderNo, Long userId);
 
-    /** 发货（管理端）：1→2，可录入物流单号 */
-    int shipOrder(String orderNo, String logisticsNo);
+    /**
+     * 发货：1→2，可录入物流单号。C2C 模式下由**订单卖家本人**发货，
+     * 管理员可代任意订单发货；二者之外一律拒绝（归属校验在 service 内完成）。
+     * @param operatorId 操作者（取自登录态），用于归属校验
+     */
+    int shipOrder(String orderNo, String logisticsNo, Long operatorId);
 
     /** 确认收货（买家）：2→3 */
     int finishOrder(String orderNo, Long userId);
