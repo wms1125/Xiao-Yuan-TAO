@@ -2,7 +2,369 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~025`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~026`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.25] - 2026-10-18
+
+修掉四个"门禁看起来在工作、实际什么都没干"的缺陷。全部由 PR #2 的真实 CI 失败暴露——
+它们都不在业务代码里，因此此前所有本地绿灯都没有意义。
+
+### 修复（门禁失效）
+- **gitleaks 密钥扫描从未扫过历史**：`actions/checkout` 用默认浅克隆（`depth=1`），
+  gitleaks 的 `HEAD^..HEAD` 拿不到父提交，直接 `unknown revision`。更关键的是
+  `fetch-depth` 原先写在 gitleaks 步骤上——那不是该 action 支持的输入，只会被忽略
+  （日志里只留下 `Unexpected input` 告警）。改为写在 checkout 上，并移除无效输入。
+  这一路扫描从落地起就是空转，而本仓库第一次真正跑 gitleaks 就抓到过真实结果。
+- **CodeQL 的 Java 分析同样空转**（static-analysis job 失败）：自动构建器只扫仓库根目录找构建文件，而本仓库是
+  多模块工程、根 pom 在 `campus-tao/RuoYi-Vue-master/`，根目录一个 pom.xml 都没有。
+  于是 finalize 阶段报 `could not process any code written in Java/Kotlin`，
+  上传的 SARIF 变成 configuration error。改为 `build-mode: manual` + 同一 job 内显式
+  `mvn -B -DskipTests compile`（javac 被 tracer 观察到，Java 数据库才有内容）。
+  注意 backend job 里的 `mvn -B verify` 能跑，靠的是它自己的
+  `defaults.run.working-directory`——那是 run 步骤的默认值，CodeQL 的自动构建器不认。
+  - 第二轮修正：`build-mode` 是整个 job 一个值，而 JS/TS 只支持 `none`、不支持 `manual`，
+    合并写会让 init 直接 fatal error。改为按语言矩阵拆分（`java` 用 `manual`、
+    `javascript-typescript` 用 `none`），构建步骤加 `if: matrix.language == 'java'`。
+- **Playwright 浏览器 E2E 从未真正跑起来**（e2e job 失败）：CI 里只有 `npm ci`、没有
+  `playwright install`，一直吃 runner 镜像预装的浏览器。镜像那份构建号与本仓库
+  `package.json` 声明的不一定对得上——实测 `ffmpeg-1013` 缺失，15 个用例全在 `newPage()`
+  阶段挂（报 `Executable doesn't exist .../ffmpeg-linux`；ffmpeg 供录屏用，缺它连浏览器
+  都起不来）。补 `npx playwright install --with-deps chromium`，把版本与系统依赖锁到本仓库这份。
+- **spotless 门禁的判定取决于开发者的操作系统**：门禁没配 `lineEnding`，走
+  `GIT_ATTRIBUTES` 语义，对没写 `eol` 的 `text=auto` 规则会退回平台换行符。
+  同一份 LF 源码在 Windows 上被判"要改成 CRLF"、在 Linux 上通过。
+  修复：`.gitattributes` 显式声明 `*.java text eol=lf`（全仓库 411 个 Java 文件在
+  HEAD 中本就无 CR，纯声明、无重写），并把本地工作区 406 个 CRLF 文件归一为 LF。
+- 归档 OpenAPI 契约未同步：P2-8 新增的 `GET /campus/notice/page` 只进了运行时，没进
+  `campus-tao/docs/openapi/campus-tao-openapi.json`，契约门禁如实拦下。
+  人工确认差异仅此一个接口后重新导出，现 195 path / 219 操作与运行时逐一匹配。
+
+### 顺带清理
+- 删除 2 个未使用的 import（`ICampusMessageService` 的 `java.util.Map`、
+  `CampusFavoriteServiceTest` 的 `ArgumentCaptor`），是上一轮 CI 报出的 spotless 违规。
+
+### 验证
+- `mvn -o -B verify` 本地 BUILD SUCCESS：335 用例 0 失败，spotless 0 violations。
+- `python campus-tao/tools/verify_openapi.py` 全 OK（195 path / 219 操作）。
+- ci.yml 用 pyyaml 解析通过，7 个 job 结构正确。
+
+## [1.0.24] - 2026-10-18
+
+按《校园淘-企业级评估报告-v1.0.23》给出的 P2 功能项顺序实施（P2-7 站内信分页 / P2-8 通知中心 / P2-9 收藏上限），
+并修掉 P1-4 落地时暴露的一处 E2E 存量失效。业务功能 + 数据量增长下的行为，全部以真机 MySQL + 真实 Chrome 取证。
+
+### 新增（P2-7 站内信会话分页）
+- 原 `selectConversations` **无界返回全量会话**：消息表涨到千行后，每打开一次消息页都把该用户所有消息读一遍。
+- 更隐蔽的是写法本身阻断索引：`where from_user_id = ? or to_user_id = ?` 让优化器无法走任何单列索引，
+  实测 `EXPLAIN` 为 `type: index / rows=1019 / filtered 19%`——整条二级索引全扫再用 19% 的行。
+  改 `UNION ALL` 把 `or` 拆成两支后，两支均 `type=ref`，只读该用户自己的消息。
+- 接口与前端同步改造：`/campus/message/list` 返回 `TableDataInfo`（total/rows），默认 20 条、上限 100 条；
+  页码/条数在服务端归一，`offset` 用 `long` 计算防溢出，**越界页直接短路不查库**，`pageSize` 超上限明确报错而非静默截断。
+- `order by` 与未读聚合在分页子查询内完成，"未读置顶"的行为不因分页消失。
+
+### 新增（P2-8 通知中心）
+- 新增页面 `campus/notice/index`：类型/状态/业务号筛选、未读数与分页、单条已读与全部已读。
+  **未读数单独走服务端聚合接口**，与列表筛选条件解耦——否则切到"只看未读"红点反而消失。
+- 新增 `GET /campus/notice/page`（`type` + `isRead` 筛选 + 分页），`countByUser` 与列表**使用同一筛选条件**：
+  列表筛了而总数没筛，翻页控件会算出错误的总页数（这是开发时用故障注入验证过的缺陷类别，见下）。
+- `V6__notice_center_and_message_index.sql`：补 `campus_message.idx_from_user`、
+  `campus_notice.idx_user_read_time(user_id, is_read, create_time)`（让"只看未读"按索引顺序取前 N 条，不再 filesort）、
+  注册「通知中心」菜单（`sys_menu` 2124）。
+  - **迁移必须可重入**：MySQL 没有 `CREATE INDEX IF NOT EXISTS`，直接写 DDL 会让重跑的应用在
+    `Duplicate key name` 上启动失败（本轮真的踩到，Flyway 记 success=0、整个应用起不来）。
+    故统一改为 `information_schema.statistics` 判存 + `PREPARE/EXECUTE/DEALLOCATE` 动态 SQL，回滚脚本 `U6` 同样幂等。
+  - `db/tools/verify_flyway.sh` 的迁移数量/版本号改为**从迁移目录推导**（原先写死 5 个），下次加迁移不会再假红。
+
+### 新增（P2-9 收藏数量上限 200）
+- 原 `add` 是 count-then-insert，两步之间存在窗口，并发下可越过上限。
+  改为单条原子 SQL 守卫：`insert ... select ... where (select count(*) from campus_favorite where user_id = ?) < ?`，
+  上限判断与插入同一语句内完成，竞态窗口关闭。
+- 达上限时给出明确提示（"收藏数量已达上限（最多 200 个），请先取消部分收藏后再试"），而非抛一个泛泛的"添加失败"。
+- 前端收藏页同步上限提示：达到上限时统计区文案改为"已达上限，取消部分收藏后可继续添加"。
+
+### 修复（P1-4 E2E 存量失效：01-login 两条用例从未真正有效）
+- **断言对象写错**：`toContainText('admin')` 而顶栏显示的是 `sys_user.nick_name`（演示库中 admin/ry 的昵称均为"若依"），
+  该断言**从落地起就不可能通过**，此前只留下"看起来跑过"的提交记录。改为定位 `.user-nickname` 精确断言昵称
+  （同时避免命中首页文案里的"若依"而蒙混过关）。
+- **负向用例绕过了防重载保护**：密码错误用例自己 `fill()` 一把就点登录，未等 Vite 预打包引发的整页 reload，
+  输入框被清空后点下去触发的只是前端表单校验（截图显示两框皆空、提示"请输入您的密码"），
+  表现成"密码错误居然没提示"——像产品缺陷，实为测试自己没把值送出去。抽出 `fillLoginForm()` 供正/负向用例共用。
+- 这两处修正后，浏览器端 E2E **首次真正全绿**：15/15（原 7 条路径 13 例 + 本轮新增路径 8）。
+
+### 验证（P2-7）
+- 真机 MySQL 播种 1000 条消息 / 100 个会话：新旧查询结果逐行一致（100 会话、未读合计 200、TopN 订单号相同）。
+- 接口首屏稳定 16ms（curl 连续 5 次）；消息表再涨 200 条耗时不变。
+- **负向验证（强制动作）**：`pageNum=999` 返回空行 + 真实 total；`pageSize=101` 明确报错；`pageSize=100` 恰好通过。
+
+### 验证（P2-8）
+- 真机 60 条 / 20 未读：未读角标 20 → 19 → 0；重复标记被拒且计数不变；admin 越权标记他人通知被拒；未读/已读筛选全部正确。
+- **负向验证（强制动作）**：注入 3 个故障——`total` 不跟随筛选、去掉空串 `type` 归一、`offset` 用 `int` 溢出——
+  分别被 `CampusNoticeServiceTest` 与新增 E2E 路径 8 精确抓红，恢复后转绿。
+- 前端新增 `views.campus.notice.test.js` 12 例（含筛选与分页器行为）。
+
+### 验证（P2-9）
+- 真机灌 199 条 → 第 200 个成功 → 第 201 个被拒且计数不越界 → 取消后回 199 → 重新收藏成功。
+- SQL 守卫双向验证：199 时放行 1 行、已满时 0 行；唯一约束拦住重复插入。
+- **负向验证（强制动作）**：去掉 SQL 守卫、把 `>=` 改为 `>`，两处均被 `CampusFavoriteServiceTest` 抓红后恢复。
+
+### 验证（全量闸门，本轮最终态）
+- 后端 `mvn -o test`：**28 个测试类 / 335 用例 / 0 失败 / 0 错误 / 0 跳过**。
+- 前端 `vitest run`：**13 文件 / 216 用例 / 0 失败**。
+- 浏览器端 E2E（真实 Chrome + 真机后端）：**15/15 通过**，覆盖登录（含负向）、商城、搜索历史、收藏、下单→支付→发货→收货、
+  售后、站内信、通知中心 8 条路径；失败留 trace + video + screenshot。
+- Flyway 迁移 **18/18 全部通过**（含 V6 三项 DDL 幂等重跑）。
+- `eslint` / `prettier --check` / `vite build` 全绿。
+
+### 未纳入本轮（P2）
+- **`/campus/**` 未登录访问仍返回 HTTP 200 + body code=401**：`AuthenticationEntryPointImpl` 未设状态码
+  （`ServletUtils.renderString` 不设 HTTP status，属全项目共性问题，非数据泄漏）。修复需前后端同时改
+  （前端 `request.js` 只在成功分支读 `code===401`），已登记为独立任务，不塞进功能项里顺带做。
+- 通知中心的筛选变化后需手动点「搜索」，未做"选择即查询"；该行为已被单测与 E2E 固定，如需调整单独排期。
+- 压测数据（约 1200 条 `campus_message`、205 个压测商品、`perfuser` 的 199 条收藏）仍留在演示库中，
+  作为 P2-7 取证的可复现工件；需要清理时另行确认。
+
+## [1.0.23] - 2026-10-17
+
+按《校园淘-企业级评估报告-v1.0.22》给出的 P0 阻塞项顺序实施。本轮只做 P0（真实通道定位、可观测性、HTTP 层测试），不改业务功能。
+
+### 新增（P0-1 支付资金语义显式化）
+- `IPaymentGateway` 新增 `realMoney()`，**刻意不提供 default 实现**：新增渠道漏声明会被编译器拦住；若默认返回 false，漏声明的真实渠道会被界面标成"沙箱演示"，而这正是最危险的错标方向（把"扣真钱"说成"不扣真钱"）。沙箱返回 false，微信按设计意图返回 true。
+- `GET /campus/payment/channel` 增加 `mode`（`sandbox` / `real` / `unavailable`）、`realMoney`、`notice` 三个字段。**取不到生效渠道时不回落成 sandbox**：把"渠道不可用"标成"沙箱演示"会让运维以为系统正跑在正常沙箱上，而支付根本走不通，故单列 `unavailable`。
+- 文案 `notice` 由服务端下发（单一来源），前端只负责展示与配色：`unavailable` → error、`real` → warning、`sandbox` → info。
+- 订单页新增资金语义提示条（`el-alert`）：沙箱明示"不产生真实扣款"，真实渠道明示"会产生实际资金流动"，不可用时明示"支付与退款将无法完成"。接口失败则不显示提示条——提示是旁路信息，不能因为取不到而挡住下单与支付。
+
+### 验证（P0-1）
+- 后端 `mvn -B -o verify`：**285 用例 / 0 失败 / 0 错误**（280 + 5），`All coverage checks have been met`、`0 Checkstyle violations`、`BugInstance size is 0`。
+- 前端 `vitest run`：**12 文件 / 201 用例 / 0 失败**（197 + 4）。
+- **负向验证（强制动作）**：把 `mode` 的 `unavailable` 分支临时改为回落 `MODE_SANDBOX`，`channel_unavailableMode` 立即报 `expected: <unavailable> but was: <sandbox>` 并 `BUILD FAILURE`；恢复后转绿。
+- 前端替身补真：新增 `ElAlert` 替身，如实渲染 `title` 与 `type`（`data-type`）——替身若只渲染空 div，"提示有没有出现、配色对不对"就无法断言。
+
+### 新增（P0-2 运行态可观测性：traceId + 业务指标 + 告警规则）
+- **请求级 traceId**（`TraceIdFilter`，`com.ruoyi.campus.observability`）：生成或沿用上游 `X-Trace-Id`，写入 MDC 并回写响应头；logback pattern 增加 `[%X{traceId:--}]`，一次请求的多条日志可用同一值串起。
+  - **入站值不无条件信任**：只接受 `^[A-Za-z0-9_-]{8,64}$`。直接写进 MDC 有两个后果——超长值撑爆日志行、含换行值可伪造日志条目（log forging）。
+  - **必须清理 MDC**：Servlet 容器复用线程，残留会把两个不相干的请求在日志里串成一条，比没有 traceId 更误导。异常路径同样清理。
+- **业务指标**（`CampusMetrics`）：`campus.payment.attempts` / `campus.refund.attempts`（counter，按 channel / mode / result 打标）、`campus.payment.channel.available`（gauge，1/0）。只登记"出事必须立刻知道"的三类，QPS/延迟/连接池复用框架自带指标。
+  - **打点放在 finally 里**：渠道抛异常时同样计为 failed。若只在成功路径打点，"渠道挂了"这一最该告警的场景反而没有任何数据。
+  - **渠道解析失败也打点**（`mode=unavailable`）：这是"用户根本付不出钱"的最直接原因。
+  - 只依赖 `micrometer-core`（API），具体注册表由 `ruoyi-admin` 的 `micrometer-registry-prometheus` 在运行时提供——业务模块不焊死具体注册表。
+- **抓取端点**：`management.endpoints.web.exposure.include` 增加 `prometheus`，并显式授予 `read-only`（项目默认 `access.default: none`）。
+  - 安全边界由网络层提供：`SecurityConfig` 匿名放行 `/actuator/prometheus`（否则 Prometheus 抓不到），`deploy/nginx.conf` 对该路径设 `allow 127.0.0.1 / 10.0.0.0/8; deny all;`，公网 403。
+- **告警规则**（`deploy/prometheus/campus-tao-alerts.yml`，5 条）：支付失败率 >20%/10m、退款失败 >0 笔/15m、渠道不可用 2m、HTTP 5xx >1%/10m、连接池等待 >0/5m。每条都带 runbook 式 description（半夜被叫起来的人不该再猜"这条什么意思"）。配套 `deploy/prometheus/README.md` 给出抓取配置与验证命令。
+- **e2e 新增第 19 节断言**：`/actuator/prometheus` 匿名可取、两个业务指标已注册、响应头回写 32 位 traceId——端点连通性由 CI 的真栈 job 验证（本地无 MySQL 时不空转）。
+
+### 验证（P0-2）
+- 后端 `mvn -B -o verify`：**296 用例 / 0 失败 / 0 错误**（285 + 11），覆盖率门禁通过、`0 Checkstyle violations`、`BugInstance size is 0`。
+- 告警规则文件 `yaml.safe_load` 解析通过：2 个 group / 5 条规则，severity 与 `for` 逐条核对。
+- **负向验证（强制动作）**：同时移除 `catch` 块内的失败打点与 `MDC.remove`，`payment_metricCountsChannelUnavailable` 报错、`clearsMdcAfterChain` 与 `clearsMdcOnException` 双双失败（`Tests run: 38, Failures: 2, Errors: 1`）；恢复后全绿。
+
+### 未纳入本轮（P0-2）
+- **「待付订单超时积压」告警未落地**：需要一条按状态聚合的 gauge（定时任务周期查库），本轮不写"指向不存在指标的规则"来凑数。
+- `/actuator/prometheus` 的连通性本地未实测（需 MySQL + 后端），由 CI e2e job 覆盖；`micrometer-registry-prometheus` 已同步进交付包离线仓库 `.tools/m2-repo`，`-o` 离线构建可解析。
+
+### 新增（P0-3 HTTP 层测试与权限注解守护）
+- **`CampusHttpLayerTest`**（`MockMvcBuilders.standaloneSetup` + `CampusGlobalExceptionHandler`，6 用例）：补上此前完全空白的一层。既有 23 个后端测试类**全部直接调用 Controller 方法**，`@Valid` 参数绑定、JSON 反序列化、统一异常响应结构都没有被测到——这些恰恰最容易在改动中悄悄坏掉。
+  - 合法请求体逐项绑定到实体（金额用 `BigDecimal.compareTo` 比较，`equals` 会把 `59.90` 与 `59.9` 判为不等）；三条 `@Valid` 负向（空标题 / 价格 0 / 缺 `categoryId`）均返回 400 **且未进入业务层**（`verify(never())`）；未预期异常兜底为 `{code:500,msg}` 而非把堆栈抛给前端；金额按数值原样返回、不被转成字符串。
+  - **如实标注测不到什么**：`standaloneSetup` 没有 Spring Security 过滤器链、也没有 AOP 代理，`@PreAuthorize` 在此**不生效**；日期格式由 `ruoyi-framework` 的 `JacksonConfig` 决定，standalone 用的是默认 ObjectMapper，故刻意不对日期格式作断言——用自己的配置去断言生产行为是自欺。
+- **`CampusPermissionGuardTest`**（静态扫描，不启 Spring 上下文，3 用例）：把"写接口必须有权限"从口头约定变成可执行断言。扫描全部 `@RestController`，凡 POST / PUT / DELETE（含 `@RequestMapping` 指定这些方法）必须满足三者之一：`@PreAuthorize` / `@Anonymous` / `@SelfServiceEndpoint`。
+  - **防假通过**：断言至少扫到 15 个控制器、至少检查 30 个变更类端点。包名写错或扫描器失效导致零结果时测试会红，而不是"零违规通过"。
+- **新增 `@SelfServiceEndpoint` 标记**（`com.ruoyi.campus.security`）：守护测试**第一次运行就抓到两个真实端点**——`CampusNoticeController#read` / `#readAll` 不带任何权限注解。
+  - 核查确认两者只改本人数据（`markRead` 的 SQL 是 `where notice_id = ? and user_id = ?`，`markReadAll` 是 `where user_id = ?`），确实不需要按钮级权限；但这个意图当时**只写在类的 Javadoc 注释里**，注释拦不住任何人。
+  - 若只留两个选项（配一个语义空洞的按钮权限 / 干脆不加注解让守护失效），作者一定选后者。`@SelfServiceEndpoint` 是第三种选择：**可以不带权限，但必须写下理由**，且理由会出现在代码评审里。
+  - 理由留空同样判失败（第三个用例）——空字符串等于把越权风险留白。
+
+### 修复（P0-3 附带的构建修正）
+- `ruoyi-system/pom.xml` 补 `spring-webmvc`（`test`）与 `jakarta.servlet-api`（`provided`）。前者缺了会让 `MockMvcBuilders.standaloneSetup` 在 `MockMvcBuilders:77` 抛 `NoClassDefFoundError`——表现为"测试跑不起来"而不是"测试失败"，最容易被误判成环境问题；后者主代码 `TraceIdFilter` 一直在用，此前靠 `ruoyi-common` 的 `compile` 作用域传递进来，属隐式依赖（上游删掉这一条，报错会指向业务代码而不是 pom）。
+  - **踩坑记录**：一开始把 `jakarta.servlet-api` 声明成 `test`，而直接声明会覆盖传递依赖的作用域（Maven 就近优先），主源码编译立刻挂掉（9 个错误全部指向 `TraceIdFilter`）。`provided` 才是"编译期需要、运行期由容器提供"的正确表达。
+- 覆盖率门禁按棘轮纪律上调：**0.70 / 0.62 → 0.71 / 0.63**（实测行 76.02%、分支 68.73%，阈值下留约 5 个百分点余量）。
+
+### 验证（P0-3）
+- 后端 `mvn -B -o clean verify`：**305 用例 / 0 失败 / 0 错误**（296 + 9），`All coverage checks have been met`、`0 Checkstyle violations`、`BugInstance size is 0`，`BUILD SUCCESS`。
+- JaCoCo **独立实算**（读 `jacoco.csv`，不转述报告文字）：行 **76.02%（1119/1472）**、分支 **68.73%（367/534）**，较上轮 74.80% / 67.32% 双升。
+- **负向验证（强制动作，两次）**：
+  1. 摘掉 `CampusProductController#remove` 的 `@PreAuthorize` → `mutatingEndpointsDeclarePermission` 精确报出 `[CampusProductController#remove]` 并 `BUILD FAILURE`；恢复后转绿。
+  2. 把 `CampusNoticeController` 两处 `@SelfServiceEndpoint` 的理由清空 → `selfServiceMarkerRequiresRationale` 报出 `[CampusNoticeController#read, CampusNoticeController#readAll]` 并失败；恢复后转绿。
+- 环境前置：`clean` 会删发行 jar，后端若在运行需先停（`verify.bat` 已有该预检）。本次验证时 8080 上有一个 19:48 启动的本地实例占用 `ruoyi-admin.jar`，停掉后 `clean verify` 才通过。
+
+### 未纳入本轮（P0-3）
+- **仍没有 `@SpringBootTest` 全栈集成测试**：本地无 MySQL 时它只会以"连不上库"失败，在 CI 上又依赖外部服务而不可复现。真栈验证继续由 `e2e_business.py` 与 CI 的 docker job 承担。
+- **「越权真的会被拦」缺一条显式断言**：`standaloneSetup` 不带 Security 过滤器链，目前这层证据只有"注解覆盖守护 + e2e"两处，缺"带权限的用户能过、不带权限的用户 403"的正面/负面成对断言。补它需要 `spring-security-test` 与真实 `UserDetailsService`，留待 P1。
+
+### 新增（P0-2 补做：越权拦截的运行时证据 + 权限串契约）
+- 评估报告 P0 第 2 项「『越权会被拦』缺运行时证据」此前只做了静态那一半，本轮补齐，并把权限证据链补成三段：
+
+  | 测试 | 回答的问题 | 形态 |
+  |---|---|---|
+  | `CampusPermissionGuardTest` | 写接口有没有加注解 | 静态扫描 |
+  | `CampusPermissionContractTest`（新） | 写的权限串对不对 | 静态，对齐 `sys_menu.perms` |
+  | `CampusAuthorizationTest`（新） | 注解到底拦不拦得住 | 运行时，真实拦截器 + 真实 `PermissionService` |
+
+- **`CampusPermissionContractTest`（5 用例，`ruoyi-system`）**：把 `@PreAuthorize` 里的权限串与迁移种下的 `sys_menu.perms` 对齐，针对一个 **e2e 永远抓不到**的失效模式（见下）。
+  - 权限集合取 **V1∪V2∪V3∪V4 的并集**，不是只看 V1：一键脚本导入的 `campus_tao_full.sql` 是 V1 基线，首次启动由 `baseline-on-migrate: true` + `baseline-version: 1` 补 V2~V4。
+  - 另加一条基线一致性检查：V1 迁移与全量脚本的 campus 权限必须一致——改了 V1 却忘记重新导出 dump，走 dump 建的新库与 Flyway 库就会分叉。
+  - 两条防假通过：注解侧至少 25 条、种子侧至少 20 条，解析失效时测试会红而不是"零违规通过"。
+- **`CampusAuthorizationTest`（4 用例，`ruoyi-admin`）**：用**真实的** `PermissionService`（`@Service("ss")`）+ `@EnableMethodSecurity` + 真实的 `CampusProductController` 做运行时断言。不启 Web 容器、不连数据库，因此能在 CI 的 backend job 里跑。
+  - 持有权限 → 放行且调用真的落到 service；不持有 → `AccessDeniedException` 且 **service 一次都没被调用**。只断言"抛异常"是不够的：若拦截发生在 service 之后，数据已经被删了。
+  - 第 4 个用例把「管理员持 `*:*:*`，任何 `@PreAuthorize` 都放行」钉成**可执行事实**——这就是 e2e 验证不到权限的根因。
+
+#### 为什么 e2e 抓不到权限问题（本轮新增的认识）
+`PermissionService.hasPermissions` 第 157 行是 `permissions.contains("*:*:*") || contains(perm)`，而 `SysPermissionService` 对管理员直接注入 `*:*:*`；同时 `e2e_business.py` 的卖家/运营侧**全部用 `admin` 跑**（文件第 2 行注释即写明「双账号：admin 卖家 / ry 买家」）。**卖家侧每一条 `@PreAuthorize` 在 e2e 里都被通配权限放行了**——权限串写成 `campus:product:remvoe` 也一样"全链路通过"，上线后非管理员一点按钮就是 403。此前把"e2e 全绿"当作权限有效的证据，是不成立的。
+
+### 验证（P0-2 补做）
+- 后端 `mvn -B -o clean verify`：**314 用例 / 0 失败 / 0 错误**（`ruoyi-system` 310 + `ruoyi-admin` 4），`All coverage checks have been met`、`0 Checkstyle violations`、`BugInstance size is 0`，`BUILD SUCCESS`。覆盖率不变（新增用例不触碰生产代码）：行 76.02%、分支 68.73%。
+- **负向验证（三次）**：
+  1. 把 `campus:product:remove` 改成 `campus:product:remvoe` → `annotatedPermissionsExistInSeed` 精确报出该串并失败；
+  2. 只改 V1 里的 `campus:product:add` → `baselineAndFullScriptAgree` 报「仅 V1 有 `campus:product:create`；仅 dump 有 `campus:product:add`」，注解侧同时报缺 `campus:product:add`；
+  3. 移除 `@EnableMethodSecurity` → 两条拒绝用例双双变成「Expected AccessDeniedException to be thrown, but nothing was thrown」。
+  三次均恢复后转绿。
+
+### 踩坑（两处，已写进代码注释）
+- **权限集合不能只看 V1**：第一版把 V1 当权限种子，跑出 12 条"缺失"（address / favorite / message / searchhistory），差点据此判定成缺陷。查库发现普通角色实际有 **29 条** campus 权限——它们种在 V2/V3。**先怀疑自己的前提，再怀疑代码**。
+- **`new LoginUser(user, permissions)` 不会设置 `userId`**：2 参构造只塞了 `user` 与 `permissions`，`getUserId()` 返回 null。表现为"越权用例通过了、service 却拿到 null 用户"——一个安静的假绿。必须用 4 参构造。
+- 顺带一提：`PermissionService.hasPermi` 会往请求上下文写权限串（供审计），单测里必须绑一个请求作用域，否则抛 `No thread-bound request found`。
+
+### 更正（P1-3 前置核查：`commons-io` 的 HIGH 结论不成立）
+v1.0.22 记录「后端镜像 HIGH 1：`commons-io 2.8.0`，修复版本 2.14.0，待后续随依赖升级处理」。本轮核查判定**这条记录有误，且处置方向是错的**：
+
+| 证据 | 结果 |
+|---|---|
+| 父 pom `commons.io.version` | **2.22.0**（`git log -S` 只命中初始化提交，从未是 2.8.0） |
+| 发行 jar `BOOT-INF/lib`（159 个依赖逐个解包扫描） | 只有 **`commons-io-2.22.0.jar`**，无任何 jar 内嵌 2.8.0 |
+| SBOM `backend-bom.json` | `pkg:maven/commons-io/commons-io@2.22.0` |
+| CI `security` job（osv-scanner 扫该 SBOM） | **pass**（2.22.0 无已知漏洞） |
+
+按原建议"升到 2.14.0"不仅无意义（当前 2.22.0 已远高于修复版本），还会把正确的版本**降级**。真实原因待查，最可能是 v1.0.22 扫描的是更早构建的镜像，或扫描口径把构建阶段缓存计入了。**本机无 trivy / docker，无法复扫**，故本项不宣称"已修复"，只更正记录。
+
+**本轮补充了权威漏洞库证据（P1-2 期间查询 OSV API）**，把"漏洞本身是否成立"也一并验证了：
+`api.osv.dev/v1/query`，Maven 坐标 `commons-io:commons-io`：
+
+| 版本 | OSV 结果 |
+|---|---|
+| **2.22.0（本项目实际使用）** | **0 条漏洞** |
+| 2.8.0（v1.0.22 报告声称的版本） | `GHSA-78wr-2p64-hpwj`：Apache Commons IO 对不可信输入的可能 DoS |
+| 2.13.0 | 同样命中 `GHSA-78wr-2p64-hpwj` |
+
+说明三件事：**漏洞本身是真的**（2.8.0 / 2.13.0 确实中招，修复版 2.14.0 也对）；但**本项目从未使用过它**，从初始化提交起就是 2.22.0；因此"升级到 2.14.0"对本项目是一条**降级建议**。
+
+> 第一次查询时我把 Maven 的包名写成了 `commons-io`（少了 groupId），得到的是 `{}`（"无漏洞"）——和正确写法 `commons-io:commons-io` 的结果恰好一致，差点得出"两种版本都安全"的错结论。做了对照组才问出问题：用确定的 `log4j-core@2.14.1` 一测，缺 groupId 时同样返回 `{}`。**先验证探针，再相信结果。**
+
+### 未纳入本轮（P0-2 补做）
+- **仍未做 `@SpringBootTest` 全栈集成测试**：CI 的 backend job 没有 MySQL service，加进去会让该 job 依赖外部服务。当前用"真实 `PermissionService` + 真实拦截器 + 不启容器"的切片覆盖了最关键的方法级拦截语义，但**过滤器链层面（`SecurityConfig` 的 `authorizeHttpRequests`、匿名放行规则）仍无自动化断言**——补它需要把 MySQL/Redis 加进 backend job，或单开一个 security job。
+
+### 新增（P1-1 分支保护 + PR 流程）
+- 评估报告 C4「人工把关与责任边界」只有 70 分，依据是「无 PR、无 merge commit、无分支保护、无评审记录；AI 产出直接进 main，人工把关只存在于对话过程，不可审计」。**对话是易失的**——三个月后没人能证明某一行代码是谁在什么依据下同意合入的。本项把它变成仓库侧的可审计事实。
+- `deploy/github/branch-protection.json`：配置即代码。6 个 CI job 全部设为必需检查 + `strict`（要求分支与 main 同步后再合并，避免"绿的其实是旧代码"）；`enforce_admins: true`；禁强推、禁删分支；会话未解决不可合并。
+- `deploy/github/README.md`：应用命令、已知取舍、负向验证方法，并写明「改 CI 的 job `name:` 必须同步本文件」，否则 PR 会永久卡在 `Expected — Waiting for status to be reported`。
+- `.github/pull_request_template.md`：把《AI 辅助开发规范》的两条硬要求（**自述不算证据**、**负向验证为强制动作**）变成合并前必须勾选的项，另加「未纳入项」「文档时效」「不降标准」三项。
+- **如实记录一处取舍**：`required_approving_review_count = 0`，而非报告建议的 1。仓库只有 1 名维护者，GitHub **不允许自我批准**，设成 1 会让任何 PR 都无法合并——**一条没人能满足的规则，第一次挡住急活时就会被关掉**，那比没有规则更糟。当前强制的是「必须走 PR + CI 全绿」，评审责任由 PR 模板的自查清单承载；有第二名协作者时把该值改回 1 即可，其余配置不用动。
+
+### 验证（P1-1）
+- `gh api repos/wms1125/Xiao-Yuan-TAO/branches/main/protection` → **HTTP 200**；回读的配置与提交的 JSON 逐项一致（6 条必需检查、`strict=true`、`enforce_admins=true`、禁强推禁删）。
+- **负向验证（强制动作）**：以管理员身份经 Contents API 直接往 main 写 `protection-probe.txt` → **HTTP 409**：`Could not create file: Changes must be made through a pull request. 6 of 6 required status checks are expected.`；随后该路径返回 **404**，确认文件确实没被写进去。管理员同样被拦，说明 `enforce_admins` 真的生效，而不是只约束普通成员。
+- **PR 合并记录**：PR #1 六项检查全部 pass（后端 3m17s / e2e 2m3s / 前端 59s / Flyway 1m1s / 镜像 6m40s / 依赖扫描 22s），`mergeable_state=clean` 后合并为 **merge commit `bfb7ab7`**。
+
+### 未纳入本轮（P1-1）
+- **本轮未能通过 `git push` 推送**：本机网络策略只放行 `api.github.com`，`github.com:443` 被代理拦截（`CONNECT tunnel failed, response 502`），`git push` / `git fetch` 均不可用。远端 PR #1 是用 Git Data API（blob → tree → commit → ref）创建的，内容与本地同名提交一致但 SHA 不同。因此 **P0-1~P0-3 与 P1-1 共 5 个本地提交尚未进入远端**，远端 main 目前只多了 PR #1 的合并提交。
+  - 在可正常访问 github.com 的环境下补推：`git fetch origin && git rebase origin/main`（三个文件与远端内容完全一致，不会冲突），再 `git push origin HEAD:refs/heads/<branch>` 开 PR 合入——**分支保护已生效，直推 main 会被拒**，这正是它的作用。
+
+### 新增（P1-4 浏览器端 E2E：真实 Chrome 点完 7 条关键路径）
+
+评估报告给「真实业务闭环完整性」扣分的一条依据是：**证据只有接口脚本 + 11 张人工截图**。接口脚本证明"后端逻辑对"，截图证明"页面渲染出来了"，两者都不覆盖"用户点下去对不对"——按钮绑错方法、文案改坏、`@click.stop` 漏写、状态按钮该隐藏没隐藏，这四类缺陷在接口脚本里完全隐形，在截图里也看不出来（图是静态的，且是挑好的那一刻拍的）。
+
+- `campus-tao-ui/playwright.config.js`：`channel: 'chrome'` 复用系统已装 Chrome（CI 的 ubuntu runner 自带），**不下载 Chromium**，省掉几十兆下载与外部 CDN 依赖；`workers: 1` 强制串行——用例共享同一个真实后端与同一套演示数据，并发会互相污染；`trace/video/screenshot: retain-on-failure` 保证红了之后能回放每一步。
+- `e2e/support/auth.js`：登录走**真实表单**，不走"先调接口拿 token 再塞 localStorage"的捷径——后者会让"登录页本身坏了"这类缺陷在 E2E 里完全隐形。登录成功的判据是**离开 `/login` 路由**而不是某个提示文案（文案会改，路由不会）。
+- `e2e/support/seed.js`：**接口播种、UI 验证**。交易链路用的是一件专供商品（库存 99、1 元），不用商城里现成的——下单会扣库存，买两次就售罄，用例第三轮必红，那是数据耗尽不是功能回归。卖家用 `ry` 而非 `admin`，因为后端禁止购买自己发布的商品（`CampusOrderServiceImpl` 第 139 行）。
+- 7 条路径 / 12 条用例，其中 5 条是负向用例（每条主路径至少带一条"本该失败"的反例）：
+
+| # | 路径 | 用例 | 关键断言 |
+|---|------|------|----------|
+| 1 | 登录 | 正确账号能进系统 / 密码错误停在登录页 | 路由离开 `/login`；错误密码必须留在原地且有提示 |
+| 2 | 商城→详情 | 列表信息与详情一致 | 卡片标题与价格必须原样出现在详情页，只验"路由能打开"等于没验 |
+| 3 | 搜索历史 | 搜过的词进入"最近搜索"并能回填 | 刷新后仍在（证明落库，不是内存态） |
+| 4 | 收藏 | 星标能收藏能取消 / 点星标不跳详情 | 两次点击回到原点（可重复执行）；`@click.stop` 失效会跳详情 |
+| 5 | 下单→支付→发货→收货 | 状态逐级推进 / 未付款不给发货收货入口 | 订单状态 待付款→已付款→已发货→已完成；终态后"确认收货"必须消失 |
+| 6 | 站内信 | 打开会话能看消息并发送 / 空内容不能发 | 未读角标点开后消失；发送后气泡出现且输入框清空 |
+| 7 | 售后 | 申请→审核通过→已退款 / 未发货订单被后端挡下 | 售后单状态推进；驳回场景必须弹出后端业务文案且对话框保持打开 |
+
+- CI：`e2e` job 内新增 `setup-node` → `npm ci` → `npx playwright test` → **失败时上传 `test-results/`（trace + video + 截图）**。放在这个 job 而不是另起一个，是因为它已经具备真实后端 + 真实 MySQL + 演示数据三件套，另起 job 等于把整套环境再搭一遍。
+- `package.json` 新增 `test:e2e`，并把 `e2e/` 与 `playwright.config.js` 纳入 `lint:strict`（0 warning）与 `format:check` 范围。
+
+### 修复（P1-4 过程中 E2E 抓出的三个真实缺陷）
+
+**1）站内信页面 100% 不可用（排序规则冲突，最严重）**
+- 现象：会话列表接口直接 500。`CampusMessageMapper.selectConversations` 里 `left join campus_order o on o.order_no = t.order_no` 报
+  `Illegal mix of collations (utf8mb4_0900_ai_ci,IMPLICIT) and (utf8mb4_general_ci,IMPLICIT) for operation '='`。
+- 根因：`V2__buyer_journey.sql` 第 59 行把 `campus_message` 显式建成 `COLLATE=utf8mb4_general_ci`，而 V1 那批表是 MySQL 8 默认的 `utf8mb4_0900_ai_ci`。两套排序规则的 varchar 列一参与 `=` 比较就报错。
+- 为什么此前没发现：单测里 Mapper 是 mock 的，SQL 根本没下到 MySQL；`e2e_business.py` 没覆盖这个列表接口；人工截图拍的是别的页面。**是 Playwright 真的点进站内信页才暴露的。**
+- 修复：新增 `V5__unify_campus_collation.sql`，把 V2/V3 建的 4 张校园表（`campus_message` / `campus_favorite` / `campus_address` / `campus_search_history`）统一 `CONVERT TO ... utf8mb4_0900_ai_ci`。**不反向对齐到 general_ci**——那要改 11 张已有业务表，收益更低、风险更大；项目依赖 MySQL 8.0（内置 8.0.40 + compose 的 `mysql:8.0`），0900 必然可用。**不改 V2 本身**：已应用的迁移改内容会触发 Flyway checksum 校验失败，只能靠新迁移纠正。
+- 取证：迁移前 `flyway_schema_history` 到 v4、4 张表为 general_ci、接口 500；迁移后到 v5、`0` 张非 0900 校园表、接口返回会话列表 200。
+
+**2）收藏连点被"防重复提交"拦下，且跨商品也会误拦**
+- 现象：连点两下星标，第二下按钮纹丝不动，还弹「数据正在处理，请勿重复提交」。
+- 根因有两层：`src/utils/request.js` 的防重复提交缓存键只有 `{ url, data }`，而 `toggleFavorite` 的参数走 `params`、`data` 恒为 `undefined`——**键里没有 `productId`**。所以一秒内先收藏商品 A 再收藏商品 B，也会被当成重复提交。
+- 修复：`toggleFavorite` / `removeFavorite` 显式 `headers: { repeatSubmit: false }`。语义上收藏/取消本就可重复：服务端每次按当前状态取反并返回 `favored`，前端完全依赖返回值渲染，拦下只会留下"按钮没反应 + 一条误导性报错"。
+- 同时把 `order/ship/{orderNo}` 的同类问题排除在外：它的 url 自带订单号，键天然不同，且发货确实该防重复，保持原样。
+- 取证：修复前 3/3 稳定失败（确定性，非抖动），修复后通过；单测 `api.campus.test.js` 两条断言同步更新为包含 `repeatSubmit: false`，把这个行为钉住。
+
+**3）登录 helper 与 Vite 首次 reload 的竞态（测试稳定性）**
+- 现象：填完账号密码点登录毫无反应，20 秒后超时，截图显示输入框是空的、还弹了必填校验。
+- 根因：Vite 首次访问某依赖会做预打包并触发一次整页 reload。reload 正好落在"填完但还没点登录"的间隙里，输入框被清空。
+- 修复：`login()` 先 `waitForLoadState('networkidle')` 等页面稳定，填完**回读输入框的值**确认落进去了再点；值没落进去就立刻断言失败，不让它伪装成"登录超时"。
+
+### 验证（P1-4）
+- 浏览器 E2E：`npx playwright test` → **12 用例 / 0 失败**，全量耗时 1.8 分钟（单条路径 6~20 秒）。
+- 后端 `mvn -B verify`：**314 用例 / 0 失败 / 0 错误 / 0 跳过**（27 个测试类），覆盖率门禁通过、`0 Checkstyle violations`、`BugInstance size is 0`、Spotless 26 文件全净。
+- 前端 `vitest run`：**12 文件 / 201 用例 / 0 失败**；`lint:strict`（0 warning）与 `format:check` 均通过，`e2e/` 已在覆盖范围内。
+- **负向验证（强制动作，且抓到了我自己的问题）**：把详情页按钮文案从「加入购物车」改成「加入购物车（改坏了）」，预期套件变红——**第一次跑竟然是 12/12 全绿**。原因是 Playwright 的 `getByRole(name)` **默认按子串匹配**，加长的文案照样命中。随后把全部 27 处按钮定位改为 `exact: true`，再跑才如预期报红：`waiting for getByRole('button', { name: '加入购物车', exact: true })`，2 条用例失败。恢复文案后 `git diff` 为空、套件回绿。
+  - 这条留痕的意义：**负向验证不是走形式，它验的是断言本身的强度**。若只满足于"改坏能红"，这次的弱断言就会被当成通过而长期潜伏。
+
+### 未纳入本轮（P1-4）
+- **CI 侧"稳定通过"尚无法取证**：本机 `git push` 仍被网络策略拦截（`CONNECT tunnel failed, response 502`），工作流文件只能本地编写与本地等效执行，无法触发真实 GitHub Actions 运行。已在 `e2e` job 内按 CI 的等价命令跑通（同一条 `npx playwright test` + 同一套 env），但"在 CI 里稳定绿"这句话要等能推送的环境跑过一次才算数——**不拿本地结果冒充 CI 结论**。
+- **截图回归（visual diff）未做**：当前只断言 DOM 与文案，不做像素级对比。像素对比在演示数据会变（商品价格、时间戳）的场景下噪声极大，需要先固定数据快照，本轮不做。
+
+### 新增（P1-2 密钥泄漏扫描：gitleaks 全历史扫描 + 登记的插件豁免）
+
+评估报告给「可复现交付的可行性」指出缺少密钥扫描。本项落地时**没有只写配置文件**——本地先下载 gitleaks 8.30.1 实跑，第一次扫就抓出一个真东西，然后把它修掉了。
+
+- `.gitleaks.toml`（仓库根）：`useDefault = true` 原样沿用官方规则集，不自造规则，避免两套口径打架。
+- CI：gitleaks 接进**既有 `security` job**（而不是新 job）——job 名不变，分支保护的 6 个必需检查自动覆盖，不必改 `branch-protection.json`。`fetch-depth: 0` **扫全量历史**：密钥提交过再删除并不算撤回，尤其这个仓库在 GitHub 上；只扫最后一次提交等于主动放弃这条最能查出问题的路径。
+- `deploy/github/README.md` 补一节「密钥泄漏扫描的登记口径」：**新增一律不做路径豁免**；豁免按文件路径写、不按指纹写（指纹绑定 commit SHA，rebase 后失效，会让「已知残留」悄悄变成「没人知道还在不在」）。
+
+### 修复（P1-2 扫描抓出的真实问题：前端提交了一把 RSA 私钥，且它真被用来存密码）
+
+**发现**：`campus-tao-ui/src/utils/jsencrypt.js` 提交了整段 RSA 私钥（`generic-api-key` 规则命中 2 次：初始提交 `16d8828`、格式化提交 `76280e4`），文件里还留着「密钥对生成 http://web.chacuo.net/netrsakeypair」的注释。
+
+**查清事实链后才动手**（没有直接删，也没有直接加白名单）：
+1. 该文件来自**若依上游脚手架**，随「初始化校园淘交付包版本库」进入本仓库，不是本项目自己生成的凭据。
+2. 后端**从来没有**用它解过任何东西——`ruoyi-framework` 里不存在任何 RSA 解密逻辑，登录请求提交的始终是明文密码。
+3. 它在前端的唯一用途：勾选「记住密码」时把密码加密写进 cookie，下次打开登录页再解出来回填表单（`login.vue`）。
+4. 结论：**前端既要加密又要解密，私钥只能放在前端——等于把钥匙和锁一起交给用户。**在这种情况下「换一把更强的密钥」「把密钥挪到环境变量」都无法奏效：需要它的正是要防的人。所以唯一正确的修法是不让密码落盘。
+
+**改动**：
+- `src/views/login.vue`：删除密码的写入/读取路径，勾选项从「记住密码」改为「**记住用户名**」——只记用户名，密码一律不进 cookie。原逻辑注释里写明了为什么不这么做不行。
+- 删除 `src/utils/jsencrypt.js`，从 `package.json`/`package-lock.json` 卸载 `jsencrypt` 依赖（`npm uninstall`，lock 同步更新）。
+- 重新生产构建，确认私钥不再出现在 `dist/` 产物里。
+- 新增 E2E 守卫用例 `负向：勾选记住后密码仍不得写入 cookie`：断言 `password` cookie 不存在、`username` cookie 存在，且重新打开登录页时用户名回填、密码框为空。
+
+**未做（如实记录）**：私钥仍在 **git 历史**里。清洗历史要强推 main，而分支保护明确禁强推（`allowsForcePush=false`）——用一条会禁掉整个安全规则的方式去抹掉一条低危残留，代价明显不划算。故按规范在 `.gitleaks.toml` 登记为唯一的路径豁免，并写明三条依据与复核条件（仓库公开、或该密钥出现在自写代码里、或升级后的默认规则在此路径命中别的内容 → 重新评估）。
+
+### 新增（P1-2 CodeQL 静态分析）
+- `codeql` job：`java` + `javascript-typescript` 双语言，`github/codeql-action@v3`，JDK 17 + Maven 缓存 + autobuild。
+- **刻意暂不设为必需检查**：它的首次运行结果无法在本地预演，先真跑一次拿到真实告警清单，再决定修哪些、阈值怎么设。一条没跑过的检查第一次挡住急活时就会被整个关掉。首次全绿后再同步进 `deploy/github/branch-protection.json` 的 contexts。
+
+### 验证（P1-2）
+- gitleaks **8.30.1 本地实跑**（非自述）：
+  - 当前工作区（`git archive HEAD` 还原 + 保留并发改动，与 CI 检出口径一致）→ 修复前 `leaks found: 1`（`jsencrypt.js` 第 9 行私钥），修复后 **`no leaks found`**。
+  - 全量历史 61 个提交 → 修复后 **`no leaks found`**（按路径豁免后）。
+  - 本地扫描有一条环境噪音：`file: command not found` + 对某个 `.docx` 的 `unable to read files to diff`；CI 的 ubuntu runner 自带 `file`，且**退出码为 0**，不影响判定。
+- **负向验证（强制动作）**：临时把 `Cookies.set('password', 'NEGATIVE-VERIFY-PROBE', ...)` 加回登录页，新用例立刻报
+  `密码不得写入 cookie，实际写入：{"name":"password","value":"NEGATIVE-VERIFY-PROBE",...}` 并失败；移除探针后回绿。
+- 浏览器 E2E：**13 用例 / 0 失败**（12 + 1 新增）。
+- 前端 `vitest run`：**201 用例 / 0 失败**；`lint:strict`、`format:check` 通过；`npm run build:prod` 成功且产物无私钥。
+- 工作流 YAML `yaml.safe_load` 解析通过，7 个 job 名称逐个核对无重复。
+
+### 未纳入本轮（P1-2）
+- **CodeQL 与 gitleaks 的 CI 实跑均未取证**：本机 `git push` 仍被网络策略拦截（`CONNECT tunnel failed, response 502`），无法触发真实的 GitHub Actions 运行。gitleaks 用的是同一二进制同一配置、口径等价；CodeQL 只能做到「YAML 合法 + 语言矩阵正确」，首次结果未知。
+- **`security` job 的 name 未改**，故远端分支保护无需重新应用；`codeql` 尚未进入必需检查列表（理由见上）。
 
 ## [1.0.22] - 2026-10-17
 

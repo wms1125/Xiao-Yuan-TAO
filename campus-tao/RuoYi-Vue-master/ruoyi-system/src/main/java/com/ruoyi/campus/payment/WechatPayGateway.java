@@ -59,6 +59,14 @@ public class WechatPayGateway implements IPaymentGateway {
     }
 
     @Override
+    public boolean realMoney() {
+        // 按渠道设计意图声明为真实资金。注意：本渠道当前 enabled() 恒为 false
+        // （下单/退款/验签均未实现），因此不可能成为生效渠道，
+        // 界面也就不会出现"标着真实扣款却付不出去"的错标。
+        return true;
+    }
+
+    @Override
     public PayResult pay(PayCommand cmd) {
         return PayResult.failed(NOT_IMPLEMENTED);
     }

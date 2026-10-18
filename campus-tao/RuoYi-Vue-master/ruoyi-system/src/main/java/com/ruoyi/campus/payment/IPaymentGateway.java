@@ -22,11 +22,38 @@ import java.util.Map;
  */
 public interface IPaymentGateway {
 
+    /** 沙箱：只记站内余额账，不产生真实资金流动 */
+    String MODE_SANDBOX = "sandbox";
+
+    /** 真实渠道：会产生实际资金流动 */
+    String MODE_REAL = "real";
+
     /** 渠道标识，与配置项 campus.payment.channel 的取值一一对应，如 sandbox / wechat */
     String channel();
 
     /** 渠道是否可用。false 时渠道路由会拒绝解析，避免误把流量打到未配置的渠道上 */
     boolean enabled();
+
+    /**
+     * 本渠道是否涉及真实资金。
+     *
+     * <p>沙箱渠道只记站内余额账，不产生实际扣款；真实渠道会动用户的钱。
+     * 这个声明最终会渲染到下单/支付界面上——把"不扣真钱"说成"扣真钱"只是吓人，
+     * 把"扣真钱"说成"不扣真钱"则是误导用户付款，性质严重得多。</p>
+     *
+     * <p><b>刻意不提供 default 实现</b>：新增渠道若忘记声明，编译器会直接拦住；
+     * 若默认返回 false，漏声明的新渠道会被界面标成"沙箱演示"，而这正是最危险的错标方向。</p>
+     */
+    boolean realMoney();
+
+    /**
+     * 资金语义标签，用于接口下发与指标打标。
+     *
+     * <p>由 {@link #realMoney()} 派生而非各自实现，避免"控制器一份、指标一份"两处字符串走样。</p>
+     */
+    default String mode() {
+        return realMoney() ? MODE_REAL : MODE_SANDBOX;
+    }
 
     /**
      * 发起扣款。

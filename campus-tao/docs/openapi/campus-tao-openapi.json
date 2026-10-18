@@ -4947,6 +4947,65 @@
         }
       }
     },
+    "/campus/notice/page": {
+      "get": {
+        "tags": [
+          "campus-notice-controller"
+        ],
+        "operationId": "page",
+        "parameters": [
+          {
+            "name": "isRead",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageNum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableDataInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/campus/notice/list": {
       "get": {
         "tags": [
@@ -5034,13 +5093,35 @@
           "campus-message-controller"
         ],
         "operationId": "list_19",
+        "parameters": [
+          {
+            "name": "pageNum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/AjaxResult"
+                  "$ref": "#/components/schemas/TableDataInfo"
                 }
               }
             }
@@ -6380,16 +6461,16 @@
           "parentMenuName": {
             "type": "string"
           },
-          "sub": {
+          "view": {
             "type": "boolean"
           },
-          "crud": {
+          "sub": {
             "type": "boolean"
           },
           "tree": {
             "type": "boolean"
           },
-          "view": {
+          "crud": {
             "type": "boolean"
           }
         },
@@ -6492,19 +6573,7 @@
           "list": {
             "type": "boolean"
           },
-          "increment": {
-            "type": "boolean"
-          },
-          "capJavaField": {
-            "type": "string"
-          },
-          "pk": {
-            "type": "boolean"
-          },
           "insert": {
-            "type": "boolean"
-          },
-          "superColumn": {
             "type": "boolean"
           },
           "edit": {
@@ -6513,7 +6582,19 @@
           "usableColumn": {
             "type": "boolean"
           },
+          "superColumn": {
+            "type": "boolean"
+          },
+          "pk": {
+            "type": "boolean"
+          },
           "query": {
+            "type": "boolean"
+          },
+          "capJavaField": {
+            "type": "string"
+          },
+          "increment": {
             "type": "boolean"
           }
         },
@@ -6528,10 +6609,10 @@
           "error": {
             "type": "boolean"
           },
-          "success": {
+          "warn": {
             "type": "boolean"
           },
-          "warn": {
+          "success": {
             "type": "boolean"
           },
           "empty": {

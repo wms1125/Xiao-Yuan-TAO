@@ -1,8 +1,10 @@
 import request from '@/utils/request'
 
-// 会话列表（我参与过的订单，带未读数）
-export function listConversation() {
-  return request({ url: '/campus/message/list', method: 'get' })
+// 会话列表（分页）。
+// query = { pageNum, pageSize }：服务端每页硬上限 100 条，超出直接报错而不是静默截断。
+// 曾经这里是"一次拉全量"，用户订单越多响应体越大，且拿不到总数无法翻页。
+export function listConversation(query) {
+  return request({ url: '/campus/message/list', method: 'get', params: query })
 }
 // 我的未读消息总数
 export function unreadMessageCount() {

@@ -29,13 +29,18 @@ management:
       default: none
     web:
       exposure:
-        include: health,info
+        # prometheus 供 Prometheus 抓取（校园淘业务指标见 com.ruoyi.campus.observability.CampusMetrics）。
+        # 该端点匿名开放（见 SecurityConfig），生产部署必须由 nginx/网络策略限制为内网可达，
+        # 禁止对公网暴露——指标会泄漏业务量与调用结构。
+        include: health,info,prometheus
   endpoint:
     health:
       access: read-only
       # 不对外暴露组件细节，仅返回 UP/DOWN
       show-details: never
     info:
+      access: read-only
+    prometheus:
       access: read-only
   info:
     env:
@@ -46,7 +51,7 @@ info:
   app:
     name: campus-tao
     description: 校园淘 校园二手交易平台
-    version: 1.0.22
+    version: 1.0.25
 
 # 开发环境配置
 server:

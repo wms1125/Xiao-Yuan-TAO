@@ -1,5 +1,6 @@
 package com.ruoyi.campus.service.impl;
 
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -7,9 +8,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.ruoyi.campus.domain.CampusNotice;
+import com.ruoyi.campus.domain.vo.CampusNoticePage;
 import com.ruoyi.campus.mapper.CampusNoticeMapper;
 import com.ruoyi.campus.notify.CampusNotifyDispatcher;
 import com.ruoyi.campus.service.ICampusNoticeService;
+import com.ruoyi.common.exception.ServiceException;
+
+import static com.ruoyi.campus.service.ICampusNoticeService.DEFAULT_PAGE_SIZE;
+import static com.ruoyi.campus.service.ICampusNoticeService.MAX_PAGE_SIZE;
 
 /**
  * 站内通知服务实现（校园淘）
@@ -46,6 +52,31 @@ public class CampusNoticeServiceImpl implements ICampusNoticeService {
     @Override
     public List<CampusNotice> selectListByUser(Long userId, Integer isRead, Integer limit) {
         return noticeMapper.selectListByUser(userId, isRead, limit);
+    }
+
+    @Override
+    public CampusNoticePage selectListByUserPaged(Long userId, Integer isRead, String type, int pageNum, int pageSize) {
+        if (userId == null) {
+            throw new ServiceException("未登录或登录态已失效");
+        }
+        if (type != null && type.trim().isEmpty()) {
+            // 空串与 null 等价：否则 where 里会多一个永远不成立的 type = ''
+            type = null;
+        }
+        int page = Math.max(pageNum, 1);
+        int size = pageSize < 1 ? DEFAULT_PAGE_SIZE : pageSize;
+        if (size > MAX_PAGE_SIZE) {
+            throw new ServiceException("每页最多 " + MAX_PAGE_SIZE + " 条通知");
+        }
+
+        long total = noticeMapper.countByUser(userId, isRead, type);
+        long offset = (long) (page - 1) * size;
+        if (offset >= total) {
+            // 越界页不再打一次库：结果必为空，但仍要返回真实 total 供翻页控件跳末页
+            return new CampusNoticePage(total, Collections.emptyList());
+        }
+        List<CampusNotice> rows = noticeMapper.selectListByUserPaged(userId, isRead, type, offset, size);
+        return new CampusNoticePage(total, rows);
     }
 
     @Override

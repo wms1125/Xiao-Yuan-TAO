@@ -11,5 +11,13 @@ Dockerfile text eol=lf
 *.dockerignore text eol=lf
 *.conf text eol=lf
 
+# Java 源码固定 LF。这是让 spotless 门禁跨平台一致的前提：
+# 门禁里没写 lineEnding，用的是 GIT_ATTRIBUTES 语义，对没有显式 eol 的
+# `text=auto` 规则会退回"平台换行符"——于是同一份 LF 源码在 Windows 上
+# 被要求改成 CRLF、在 Linux 上却通过，构建结果取决于开发者的操作系统。
+# 固定为 LF 后（全仓库 411 个 Java 文件在 HEAD 中本就无 CR，纯声明、无重写），
+# Windows 上也能跑出与 CI 相同的 spotless 判定。
+*.java text eol=lf
+
 # 其余按平台默认
 * text=auto

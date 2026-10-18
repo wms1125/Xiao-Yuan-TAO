@@ -15,7 +15,7 @@
       <div class="campus-stats">
         <div class="campus-stat">
           <div class="campus-stat__label">会话总数</div>
-          <div class="campus-stat__value">{{ conversationList.length }}</div>
+          <div class="campus-stat__value">{{ total }}</div>
           <div class="campus-stat__hint">按最近消息排序</div>
         </div>
         <div class="campus-stat">
@@ -59,6 +59,23 @@
               <div class="campus-empty__desc">在「我的订单」里对某笔订单点击「联系对方」即可开始沟通</div>
             </div>
           </div>
+
+          <!--
+            分页器：会话数随订单线性增长，列表改为服务端分页。
+            el-pagination 的 page.change 返回 { pageNum, pageSize }，直接覆盖查询参数。
+          -->
+          <el-pagination
+            v-if="total > 0"
+            class="msg-pager"
+            :current-page="queryParams.pageNum"
+            :page-size="queryParams.pageSize"
+            :page-sizes="[10, 20, 50]"
+            :total="total"
+            layout="total, sizes, prev, pager, next"
+            background
+            @current-change="handleCurrentChange"
+            @size-change="handleSizeChange"
+          />
         </div>
 
         <!-- 消息区 -->
@@ -114,9 +131,15 @@
 </template>
 
 <script setup name="CampusMessage">
-import { listConversation, listOrderMessage, readOrderMessage, sendMessage } from '@/api/campus/message'
+import {
+  listConversation,
+  listOrderMessage,
+  readOrderMessage,
+  sendMessage,
+  unreadMessageCount
+} from '@/api/campus/message'
 import { getInfo } from '@/api/login'
-import { onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
@@ -129,6 +152,14 @@ const messageList = ref([])
 const activeOrderNo = ref('')
 const draft = ref('')
 const msgBoxRef = ref(null)
+/** 会话总数：来自服务端聚合，不是当前页长度 */
+const total = ref(0)
+
+/** 列表分页参数：每页上限由服务端硬卡（100），前端只做初值 */
+const queryParams = reactive({
+  pageNum: 1,
+  pageSize: 10
+})
 
 /** 当前登录用户 ID：由 JWT 解出，仅用于区分"我发的"与"对方发的" */
 const myUserId = ref(null)
@@ -169,12 +200,36 @@ function scrollToBottom() {
 async function getList() {
   loading.value = true
   try {
-    const res = await listConversation()
-    conversationList.value = res.data || []
-    totalUnread.value = conversationList.value.reduce((sum, c) => sum + (Number(c.unread) || 0), 0)
+    const res = await listConversation({ pageNum: queryParams.pageNum, pageSize: queryParams.pageSize })
+    conversationList.value = res.rows || []
+    // 总数由服务端聚合返回：分页后不能再拿当前页长度当会话总数
+    total.value = res.total || 0
   } finally {
     loading.value = false
   }
+}
+
+/** 未读总数单独取服务端聚合值：分页后未读数可能落在其他页，遍历当前页会漏算 */
+async function getUnreadTotal() {
+  try {
+    const res = await unreadMessageCount()
+    totalUnread.value = res.data?.count ?? 0
+  } catch {
+    totalUnread.value = 0
+  }
+}
+
+/** 翻页：el-pagination 的 current-change 直接回传新页码（数字） */
+function handleCurrentChange(pageNum) {
+  queryParams.pageNum = pageNum
+  getList()
+}
+
+/** 改每页条数：必须回到第 1 页，否则可能停在"新条数下不存在的页码"上拿到空列表 */
+function handleSizeChange(pageSize) {
+  queryParams.pageSize = pageSize
+  queryParams.pageNum = 1
+  getList()
 }
 
 async function selectConversation(orderNo) {
@@ -186,7 +241,9 @@ async function selectConversation(orderNo) {
     messageList.value = res.data || []
     // 打开会话即把发给我的未读标记为已读（失败不阻塞查看）
     await readOrderMessage(orderNo).catch(() => {})
+    // 已读会改变未读总数，且可能把该会话挤出当前页，两端都要刷新
     await getList()
+    await getUnreadTotal()
   } finally {
     msgLoading.value = false
     scrollToBottom()
@@ -210,6 +267,7 @@ async function handleSend() {
 onMounted(() => {
   loadMyUserId()
   getList()
+  getUnreadTotal()
   // 支持从订单页带 orderNo 直接进入指定会话
   if (route.query.orderNo) {
     selectConversation(route.query.orderNo)
@@ -238,6 +296,13 @@ onMounted(() => {
 .msg-conv {
   max-height: 460px;
   overflow-y: auto;
+}
+
+.msg-pager {
+  margin-top: 8px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+  justify-content: flex-end;
 }
 
 .msg-conv__item {

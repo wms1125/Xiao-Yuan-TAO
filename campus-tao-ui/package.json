@@ -11,12 +11,13 @@
     "build:stage": "vite build --mode staging",
     "preview": "vite preview",
     "test:unit": "vitest run",
+    "test:e2e": "playwright test",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "lint:strict": "eslint src/views/campus src/api/campus src/utils/ruoyi.js tests --max-warnings 0",
-    "format": "prettier --write \"src/**/*.{js,vue}\" \"vite/**/*.js\" \"tests/**/*.js\" \"*.js\" \"index.html\"",
-    "format:check": "prettier --check \"src/**/*.{js,vue}\" \"vite/**/*.js\" \"tests/**/*.js\" \"*.js\" \"index.html\""
+    "lint:strict": "eslint src/views/campus src/api/campus src/utils/ruoyi.js tests e2e playwright.config.js --max-warnings 0",
+    "format": "prettier --write \"src/**/*.{js,vue}\" \"vite/**/*.js\" \"tests/**/*.js\" \"e2e/**/*.js\" \"*.js\" \"index.html\"",
+    "format:check": "prettier --check \"src/**/*.{js,vue}\" \"vite/**/*.js\" \"tests/**/*.js\" \"e2e/**/*.js\" \"*.js\" \"index.html\""
   },
   "repository": {
     "type": "git",
@@ -34,7 +35,6 @@
     "fuse.js": "7.1.0",
     "js-beautify": "1.15.4",
     "js-cookie": "3.0.8",
-    "jsencrypt": "3.3.2",
     "nprogress": "0.2.0",
     "pinia": "3.0.4",
     "vue": "3.5.44",
@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "^1.64.1",
     "@vitejs/plugin-vue": "5.2.4",
     "@vitest/coverage-v8": "^4.1.11",
     "@vue/test-utils": "^2.5.1",

@@ -41,6 +41,12 @@ public class SandboxPaymentGateway implements IPaymentGateway {
     }
 
     @Override
+    public boolean realMoney() {
+        // 扣的是站内余额，不产生任何真实资金流动
+        return false;
+    }
+
+    @Override
     public PayResult pay(PayCommand cmd) {
         boolean ok = accountService.pay(cmd.getUserId(), cmd.getAmount());
         if (!ok) {

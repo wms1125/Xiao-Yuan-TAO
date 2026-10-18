@@ -2,6 +2,7 @@ package com.ruoyi.campus.service.impl;
 
 import com.ruoyi.campus.domain.CampusMessage;
 import com.ruoyi.campus.domain.CampusOrder;
+import com.ruoyi.campus.domain.vo.CampusConversationPage;
 import com.ruoyi.campus.mapper.CampusMessageMapper;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
 import com.ruoyi.campus.service.ICampusMessageService;
@@ -10,10 +11,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static com.ruoyi.campus.service.ICampusMessageService.DEFAULT_PAGE_SIZE;
+import static com.ruoyi.campus.service.ICampusMessageService.MAX_PAGE_SIZE;
 
 /**
  * 站内信服务实现（校园淘）
@@ -33,9 +38,26 @@ public class CampusMessageServiceImpl implements ICampusMessageService {
     private CampusOrderMapper orderMapper;
 
     @Override
-    public List<Map<String, Object>> selectConversations(Long userId) {
+    public CampusConversationPage selectConversations(Long userId, int pageNum, int pageSize) {
         requireUser(userId);
-        return messageMapper.selectConversations(userId);
+
+        // 页码归一：小于 1 一律当第 1 页，不接受负数页码把 offset 算成负数
+        int page = Math.max(pageNum, 1);
+        int size = pageSize < 1 ? DEFAULT_PAGE_SIZE : pageSize;
+        if (size > MAX_PAGE_SIZE) {
+            // 报错而非静默截断：截断会让调用方误以为拿到的就是全部会话
+            throw new ServiceException("每页最多 " + MAX_PAGE_SIZE + " 条会话");
+        }
+
+        long total = messageMapper.countConversations(userId);
+        // 越界页不再打一次数据库：offset 已超过总数时结果必为空，
+        // 直接返回空行 + 正确 total（翻页控件据此能跳到末页）
+        long offset = (long) (page - 1) * size;
+        if (offset >= total) {
+            return new CampusConversationPage(total, Collections.emptyList());
+        }
+        List<Map<String, Object>> rows = messageMapper.selectConversationsPaged(userId, offset, size);
+        return new CampusConversationPage(total, rows);
     }
 
     @Override

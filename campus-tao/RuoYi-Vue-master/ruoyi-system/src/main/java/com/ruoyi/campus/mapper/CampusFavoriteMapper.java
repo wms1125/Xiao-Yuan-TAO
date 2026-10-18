@@ -35,6 +35,16 @@ public interface CampusFavoriteMapper {
     int insertCampusFavorite(CampusFavorite favorite);
 
     /**
+     * 带上限守卫的新增收藏：仅当该用户收藏数小于 {@code limit} 时才插入。
+     *
+     * <p>把上限判断放进同一条 INSERT...SELECT 的 WHERE 子查询，由 InnoDB 原子执行，
+     * 消掉"先 count 再 insert"在并发下的竞态窗口。
+     * 返回 1 表示插入成功，返回 0 表示已到上限。</p>
+     */
+    int insertIfUnderLimit(@Param("userId") Long userId, @Param("productId") Long productId,
+                           @Param("limit") int limit);
+
+    /**
      * 取消收藏。<b>SQL 自带 user_id 条件</b>：
      * 越权删除在 SQL 层即被拦住（返回 0 行），不依赖上层判空。
      */

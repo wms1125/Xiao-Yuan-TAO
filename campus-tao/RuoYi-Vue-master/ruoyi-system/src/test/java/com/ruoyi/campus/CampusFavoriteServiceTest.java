@@ -19,7 +19,6 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -28,6 +27,7 @@ import com.ruoyi.campus.domain.CampusFavorite;
 import com.ruoyi.campus.domain.CampusProduct;
 import com.ruoyi.campus.mapper.CampusFavoriteMapper;
 import com.ruoyi.campus.mapper.CampusProductMapper;
+import com.ruoyi.campus.service.ICampusFavoriteService;
 import com.ruoyi.campus.service.impl.CampusFavoriteServiceImpl;
 import com.ruoyi.common.exception.ServiceException;
 
@@ -75,11 +75,70 @@ class CampusFavoriteServiceTest {
     void toggleAddsWhenNotFavored() {
         when(productMapper.selectCampusProductById(PRODUCT_ID)).thenReturn(onSaleProduct());
         when(favoriteMapper.countByUserAndProduct(USER_ID, PRODUCT_ID)).thenReturn(0);
+        when(favoriteMapper.countByUserId(USER_ID)).thenReturn(3);
+        when(favoriteMapper.insertIfUnderLimit(USER_ID, PRODUCT_ID,
+                ICampusFavoriteService.MAX_FAVORITES)).thenReturn(1);
 
         assertTrue(favoriteService.toggle(USER_ID, PRODUCT_ID));
 
-        verify(favoriteMapper).insertCampusFavorite(any(CampusFavorite.class));
+        // 改为带上限守卫的插入：并发下也不会超过 MAX_FAVORITES
+        verify(favoriteMapper).insertIfUnderLimit(USER_ID, PRODUCT_ID, ICampusFavoriteService.MAX_FAVORITES);
         verify(favoriteMapper, never()).deleteByUserAndProduct(anyLong(), anyLong());
+    }
+
+    // ---------------- 收藏数量上限 ----------------
+
+    @Test
+    @DisplayName("上限边界：正好 MAX-1 个时仍可收藏")
+    void allowsFavoriteAtMaxMinusOne() {
+        when(productMapper.selectCampusProductById(PRODUCT_ID)).thenReturn(onSaleProduct());
+        when(favoriteMapper.countByUserAndProduct(USER_ID, PRODUCT_ID)).thenReturn(0);
+        when(favoriteMapper.countByUserId(USER_ID)).thenReturn(ICampusFavoriteService.MAX_FAVORITES - 1);
+        when(favoriteMapper.insertIfUnderLimit(USER_ID, PRODUCT_ID,
+                ICampusFavoriteService.MAX_FAVORITES)).thenReturn(1);
+
+        assertTrue(favoriteService.toggle(USER_ID, PRODUCT_ID));
+    }
+
+    @Test
+    @DisplayName("上限边界：达到 MAX 个时拒绝收藏，且给出明确提示")
+    void rejectsFavoriteAtMax() {
+        when(productMapper.selectCampusProductById(PRODUCT_ID)).thenReturn(onSaleProduct());
+        when(favoriteMapper.countByUserAndProduct(USER_ID, PRODUCT_ID)).thenReturn(0);
+        when(favoriteMapper.countByUserId(USER_ID)).thenReturn(ICampusFavoriteService.MAX_FAVORITES);
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> favoriteService.toggle(USER_ID, PRODUCT_ID));
+
+        // 提示必须包含上限值和下一步动作——只说"收藏失败"用户不知道该干什么
+        assertTrue(ex.getMessage().contains("最多 " + ICampusFavoriteService.MAX_FAVORITES + " 个"), ex.getMessage());
+        // 已满时不该再去尝试插入
+        verify(favoriteMapper, never()).insertIfUnderLimit(anyLong(), anyLong(), eq(ICampusFavoriteService.MAX_FAVORITES));
+    }
+
+    @Test
+    @DisplayName("负向：并发竞态下插入返回 0 行，同样报上限错误（不误导用户）")
+    void rejectsWhenInsertGuardBlocks() {
+        when(productMapper.selectCampusProductById(PRODUCT_ID)).thenReturn(onSaleProduct());
+        when(favoriteMapper.countByUserAndProduct(USER_ID, PRODUCT_ID)).thenReturn(0);
+        // 检查时还没满，但两个并发请求同时通过了检查
+        when(favoriteMapper.countByUserId(USER_ID)).thenReturn(ICampusFavoriteService.MAX_FAVORITES - 1);
+        // SQL 层的守卫拦住后一个：插入 0 行
+        when(favoriteMapper.insertIfUnderLimit(USER_ID, PRODUCT_ID,
+                ICampusFavoriteService.MAX_FAVORITES)).thenReturn(0);
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> favoriteService.toggle(USER_ID, PRODUCT_ID));
+
+        assertTrue(ex.getMessage().contains("已达上限"), ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("已达上限时取消收藏仍然可用（上限只挡新增，不挡删除）")
+    void removeStillWorksAtMax() {
+        when(favoriteMapper.deleteByUserAndProduct(USER_ID, PRODUCT_ID)).thenReturn(1);
+
+        assertTrue(favoriteService.remove(USER_ID, PRODUCT_ID));
     }
 
     @Test
@@ -205,13 +264,14 @@ class CampusFavoriteServiceTest {
     void insertUsesLoginUserId() {
         when(productMapper.selectCampusProductById(PRODUCT_ID)).thenReturn(onSaleProduct());
         when(favoriteMapper.countByUserAndProduct(USER_ID, PRODUCT_ID)).thenReturn(0);
+        when(favoriteMapper.countByUserId(USER_ID)).thenReturn(1);
+        when(favoriteMapper.insertIfUnderLimit(USER_ID, PRODUCT_ID,
+                ICampusFavoriteService.MAX_FAVORITES)).thenReturn(1);
 
         favoriteService.toggle(USER_ID, PRODUCT_ID);
 
-        ArgumentCaptor<CampusFavorite> captor = ArgumentCaptor.forClass(CampusFavorite.class);
-        verify(favoriteMapper).insertCampusFavorite(captor.capture());
-        assertEquals(Long.valueOf(USER_ID), captor.getValue().getUserId());
-        assertEquals(Long.valueOf(PRODUCT_ID), captor.getValue().getProductId());
+        // 守卫式插入直接以登录态 userId 与 productId 为参数，没有中间对象可被改写
+        verify(favoriteMapper).insertIfUnderLimit(USER_ID, PRODUCT_ID, ICampusFavoriteService.MAX_FAVORITES);
     }
 
     @Test

@@ -9,7 +9,9 @@
 	-->
 	<property name="log.path" value="logs" />
     <!-- 日志输出格式 -->
-	<property name="log.pattern" value="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - %msg%n" />
+	<!-- traceId 由 com.ruoyi.campus.observability.TraceIdFilter 写入 MDC；
+	     非请求线程（定时任务、启动日志）没有该值，用 "-" 占位而不是输出 "traceId_IS_UNDEFINED"。 -->
+	<property name="log.pattern" value="%d{HH:mm:ss.SSS} [%thread] [%X{traceId:--}] %-5level %logger{20} - [%method,%line] - %msg%n" />
 
 	<!-- 控制台输出 -->
 	<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
