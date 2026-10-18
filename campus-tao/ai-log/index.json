@@ -1,0 +1,512 @@
+{
+  "generated_at": "2026-10-18",
+  "generator": "campus-tao/tools/ai_log_index.py",
+  "count": 26,
+  "meta_reviewed": 1,
+  "meta_policy": "001~025 为历史篇目，四项字段如实标注「未追溯」；自 026 起新篇目必须填写（AI 生成占比为撰写者自估值，签核人与日期须人工填写）。",
+  "logs": [
+    {
+      "id": "001",
+      "file": "001-环境与依赖隔离搭建.md",
+      "title": "ai-log 001 · 环境与依赖隔离搭建",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "涉及文件"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "002",
+      "file": "002-数据库初始化与后端启动.md",
+      "title": "ai-log 002 · 数据库初始化与后端启动",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "涉及文件"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "003",
+      "file": "003-商品与分类模块（后端）.md",
+      "title": "ai-log 003 · 商品与分类模块（后端）",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "涉及文件"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "004",
+      "file": "004-购物车与订单模块.md",
+      "title": "ai-log 004 · 购物车与订单模块",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "涉及文件"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "005",
+      "file": "005-支付账户与售后模块.md",
+      "title": "ai-log 005 · 支付账户与售后模块",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "涉及文件"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "006",
+      "file": "006-M3-1前端页面与端到端验证.md",
+      "title": "ai-log 006 · M3-1 前端页面与端到端验证",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "涉及文件"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "007",
+      "file": "007-企业级加固与交付打包.md",
+      "title": "ai-log 007 · 企业级加固与交付打包",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "补充加固（P0 / P1 收尾）",
+        "涉及文件"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "008",
+      "file": "008-可观测性与运营侧能力.md",
+      "title": "ai-log 008 · 可观测性与运营侧能力",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "未覆盖 / 后续建议"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "009",
+      "file": "009-依赖漏洞CVE专项治理.md",
+      "title": "ai-log 009 · 依赖漏洞（CVE）专项治理",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "未覆盖 / 后续建议"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "010",
+      "file": "010-外呼通道与物流轨迹对接.md",
+      "title": "ai-log 010 · 短信/邮件外呼通道与物流轨迹对接",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "设计落地",
+        "验证证据"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "011",
+      "file": "011-演示数据重做与真实感数据集.md",
+      "title": "ai-log 011 · 演示数据重做与真实感数据集",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "设计落地",
+        "验证证据"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "012",
+      "file": "012-SVG图标插件自研替换与前端告警清零.md",
+      "title": "ai-log 012 · SVG 图标插件自研替换与前端构建告警清零",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "遗留与后续"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "013",
+      "file": "013-工程流水线加固与覆盖率门禁.md",
+      "title": "ai-log 013 · 工程流水线加固与覆盖率门禁",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "遗留与后续"
+      ],
+      "git_last_commit_date": "2026-10-15",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "014",
+      "file": "014-前端代码规范基线与静态检查门禁.md",
+      "title": "ai-log 014 · 前端代码规范基线与静态检查门禁",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "遗留与后续"
+      ],
+      "git_last_commit_date": "2026-10-16",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "015",
+      "file": "015-后端代码规范基线与静态检查门禁.md",
+      "title": "ai-log 015 · 后端代码规范基线与静态检查门禁",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "遗留与后续"
+      ],
+      "git_last_commit_date": "2026-10-16",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "016",
+      "file": "016-企业级评估P0项集中治理.md",
+      "title": "企业级评估 P0 项集中治理（业务边界 / 测试纵深 / 交付安全 / CI 补齐）",
+      "sections": [
+        "目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "未纳入本轮（如实记录）"
+      ],
+      "git_last_commit_date": "2026-10-16",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "017",
+      "file": "017-前端组件测试与覆盖率棘轮.md",
+      "title": "前端组件测试与覆盖率棘轮",
+      "sections": [
+        "目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "未纳入本轮（如实记录）"
+      ],
+      "git_last_commit_date": "2026-10-16",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "018",
+      "file": "018-买家侧闭环与AI规范与遗留清理.md",
+      "title": "ai-log 018 · 买家侧闭环补全 · AI 辅助开发规范 · 遗留项清理",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "未纳入本轮（如实记录）",
+        "涉及文件",
+        "人工复核结论"
+      ],
+      "git_last_commit_date": "2026-10-16",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "019",
+      "file": "019-Flyway迁移与容器化与浏览器取证.md",
+      "title": "ai-log 019 · 数据库版本化迁移（Flyway）· 容器化交付 · 浏览器实测取证",
+      "sections": [
+        "里程碑目标",
+        "关键决策与取舍",
+        "踩坑与解决",
+        "验证证据",
+        "未纳入本轮（如实记录）",
+        "涉及文件",
+        "人工复核结论"
+      ],
+      "git_last_commit_date": "2026-10-16",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "020",
+      "file": "020-买家侧收货地址模块与前端门禁补齐.md",
+      "title": "买家侧收货地址模块落地与前端测试门禁补齐",
+      "sections": [
+        "1. 目标与结论",
+        "2. 关键实现",
+        "3. 本轮抓到的三个真实缺陷（都是\"自述不算证据\"的正面例子）",
+        "4. 验证（自述不算证据）",
+        "5. 未纳入本轮（如实记录）",
+        "6. 追加"
+      ],
+      "git_last_commit_date": "2026-10-16",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "021",
+      "file": "021-支付网关抽象层.md",
+      "title": "抽取 `IPaymentGateway` 支付网关抽象层",
+      "sections": [
+        "1. 目标与结论",
+        "2. 关键实现",
+        "3. 本轮抓到的三个真实缺陷",
+        "4. 验证（自述不算证据）",
+        "5. 未纳入本轮（如实记录）",
+        "6. 方法论小结"
+      ],
+      "git_last_commit_date": "2026-10-16",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "022",
+      "file": "022-收藏站内信搜索历史落地.md",
+      "title": "收藏 / 站内信 / 搜索历史三张空表落地",
+      "sections": [
+        "1. 目标与结论",
+        "2. 关键实现",
+        "3. 本轮抓到的三个真实缺陷",
+        "4. 验证（自述不算证据）",
+        "5. 未纳入本轮（如实记录）",
+        "6. 方法论小结"
+      ],
+      "git_last_commit_date": "2026-10-17",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "023",
+      "file": "023-CI红本地绿-两处真实缺陷.md",
+      "title": "P0-2 推送后 CI 抓出两处真实缺陷（自述不算证据的回报）",
+      "sections": [
+        "1. 目标与结论",
+        "2. 关键实现（修复）",
+        "3. 本轮抓到的真实缺陷",
+        "4. 验证",
+        "5. 未纳入本轮",
+        "6. 方法论小结"
+      ],
+      "git_last_commit_date": "2026-10-17",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "024",
+      "file": "024-门禁棘轮与静态分析与性能与契约治理.md",
+      "title": "评估复评 7 项扣分逐条治理（门禁阈值、静态分析、性能、契约）",
+      "sections": [
+        "1. 目标与结论",
+        "2. 关键实现",
+        "3. 本轮抓到的真实缺陷（四条，均为此前不可见）",
+        "4. 验证",
+        "5. 未纳入本轮（如实记录）",
+        "6. 方法论小结"
+      ],
+      "git_last_commit_date": "2026-10-17",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "025",
+      "file": "025-索引迁移落地与容器镜像归档.md",
+      "title": "收口 v1.0.21 的两项「未纳入」：索引迁移落地 + 容器镜像归档",
+      "sections": [
+        "1. 目标与结论",
+        "2. 关键实现",
+        "3. 首次实跑抓到的真实缺陷",
+        "4. 验证"
+      ],
+      "git_last_commit_date": "2026-10-17",
+      "meta": {
+        "ai_generated_ratio": "未追溯",
+        "human_edits": "未追溯",
+        "reviewer": "未追溯",
+        "review_date": "未追溯"
+      }
+    },
+    {
+      "id": "026",
+      "file": "026-首次真实CI跑通与认证401与百万行复测.md",
+      "title": "首次真实 CI 跑通 + 认证 401 + 百万行索引复测 + ai-log 元数据",
+      "sections": [
+        "1. 目标与结论",
+        "2. 关键实现",
+        "3. 踩坑与解决",
+        "4. 验证证据",
+        "5. 未纳入本轮（如实记录）"
+      ],
+      "git_last_commit_date": null,
+      "meta": {
+        "ai_generated_ratio": "0.95",
+        "human_edits": "任务方向、优先级与验收标准由用户逐轮确定；实施、验证与文档由 AI 完成",
+        "reviewer": "待人工签核",
+        "review_date": "待签核"
+      }
+    }
+  ]
+}

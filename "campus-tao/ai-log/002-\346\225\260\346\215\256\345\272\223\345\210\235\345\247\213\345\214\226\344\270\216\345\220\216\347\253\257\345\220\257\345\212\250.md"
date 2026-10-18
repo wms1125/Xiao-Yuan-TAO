@@ -1,0 +1,71 @@
+# ai-log 002 · 数据库初始化与后端启动
+
+> 里程碑：M2（环境搭建） ｜ 主题：campus_tao 库初始化与后端一键启动 ｜ 记录方式：AI 辅助留痕
+
+## 里程碑目标
+
+让数据库与后端在交付机上一次性就绪：
+
+- 初始化 MySQL 数据目录并设定 root 密码 `123456`；
+- 导入 `sql/campus_tao_full.sql`，得到 `campus_tao` 库（33 张系统表 + 8 张业务表 + 演示数据）；
+- 以 `java -jar` 方式启动后端 8080，并自动拉起内嵌 Redis 6379；
+- 打通登录与基础接口，为后续业务开发提供可访问的服务。
+
+## 关键决策与取舍
+
+| 决策点 | 选择 | 备选方案 | 取舍理由 |
+|--------|------|----------|----------|
+| 建表脚本 | 统一全量脚本 `sql/campus_tao_full.sql`（DROP + 重建全部表） | 增量脚本逐个 apply | 全量脚本可一键重建，避免增量脚本顺序与残留问题，交付更可控 |
+| 库内容 | 33 张系统表 + 8 张业务表 + 菜单/角色数据 | 仅业务表 | 若依权限体系依赖系统表，菜单/角色数据随脚本一并导入才能动态驱动菜单 |
+| 启动方式 | `java -jar` 启动 fat-jar | `mvn spring-boot:run` | devtools 重启会令 Tomcat 落到随机端口，`java -jar` 端口稳定 |
+| Redis | 后端启动时内嵌拉起 | 单独启动 Redis | 减少一个需人工启动的进程，降低上手门槛 |
+| 验证码 | 由数据库配置控制 | 写在 yml / 命令行参数 | 若依验证码开关实际读取 `sys_config`，命令行参数无效 |
+
+## 踩坑与解决
+
+| 现象 | 根因 | 解决 |
+|------|------|------|
+| 初始化脚本报路径错误 / 失败 | 发行包路径含中文，MySQL 截断路径 | 移到纯英文路径后重跑 |
+| 用命令行改验证码开关无效 | 开关读取自数据库 `sys_config.sys.account.captchaEnabled`，不在 yml | 直接 `UPDATE sys_config SET config_value='false' WHERE config_key='sys.account.captchaEnabled'` |
+| 后端端口不是 8080 | 使用 `mvn spring-boot:run` 且 devtools 热重启导致随机端口 | 关闭 devtools restart，改用 `java -jar` 固定 8080 |
+| 上传功能异常 | 上传路径为绝对路径 `D:/ruoyi`（不存在） | 改为相对路径 `./uploadPath`，并刷新 jar 内 `application.yml` |
+
+## 验证证据
+
+1. 初始化：双击 `1-初始化数据库.bat`，输出「数据库初始化完成」。该步**只需跑一次**。
+
+2. 启动后端：双击 `2-启动后端.bat`，日志出现：
+
+```
+Started RuoYiApplication
+Tomcat started on port 8080
+```
+
+同时打印内嵌 Redis 已在 6379 拉起。
+
+3. 服务连通性：
+
+```
+curl http://localhost:8080/captchaImage
+```
+
+返回 HTTP 200 且响应含 base64 图片，说明后端与 Redis 缓存链路正常。
+
+4. 库结构核对：`campus_tao` 含 33 张系统表 + 8 张业务表（`campus_category`、`campus_product`、`campus_cart`、`campus_account`、`campus_order`、`campus_order_item`、`campus_aftersale`、`campus_review`）。
+
+5. 登录验证：演示环境下验证码开关为 false，浏览器登录页不出现验证码，可直接以 `admin / admin123` 进入。
+
+## 涉及文件
+
+- `campus-tao/sql/campus_tao_full.sql`
+- `campus-tao/1-初始化数据库.bat`、`campus-tao/2-启动后端.bat`
+- `campus-tao/RuoYi-Vue-master/ruoyi-admin/src/main/resources/application.yml`
+- `campus-tao/RuoYi-Vue-master/ruoyi-admin/target/ruoyi-admin.jar`
+- `campus-tao/启动说明.md`
+
+<!-- ai-log-meta
+ai_generated_ratio: 未追溯
+human_edits: 未追溯
+reviewer: 未追溯
+review_date: 未追溯
+-->

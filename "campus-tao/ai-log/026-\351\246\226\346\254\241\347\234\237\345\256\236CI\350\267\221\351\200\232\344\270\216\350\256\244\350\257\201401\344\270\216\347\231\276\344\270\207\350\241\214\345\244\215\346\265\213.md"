@@ -1,0 +1,73 @@
+# 026 · 首次真实 CI 跑通 + 认证 401 + 百万行索引复测 + ai-log 元数据
+
+## 1. 目标与结论
+收口四件事：① PR #2 的 CI 从 5 处失败修到全绿（本仓库第一次有真实 CI 运行）；
+② #29 认证失败返回真实 HTTP 401（前后端同改）；③ P2-10 百万行订单索引复测并落地 V7；
+④ P2-11 为 ai-log 建立结构化元数据（本篇即第一个按新规范带元数据块的篇目）。
+
+**结论**：run 39121486137 八项检查全绿（含浏览器 E2E 15 例首次在 CI 跑通）；
+#29 真机验证未登录/过期 token 均 401；V7 迁移消除两条定时任务扫描的 filesort；
+`ai-log/index.json` 可机器校验签核覆盖。
+
+## 2. 关键实现
+
+### 2.1 CI 门禁修复（六个"看着在扫、实际空转"）
+| 缺陷 | 根因 | 修复 |
+|---|---|---|
+| gitleaks 从未扫历史 | checkout 浅克隆 + `fetch-depth` 写在 action 不支持的输入上 | 移到 checkout，删无效输入 |
+| CodeQL 提取不到 Java | 根 pom 在子目录，autobuild 只扫仓库根 | build-mode: manual + 显式 mvn |
+| build-mode 单值冲突 | JS/TS 只支持 none | 按语言矩阵拆分 |
+| 浏览器 E2E 全挂在 newPage | 无 playwright install，镜像预装版本不匹配（缺 ffmpeg-1013） | `install --with-deps chromium` |
+| spotless 判定随操作系统变 | `text=auto` 无 eol 时退回平台换行符 | `.gitattributes` 固定 `*.java eol=lf` |
+| OpenAPI 契约过期 | 新接口未同步归档 | `verify_openapi.py --refresh` |
+
+推送通道：`git push` 被 502 拦，改走 Git Data API（`.wb-rebuild-branch.py`，
+以分支 tip 为 parent 增量传 blob）。
+
+### 2.2 #29 认证 401
+`ServletUtils.renderString` 把状态码写死 200，认证失败只能靠 body code=401 表达。
+加三参重载 `(response, string, status)`（两参委托 200，其余调用方行为不变），
+入口点改用三参；前端 `request.js` 抽 `handleSessionExpired()`，错误分支的
+真实 401 与成功分支的 body code=401 汇入同一弹窗。
+
+### 2.3 P2-10 百万行复测
+隔离库造 100 万订单 / 150 万订单项（递归 CTE），EXPLAIN 复测 Mapper 真实 SQL。
+主链路（idx_user_time）零退化；两条定时任务扫描暴露 filesort（30 万 / 24.8 万行），
+V7 落地 `(status,create_time)` / `(status,ship_time)` 复测确认消除。
+详见 `docs/perf-report-v1.0.25.md`。
+
+### 2.4 P2-11 ai-log 元数据
+`tools/ai_log_index.py` 解析全部篇目（编号/标题/章节/git 日期/元数据块），
+做结构校验并产出 `ai-log/index.json`。001~025 历史篇目四项字段**如实标注「未追溯」**
+——补不出真值就不许编造，缺失本身被工具如实统计；自本篇起新篇目必须填写。
+
+## 3. 踩坑与解决
+| 现象 | 根因 | 解决 |
+|---|---|---|
+| 改 ci.yml 时引入 YAML 缩进错误，job 被解析成嵌套键 | Edit 工具对长区间缩进的手工对齐不可靠 | 从 HEAD 恢复后重做最小改动，并用 pyyaml 结构断言校验 |
+| CTE 报 1100001 次迭代中止 | 造 150 万订单项但深度只放到 1.1M | 放宽到 1.6M（订单项行数 + 余量） |
+| 本地 spotless 报 CRLF、CI 报 unused import，两处不一致 | 门禁未配 lineEnding，GIT_ATTRIBUTES 语义随平台回退 | `.gitattributes` 显式 eol=lf，本地 406 文件归一（git 零差异） |
+| verify_flyway 重放断言期望 7 实得 6 | 我把 V4(4 条)+V7(2 条) 数错为 7 | 修正期望值为 6 |
+
+## 4. 验证证据
+- CI run 39121486137：后端/前端/Flyway/Docker/gitleaks/CodeQL(java+js)/E2E/契约 全绿；
+  浏览器 E2E 15 passed (1.4m)；PR #2 已合并（main 29483eac）。
+- #29：新测 `AuthenticationEntryPointStatusTest`（Mock Servlet 断言终态 401），
+  负向验证注回两参调用抓红后恢复；真机 curl 未登录/过期 → 401、有效 → 200；
+  前端 `request.401.test.js` 4 例；后端 336 / 前端 220 全绿。
+- P2-10：`verify_flyway.sh` 19/19；EXPLAIN 前后对比存 `perf/million-db-explain-result{,-after-v7}.txt`。
+- P2-11：`python campus-tao/tools/ai_log_index.py` 全部通过并产出 index.json。
+
+## 5. 未纳入本轮（如实记录）
+- P0-1 真实支付通道仍被真实商户号阻塞。
+- ai-log 历史篇目（001~025）的 AI 占比与签核信息无法追溯，保持「未追溯」；
+  「签核人」字段在本篇也只能如实写「待人工签核」——签名必须来自人，不能由 AI 代填。
+- Q4c 订单号前置通配符搜索不可索引，是否改前缀搜索属产品决策。
+- CI 的 e2e job 仍依赖本地演示库口径的数据断言，尚未做每次 run 的独立数据面。
+
+<!-- ai-log-meta
+ai_generated_ratio: 0.95
+human_edits: 任务方向、优先级与验收标准由用户逐轮确定；实施、验证与文档由 AI 完成
+reviewer: 待人工签核
+review_date: 待签核
+-->

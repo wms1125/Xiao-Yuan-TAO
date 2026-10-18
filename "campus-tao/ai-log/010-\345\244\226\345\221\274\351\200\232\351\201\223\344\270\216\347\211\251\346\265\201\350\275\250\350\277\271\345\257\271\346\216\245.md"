@@ -1,0 +1,83 @@
+# ai-log 010 · 短信/邮件外呼通道与物流轨迹对接
+
+> 里程碑：M8（运营通道对接） ｜ 主题：通知外呼抽象与降级、物流轨迹 Provider、定时同步、留痕举证 ｜ 记录方式：AI 辅助留痕
+
+## 里程碑目标
+
+v1.0.5 落地了站内通知（`campus_notice`），并在 CHANGELOG 的 `[未发布]` 里如实挂着两条缺口：
+
+- 短信/邮件**外呼通道未接入**（站内通知只覆盖「用户打开了网站」的场景，用户不登录就完全收不到消息）；
+- 物流轨迹**未对接第三方承运商**（只记录了物流单号，买家看不到「货到哪了」）。
+
+本次把这两条补上。约束是：**交付环境不允许依赖外部服务**（交付机可能完全无网、也没有真实的短信/物流账号），因此目标不是"接入某一家具体厂商"，而是：
+
+- **可对接**：通道/Provider 以接口抽象，换网关只改配置与环境变量；
+- **可降级**：未配置时自动降级为「仅站内通知 / 仅记录物流单号」，**绝不阻断下单、发货等主流程**；
+- **可举证**：外呼是否真实发出必须有留痕（`campus_notify_log`），而不是只看代码"应该会发"；
+- **可验证**：交付前用一个本地 mock 网关证明"外呼真的发出去了、轨迹真的拉回来了"。
+
+## 关键决策与取舍
+
+| 决策点 | 选择 | 备选方案 | 取舍理由 |
+|--------|------|----------|----------|
+| 外呼通道的抽象粒度 | `CampusNotifyChannel` 接口（`code/name/enabled/targetOf/targetAvailable/send`），`List<CampusNotifyChannel>` 自动注入 | 在通知服务里写 `if (smsEnabled) {...} if (mailEnabled) {...}` | 通道是**可增删**的维度（未来加企业微信/钉钉），新增通道只需实现接口，通知服务一行不改；`enabled()` 与 `targetAvailable()` 上提为接口契约，使"未配置/目标缺失"成为**通道自身的语义**而非调用方的 if-else |
+| 未配置网关时的行为 | 自动视为「未启用」并留痕 `status=2`，业务继续 | 启动时报错要求必须配置；或静默跳过不记录 | 交付/演示环境没有真实网关，**报错会让系统无法启动**、静默跳过会让"通道没配"这件事无从察觉。留痕成 `status=2` 既保证系统可用，又让运营在留痕页一眼看到"这条消息没真正发出去" |
+| 外呼的执行时机 | 站内通知落库后**异步**分发到线程池（2 线程，守护线程） | 同步调用网关后再返回；或用 MQ | 网关抖动（连接 3s + 读 5s 超时）会直接拖慢下单事务甚至拖垮连接池；MQ 需要额外中间件。异步 + 固定小线程池是**不引中间件前提下**的最小代价方案；同时把"站内通知必达"与"外呼尽力而为"两条链路的失败域分开 |
+| HTTP 能力放哪 | 抽 `com.ruoyi.campus.support.HttpFormClient`（外呼与物流共用） | 通道与 Provider 各自实现；或引入 OkHttp/HttpClient | 两处都是"POST 表单 + 超时 + 判成功 + 截断响应"，共用一份**避免超时策略与判成功口径分叉**；用 JDK `HttpURLConnection` 而**不新增任何第三方依赖**（SBOM 组件数保持 166，无新增许可） |
+| 网关"成功"的判定 | 兼容 `success=true` 与 `code/ret/status ∈ {0,200,0000,2000}`，其余抛异常留痕 | 只认 HTTP 200；或只认某一种 JSON 约定 | 实测多数国内短信/物流网关是"HTTP 200 + 业务 code 非 0 表示失败"，只看 HTTP 状态会把**失败当成功**；而只认单一约定的适配面太窄 |
+| 物流轨迹的落库方式 | 独立表 `campus_logistics_trace` + `insert ignore` 唯一键去重 | 存 JSON 大字段在订单上；或每次查询实时透传不落库 | 轨迹是**多节点、追加式**数据，塞进订单列会退化成不可查询的字符串；实时透传则每次打开详情都打网关、且历史轨迹丢失。唯一键 `(order_no, logistics_no, status_label, context)` 让**重复同步天然幂等**（实测第二次同步新增 0 条） |
+| 轨迹同步的触发 | 定时任务 `campusLogisticsTask.syncShippedTrace`（每 30 分钟，job_id=101）+ 管理端/买家手工触发的同步接口 | 只在用户打开订单详情时实时拉取 | 定时同步把网关节流与延迟挡在业务之外；手工接口用于即时查看。两者共用同一 service 方法与幂等落库 |
+| 查询接口的权限口径 | 轨迹查询**强制登录 + 订单归属校验**（本人或管理员），与订单详情同口径 | 沿用商品详情的 `@Anonymous` 便于展示 | 物流轨迹含收货地址与运单号，属**订单隐私**，开放匿名会直接造成越权（本次 e2e 已加断言：匿名 401、他人订单被拒） |
+| 敏感配置的位置 | 全部走 `${CAMPUS_SMS_*}` / `${CAMPUS_MAIL_*}` / `${CAMPUS_LOGISTICS_*}` 占位符，`application.yml` 内**不出现任何密钥明文** | 把演示网关地址直接写进 yml 便于演示 | 与既有硬约束（密钥外部化）一致；交付默认值为空 → 通道未启用 → 降级，**交付态天然是"未配置"的安全态**，演示时用环境变量注入即可 |
+
+## 踩坑与解决
+
+| 现象 | 根因 | 解决 |
+|------|------|------|
+| 测试类直接调 `provider().parse(...)` 编译不过 | `parse` 原为包级私有，而测试类在**同一包**下本可访问——实际是 IDE/编译期可见性差异暴露了设计问题：解析逻辑是可测的纯函数，不该藏起来 | 把 `parse` 提为 `public` 并在注释中写明"时间无法解析时节点仍保留"，作为可测契约 |
+| `fastjson2` 的 import 在 `ruoyi-system` 里"能用但没声明" | 它来自 `ruoyi-common` 的**传递依赖**（幽灵依赖），v1.0.6 升级依赖树时已吃过同类亏（`fast-glob` 消失导致构建中断） | 在 `ruoyi-system/pom.xml` 显式声明 `fastjson2`，把隐性依赖变成显式契约；SBOM 组件数不变（组件本来就在清单里） |
+| 前端首轮浏览器冒烟"没渲染出物流轨迹" | 子代理在登录后**未硬刷新**，旧模块缓存 + 菜单/组件懒加载时序导致新页面未加载；并非代码缺陷 | 明确要求"登录后硬刷新再逐页访问"，第二轮在 `/campus/order` 直接进入后读到「物流轨迹」区块与 `已揽收/运输中` 两条节点 |
+| 交付前无法证明"外呼真的发出"（没有真实网关） | 无网的交付机 + 无厂商账号，任何"看代码"的结论都不算证据 | 写一个本地 mock 网关闭环验证：`POST /sms`、`/email`、`/logistics` 三个端点把**收到的表单原文**追加写入 `requests.log`；实测下单/发货/售后审核三个事件各触发短信与邮件共 6 次真实 HTTP 调用，留痕 `status=1`、耗时 1~15ms |
+| 手工断点验证后运行库被写脏 | e2e 与专项验证必然产生订单/商品/留痕数据 | 验证结束统一 `truncate` 8 张业务表（含新增的 `campus_notify_log`、`campus_logistics_trace`）并重置自增，仅保留 `campus_category` 1 条主数据，恢复交付基线 |
+
+## 设计落地
+
+**后端（新增 12 个类 + 2 张表 + 2 个接口 + 1 个定时任务）**
+
+| 分层 | 文件 |
+|------|------|
+| 通道抽象 | `campus/notify/CampusNotifyChannel.java`（接口）、`SmsNotifyChannel.java`、`EmailNotifyChannel.java`、`CampusNotifyDispatcher.java`（异步分发 + 留痕） |
+| 物流抽象 | `campus/logistics/ILogisticsProvider.java`、`HttpLogisticsProvider.java`、`LogisticsTraceNode.java` |
+| 共用能力 | `campus/support/HttpFormClient.java`（POST 表单 + 3s/5s 超时 + 判成功 + 截断） |
+| 领域/持久 | `CampusNotifyLog`、`CampusLogisticsTrace` + 2 个 Mapper（接口 + XML） |
+| 服务/接口 | `ICampusNotifyLogService`、`ICampusLogisticsService`、`CampusNotifyLogController`（`/campus/notifylog/list`）、`CampusLogisticsController`（`/campus/logistics/status|trace/{orderNo}|sync/{orderNo}`） |
+| 定时任务 | `ruoyi-quartz/.../task/CampusLogisticsTask.java`（白名单包内，`sys_job` job_id=101，`0 0/30 * * * ?`） |
+
+**接入点**：`CampusNoticeServiceImpl.push()` 在站内通知落库后追加一行 `notifyDispatcher.dispatch(...)`——因此**下单、发货、售后审核、超时自动取消**四类既有事件自动获得外呼能力，业务代码无需改动。
+
+**数据库**：`campus_logistics_trace`（唯一键幂等去重）、`campus_notify_log`（`status` 0失败/1成功/2未启用）；全量脚本 `sql/campus_tao_full.sql` 已同步，另附增量脚本 `sql/migration-v1.0.7.sql`（建表 + 注册 job 101 + 新增「通知外呼日志」菜单 2007）。
+
+**前端**：订单详情弹窗新增「物流轨迹」时间线（`el-timeline`，未配置通道时显示"已降级为仅记录物流单号"，管理员可见「同步轨迹」按钮）；新增 `campus/notifylog/index.vue` 外呼留痕运营页（渠道/结果筛选 + 四项统计卡）；`api/campus/order.js`、`api/campus/notifylog.js` 补接口封装。
+
+## 验证证据
+
+1. **离线构建与单测**（`verify.bat` 5 步）：后端 `clean package` BUILD SUCCESS；后端单测 **23/23**（新增 `CampusNotifyLogisticsTest` 8 例：网关成功约定判定 4 例 + 轨迹解析 4 例）；前端 vitest **44/44**（新增物流轨迹/外呼留痕接口封装 3 例）；前端 `build:prod` 通过。
+
+2. **端到端回归**（`python e2e_business.py`，两种配置各跑一次，均 `RESULT: ALL_PASS`）：
+   - **未配置通道（交付默认态）**：`/campus/logistics/status` 返回 `false`，轨迹接口返回 `providerEnabled=false`；18.3 断言外呼留痕**每条业务消息都落了 `status=2`（未启用降级）**，短信与邮件通道各一条链路；
+   - **mock 网关已启用**：mock 网关 `requests.log` 实测收到 **6 次真实 HTTP 调用**（下单/发货/售后审核 × 短信/邮件），留痕 `status=1`、耗时 1~15ms；报文内容经核对为 `【校园淘】订单已发货 订单 CT... 已发货，物流单号：SF1234567890...`。
+
+3. **越权与权限专项**（e2e 18.1~18.3 断言）：未登录访问物流轨迹 → **401**；ry 访问非本人订单轨迹 → 被拒；ry 访问 `/campus/notifylog/list` → **403**（无 `campus:notifylog:list`），admin 可见。
+
+4. **物流轨迹专项**：手工同步 #1 新增 **2** 条节点（已揽收 / 运输中，时间 2026-10-15 09:10:00 / 13:20:00），#2 新增 **0** 条（唯一键幂等）；直接手工触发 `sys_job` 101 → 「操作成功」，库中节点数保持 2、无重复；定时任务 cron `0 0/30 * * * ?` 已注册且 `status=0`（启用）。
+
+5. **前端 UI 实测**（Playwright，Chromium）：admin 登录 → `/campus/order` 订单详情弹窗渲染出「物流轨迹」区块与两条节点（含时间戳）；`/campus/notifylog` 表格渲染 6 行（首行：`短信 | 15666666666 | 售后审核通过 | AS2026101518... | 成功 | 4 ms`）；全程 `pageerror` 与 console error 均为空。
+
+6. **交付基线复核**：验证后清空 8 张业务表（含两张新表），仅保留 `campus_category` 1 条；重启后 `/actuator/health` = **UP**、物流通道 = **false**、外呼留痕 0 条——**交付态即"未配置通道"的安全降级态**。
+
+<!-- ai-log-meta
+ai_generated_ratio: 未追溯
+human_edits: 未追溯
+reviewer: 未追溯
+review_date: 未追溯
+-->

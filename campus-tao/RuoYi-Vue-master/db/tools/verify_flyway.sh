@@ -97,6 +97,8 @@ n=$(sql "select count(*) from information_schema.statistics where table_schema='
 [ "$n" = "1" ] && ok "V6 idx_user_read_time 已生效（通知中心排序索引）" || bad "V6 idx_user_read_time 缺失：$n"
 mn=$(tsql "select count(*) from sys_menu where parent_id=2000 and path='notice' and component='campus/notice/index';")
 [ "$mn" = "1" ] && ok "V6 通知中心菜单已注册" || bad "V6 菜单缺失：$mn"
+o=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and table_name='campus_order' and seq_in_index=1 and index_name in ('idx_status_time','idx_status_ship');")
+[ "$o" = "2" ] && ok "V7 定时任务扫描索引已生效（2/2）" || bad "V7 索引缺失：$o（期望 2）"
 
 # ---------- 2. 逐表行数核对 ----------
 echo
@@ -123,8 +125,8 @@ left=$(sql "select group_concat(table_name) from information_schema.tables where
 [ "$left" = "flyway_schema_history" ] && ok "业务表已全部删除（仅保留空的版本表）" || bad "回滚后残留表：$left"
 h=$(tsql "select count(*) from flyway_schema_history;")
 [ "$h" = "0" ] && ok "版本记录已清空" || bad "版本记录残留 $h 行"
-i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name='idx_user_time'));")
-[ "$i" = "0" ] && ok "回滚后 V4 索引无残留" || bad "回滚后残留索引：$i"
+i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name in ('idx_user_time','idx_status_time','idx_status_ship')) or (table_name='campus_message' and index_name='idx_from_user') or (table_name='campus_notice' and index_name='idx_user_read_time'));")
+[ "$i" = "0" ] && ok "回滚后 V4/V6/V7 索引无残留" || bad "回滚后残留索引：$i"
 
 # ---------- 4. 再迁移 ----------
 echo
@@ -137,8 +139,8 @@ else
 fi
 t=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB';")
 [ "$t" = "47" ] && ok "表数恢复为 47" || bad "表数异常：$t（期望 47）"
-i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name='idx_user_time'));")
-[ "$i" = "4" ] && ok "重放后 V4 索引恢复（4/4）" || bad "重放后索引缺失：$i（期望 4）"
+i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name in ('idx_user_time','idx_status_time','idx_status_ship')));")
+[ "$i" = "6" ] && ok "重放后 V4+V7 索引恢复（6/6）" || bad "重放后索引缺失：$i（期望 6）"
 
 # ---------- 5. 再核对 ----------
 echo
