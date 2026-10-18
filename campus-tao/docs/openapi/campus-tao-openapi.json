@@ -2148,6 +2148,54 @@
         }
       }
     },
+    "/campus/payqr": {
+      "get": {
+        "tags": [
+          "campus-user-pay-qr-controller"
+        ],
+        "operationId": "my",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AjaxResult"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "campus-user-pay-qr-controller"
+        ],
+        "operationId": "save_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayQrSaveDTO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AjaxResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/campus/payment/notify/{channel}": {
       "post": {
         "tags": [
@@ -2287,6 +2335,45 @@
         }
       }
     },
+    "/campus/order/direct-pay/{orderNo}": {
+      "post": {
+        "tags": [
+          "campus-order-controller"
+        ],
+        "operationId": "directPay",
+        "parameters": [
+          {
+            "name": "orderNo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectPayDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AjaxResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/campus/order/create": {
       "post": {
         "tags": [
@@ -2303,6 +2390,36 @@
           },
           "required": true
         },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AjaxResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campus/order/confirm-pay/{orderNo}": {
+      "post": {
+        "tags": [
+          "campus-order-controller"
+        ],
+        "operationId": "confirmPay",
+        "parameters": [
+          {
+            "name": "orderNo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -6461,16 +6578,16 @@
           "parentMenuName": {
             "type": "string"
           },
-          "view": {
+          "tree": {
             "type": "boolean"
           },
           "sub": {
             "type": "boolean"
           },
-          "tree": {
+          "crud": {
             "type": "boolean"
           },
-          "crud": {
+          "view": {
             "type": "boolean"
           }
         },
@@ -6573,13 +6690,13 @@
           "list": {
             "type": "boolean"
           },
+          "increment": {
+            "type": "boolean"
+          },
+          "capJavaField": {
+            "type": "string"
+          },
           "insert": {
-            "type": "boolean"
-          },
-          "edit": {
-            "type": "boolean"
-          },
-          "usableColumn": {
             "type": "boolean"
           },
           "superColumn": {
@@ -6588,13 +6705,13 @@
           "pk": {
             "type": "boolean"
           },
-          "query": {
+          "edit": {
             "type": "boolean"
           },
-          "capJavaField": {
-            "type": "string"
+          "usableColumn": {
+            "type": "boolean"
           },
-          "increment": {
+          "query": {
             "type": "boolean"
           }
         },
@@ -6609,10 +6726,10 @@
           "error": {
             "type": "boolean"
           },
-          "warn": {
+          "success": {
             "type": "boolean"
           },
-          "success": {
+          "warn": {
             "type": "boolean"
           },
           "empty": {
@@ -7890,6 +8007,26 @@
           "title"
         ]
       },
+      "PayQrSaveDTO": {
+        "type": "object",
+        "properties": {
+          "qrUrl": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "qrUrl"
+        ]
+      },
+      "DirectPayDTO": {
+        "type": "object",
+        "properties": {
+          "payProofUrl": {
+            "type": "string"
+          }
+        }
+      },
       "CampusOrderCreateDTO": {
         "type": "object",
         "properties": {
@@ -8150,6 +8287,17 @@
             "type": "integer",
             "format": "int32"
           },
+          "payType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sellerId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "payProofUrl": {
+            "type": "string"
+          },
           "receiverName": {
             "type": "string"
           },
@@ -8197,6 +8345,9 @@
             "items": {
               "$ref": "#/components/schemas/CampusOrderItem"
             }
+          },
+          "sellerPayQrUrl": {
+            "type": "string"
           }
         }
       },

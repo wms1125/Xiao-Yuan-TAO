@@ -647,9 +647,7 @@ function handleConfirmPay(row) {
 function handleCancel(row) {
   // 直付订单的钱已直接付给卖家，平台不经手——取消语义必须如实告知
   const tip =
-    row.status === 7
-      ? '款项已直接付给卖家，取消后需与卖家线下协商退款，平台仅记录状态。'
-      : '已付款订单将退回沙箱余额。'
+    row.status === 7 ? '款项已直接付给卖家，取消后需与卖家线下协商退款，平台仅记录状态。' : '已付款订单将退回沙箱余额。'
   ElMessageBox.confirm('确认取消订单「' + row.orderNo + '」？' + tip, '取消确认', {
     type: 'warning'
   })
