@@ -2,7 +2,7 @@
   "generated_at": "2026-10-19",
   "generator": "campus-tao/tools/ai_log_index.py",
   "count": 27,
-  "meta_reviewed": 0,
+  "meta_reviewed": 2,
   "meta_policy": "001~025 为历史篇目，四项字段如实标注「未追溯」；自 026 起新篇目必须填写（AI 生成占比为撰写者自估值，签核人与日期须人工填写）。",
   "logs": [
     {
@@ -504,8 +504,8 @@
       "meta": {
         "ai_generated_ratio": "0.95",
         "human_edits": "任务方向、优先级与验收标准由用户逐轮确定；实施、验证与文档由 AI 完成",
-        "reviewer": "待人工签核",
-        "review_date": "待签核"
+        "reviewer": "wms1125",
+        "review_date": "2026-10-19"
       }
     },
     {
@@ -522,8 +522,8 @@
       "meta": {
         "ai_generated_ratio": "0.95",
         "human_edits": "支付方案由用户在三个选项中选定 C2C 卖家收款码直付；实施、验证与文档由 AI 完成",
-        "reviewer": "待人工签核",
-        "review_date": "待签核"
+        "reviewer": "wms1125",
+        "review_date": "2026-10-19"
       }
     }
   ]
