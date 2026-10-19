@@ -22,6 +22,7 @@ public class CampusAftersale implements Serializable {
     private String reason;
     private BigDecimal refundAmount;
     private Integer status;
+    private Integer orderStatusBefore;
     private String handler;
     private String handleRemark;
     private Date createTime;
@@ -47,6 +48,8 @@ public class CampusAftersale implements Serializable {
     public void setRefundAmount(BigDecimal refundAmount) { this.refundAmount = refundAmount; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
+    public Integer getOrderStatusBefore() { return orderStatusBefore; }
+    public void setOrderStatusBefore(Integer orderStatusBefore) { this.orderStatusBefore = orderStatusBefore; }
     public String getHandler() { return handler; }
     public void setHandler(String handler) { this.handler = handler; }
     public String getHandleRemark() { return handleRemark; }

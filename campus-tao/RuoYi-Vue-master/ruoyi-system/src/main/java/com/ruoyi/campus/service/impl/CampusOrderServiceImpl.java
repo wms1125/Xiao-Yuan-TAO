@@ -32,8 +32,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -181,6 +183,12 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         noticeService.push(userId, "order", "订单创建成功",
                 "订单 " + order.getOrderNo() + " 已创建，应付 ¥" + order.getTotalAmount()
                         + "，请尽快完成支付，超时将自动取消。", order.getOrderNo());
+        // 站内通知：告知卖家有新订单
+        for (Long sid : resolveSellerIds(order.getOrderNo())) {
+            noticeService.push(sid, "order", "您有一笔新订单",
+                    "订单 " + order.getOrderNo() + " 已下单，金额 ¥" + order.getTotalAmount()
+                            + "，等待买家付款。", order.getOrderNo());
+        }
         return order.getOrderNo();
     }
 
@@ -211,6 +219,13 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         order.setStatus(STATUS_PAID);
         order.setPayTime(new Date());
         orderMapper.updateCampusOrder(order);
+        // 站内通知：支付成功告知买家，并提醒卖家发货
+        noticeService.push(userId, "order", "支付成功",
+                "订单 " + orderNo + " 已支付 ¥" + order.getTotalAmount() + "，请等待卖家发货。", orderNo);
+        for (Long sid : resolveSellerIds(orderNo)) {
+            noticeService.push(sid, "order", "订单已付款",
+                    "订单 " + orderNo + " 买家已付款 ¥" + order.getTotalAmount() + "，请尽快发货。", orderNo);
+        }
         return true;
     }
 
@@ -248,8 +263,8 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         Long sellerId = null;
         for (CampusOrderItem item : orderItemMapper.selectByOrderNo(orderNo)) {
             CampusProduct p = productMapper.selectCampusProductById(item.getProductId());
-            if (p == null || p.getSellerId() == null) {
-                throw new ServiceException("商品[" + item.getProductTitle() + "]缺少卖家信息，无法直付");
+            if (p == null || p.getSellerId() == null || p.getSellerId() <= 0) {
+                throw new ServiceException("商品[" + item.getProductTitle() + "]缺少有效卖家信息，无法直付");
             }
             if (sellerId == null) {
                 sellerId = p.getSellerId();
@@ -292,7 +307,8 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         if (order.getSellerId() == null || !order.getSellerId().equals(sellerId)) {
             throw new ServiceException("仅订单卖家本人可确认收款");
         }
-        int affected = orderMapper.confirmPayIfAwaitConfirm(orderNo, new Date());
+        Date now = new Date();
+        int affected = orderMapper.confirmPayIfAwaitConfirm(orderNo, now, now, sellerId);
         if (affected == 0) {
             throw new ServiceException("订单状态已变化（可能已被取消），请刷新后查看");
         }
@@ -314,6 +330,7 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
             order.setStatus(STATUS_CANCELLED);
             order.setCancelTime(new Date());
             orderMapper.updateCampusOrder(order);
+            notifySellerCancelled(order);
             return true;
         } else if (order.getStatus() == STATUS_AWAIT_SELLER_CONFIRM) {
             // 待卖家确认（C2C 直付）：买家撤回。
@@ -323,6 +340,7 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
             order.setStatus(STATUS_CANCELLED);
             order.setCancelTime(new Date());
             orderMapper.updateCampusOrder(order);
+            notifySellerCancelled(order);
             return true;
         } else if (order.getStatus() == STATUS_PAID) {
             // 已付款：退款 + 回库存。
@@ -339,6 +357,7 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
             order.setStatus(STATUS_CANCELLED);
             order.setCancelTime(new Date());
             orderMapper.updateCampusOrder(order);
+            notifySellerCancelled(order);
             return true;
         }
         throw new ServiceException("当前订单状态不可取消");
@@ -380,7 +399,13 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         }
         order.setStatus(STATUS_FINISHED);
         order.setFinishTime(new Date());
-        return orderMapper.updateCampusOrder(order);
+        int rows = orderMapper.updateCampusOrder(order);
+        // 站内通知：告知卖家买家已确认收货
+        for (Long sid : resolveSellerIds(orderNo)) {
+            noticeService.push(sid, "order", "买家已确认收货",
+                    "订单 " + orderNo + " 买家已确认收货，交易完成。", orderNo);
+        }
+        return rows;
     }
 
     @Override
@@ -417,6 +442,33 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         }
     }
 
+    /**
+     * 解析订单涉及的卖家 ID 集合（去重，排除空值、无效值(<=0)与买家本人），
+     * 供下单/支付/收货/取消等业务事件通知卖家。跨卖家订单会返回多个卖家。
+     */
+    @Override
+    public List<Long> resolveSellerIds(String orderNo) {
+        CampusOrder order = orderMapper.selectOrderByOrderNo(orderNo);
+        Long buyerId = order == null ? null : order.getUserId();
+        Set<Long> sellers = new LinkedHashSet<>();
+        for (CampusOrderItem item : orderItemMapper.selectByOrderNo(orderNo)) {
+            CampusProduct p = productMapper.selectCampusProductById(item.getProductId());
+            if (p != null && p.getSellerId() != null && p.getSellerId() > 0
+                    && !p.getSellerId().equals(buyerId)) {
+                sellers.add(p.getSellerId());
+            }
+        }
+        return new ArrayList<>(sellers);
+    }
+
+    /** 站内通知：买家取消订单后告知相关卖家 */
+    private void notifySellerCancelled(CampusOrder order) {
+        for (Long sid : resolveSellerIds(order.getOrderNo())) {
+            noticeService.push(sid, "order", "买家已取消订单",
+                    "订单 " + order.getOrderNo() + " 已被买家取消，占用库存已释放。", order.getOrderNo());
+        }
+    }
+
     @Override
     public CampusOrder selectWithItems(String orderNo) {
         CampusOrder order = orderMapper.selectOrderByOrderNo(orderNo);
@@ -441,7 +493,7 @@ public class CampusOrderServiceImpl implements ICampusOrderService {
         if (sellerId == null && order.getItems() != null && !order.getItems().isEmpty()) {
             for (CampusOrderItem item : order.getItems()) {
                 CampusProduct p = productMapper.selectCampusProductById(item.getProductId());
-                if (p == null || p.getSellerId() == null) {
+                if (p == null || p.getSellerId() == null || p.getSellerId() <= 0) {
                     return;
                 }
                 if (sellerId == null) {

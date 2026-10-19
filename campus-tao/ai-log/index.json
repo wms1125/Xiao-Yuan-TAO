@@ -1,7 +1,7 @@
 {
   "generated_at": "2026-10-19",
   "generator": "campus-tao/tools/ai_log_index.py",
-  "count": 27,
+  "count": 28,
   "meta_reviewed": 2,
   "meta_policy": "001~025 为历史篇目，四项字段如实标注「未追溯」；自 026 起新篇目必须填写（AI 生成占比为撰写者自估值，签核人与日期须人工填写）。",
   "logs": [
@@ -524,6 +524,24 @@
         "human_edits": "支付方案由用户在三个选项中选定 C2C 卖家收款码直付；实施、验证与文档由 AI 完成",
         "reviewer": "wms1125",
         "review_date": "2026-10-19"
+      }
+    },
+    {
+      "id": "028",
+      "file": "028-发布前功能数据整改与V9U9闭环.md",
+      "title": "发布前功能/数据整改与 V9/U9 闭环",
+      "sections": [
+        "1. 目标与结论",
+        "2. 关键实现",
+        "3. 验证与负向验证",
+        "4. 遗留与边界（如实登记）"
+      ],
+      "git_last_commit_date": null,
+      "meta": {
+        "ai_generated_ratio": "0.92",
+        "human_edits": "整改清单由 AI 按\"功能/数据正确性\"维度整理后经用户确认（\"按这个方案来\"）授权执行；缺陷定位、实现、迁移与验证由 AI 完成，签核留白待用户本人填写",
+        "reviewer": "待人工签核",
+        "review_date": "待人工签核"
       }
     }
   ]

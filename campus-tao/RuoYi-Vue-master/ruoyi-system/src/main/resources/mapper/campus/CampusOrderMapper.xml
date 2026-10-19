@@ -18,6 +18,8 @@
         <result property="address" column="address"/>
         <result property="remark" column="remark"/>
         <result property="payTime" column="pay_time"/>
+        <result property="payConfirmTime" column="pay_confirm_time"/>
+        <result property="payConfirmBy" column="pay_confirm_by"/>
         <result property="shipTime" column="ship_time"/>
         <result property="logisticsNo" column="logistics_no"/>
         <result property="addressSnapshot" column="address_snapshot"/>
@@ -35,7 +37,7 @@
 
     <sql id="Base_Column_List">
         id, order_no, user_id, user_name, total_amount, status, pay_type, seller_id, pay_proof_url,
-        receiver_name, receiver_phone, address, remark, pay_time, ship_time, logistics_no, address_snapshot,
+        receiver_name, receiver_phone, address, remark, pay_time, pay_confirm_time, pay_confirm_by, ship_time, logistics_no, address_snapshot,
         finish_time, cancel_time, create_time, update_time
     </sql>
 
@@ -66,6 +68,8 @@
             <if test="address != null">address = #{address},</if>
             <if test="remark != null">remark = #{remark},</if>
             <if test="payTime != null">pay_time = #{payTime},</if>
+            <if test="payConfirmTime != null">pay_confirm_time = #{payConfirmTime},</if>
+            <if test="payConfirmBy != null">pay_confirm_by = #{payConfirmBy},</if>
             <if test="shipTime != null">ship_time = #{shipTime},</if>
             <if test="logisticsNo != null">logistics_no = #{logisticsNo},</if>
             <if test="finishTime != null">finish_time = #{finishTime},</if>
@@ -139,9 +143,10 @@
         where order_no = #{orderNo} and status = 0
     </update>
 
-    <!-- C2C 直付：卖家确认收款，原子置为已付款(1)并写支付时间 -->
+    <!-- C2C 直付：卖家确认收款，原子置为已付款(1)并写支付时间与确认留痕 -->
     <update id="confirmPayIfAwaitConfirm">
-        update campus_order set status = 1, pay_time = #{payTime}
+        update campus_order set status = 1, pay_time = #{payTime},
+            pay_confirm_time = #{confirmTime}, pay_confirm_by = #{confirmBy}
         where order_no = #{orderNo} and status = 7
     </update>
 </mapper>

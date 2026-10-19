@@ -65,4 +65,10 @@ public interface ICampusOrderService {
     List<CampusStatusStat> countGroupByStatus(CampusOrder order);
 
     int countByUserId(Long userId);
+
+    /**
+     * 解析订单涉及的卖家 ID 集合（去重，排除空值、无效值(<=0)与买家本人）。
+     * 供下单/支付/收货/取消/售后等业务事件向卖家推送站内通知使用。
+     */
+    List<Long> resolveSellerIds(String orderNo);
 }

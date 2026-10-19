@@ -2,7 +2,58 @@
 
 本文件记录校园淘（campus-tao）交付包的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-开发过程留痕见 `campus-tao/ai-log/001~026`，里程碑文档见 `campus-tao/M1~M5`。
+开发过程留痕见 `campus-tao/ai-log/001~028`，里程碑文档见 `campus-tao/M1~M5`。
+
+## [1.0.27] - 2026-10-19
+
+发布前的一次「功能与数据正确性」整改：修掉 4 个用户可感知的真实缺陷，并补齐支付对账与
+直付确认留痕。**这批缺陷此前未被评分检出**——v1.0.26 的 92 分是虚高的，本版把账目补齐。
+
+### 修复
+- **收藏页「去看看」跳 404**：路由 `/campus/mall/detail/{id}` 与真实路由 `/campus/mall-detail`
+  不一致，改为 `path + query` 跳转。
+- **售后驳回后订单状态自相矛盾**：驳回分支原先把订单强行置「已完成(3)」，既丢失原状态
+  （可能是已发货 2），又不写 `finish_time`，导致同一订单「已完成但无完成时间」。现申请时用
+  `order_status_before` 记录原状态，驳回时还原，并保证完成时间与状态一致。
+- **卖家看不到、也不能同步自己订单的物流**：`canAccess` 只判买家与管理员，且同步端点是
+  管理端专属。现归属校验补「卖家本人」，同步端点去掉 admin 专属，改标 `@SelfServiceEndpoint`
+  并写明数据隔离依据（权限注解守护测试同步覆盖）。
+- **卖家信息校验收紧**：直付发起与收款码附带处的卖家校验从 `== null` 收紧为 `null || <= 0`，
+  避免脏数据（seller_id=0）被当作有效卖家。
+
+### 新增
+- **业务事件站内通知补齐**：下单（通知卖家）、支付成功（通知买家+卖家）、确认收货
+  （通知卖家）、取消订单（通知卖家）、售后申请（通知卖家）共 5 类事件接入 `noticeService`；
+  新增 `resolveSellerIds(orderNo)` 支持跨卖家订单按订单项解析多个卖家。
+- **支付流水表 `campus_payment_record`**：`pay` / `refund` / 渠道回调三条路径落库，并保留
+  `channelTradeNo`——此前该字段「无处落库、只能丢弃」，对账无从下手。写入失败仅告警不阻断
+  主交易链路。
+- **直付确认收款留痕**：`pay_confirm_time` / `pay_confirm_by`，把「谁在何时确认已收款」
+  从状态变更变成可举证记录。
+- **卖家维度索引**：`campus_order(seller_id, create_time)`，卖家列表查询不再全表扫描。
+- **启用校园淘定时任务**：超时取消 / 物流同步两个 job 由停用改为启用（此前等于没接上）。
+
+### 数据库迁移
+- **V9 迁移**（`V9__campus_fix_and_payment_record.sql`，幂等判存写法同 V6~V8）：加
+  `campus_aftersale.order_status_before`、`campus_order.pay_confirm_time/pay_confirm_by`、
+  `campus_order.idx_seller_time`、建表 `campus_payment_record`、启用定时任务。
+- **补上缺失的回滚脚本 `U9`**：`db/rollback/` 此前只有 U1~U8，`rollback.sh` 回滚到 V9 之前会
+  因「找不到 U9」**直接中止且不清理版本记录**（库结构与版本记录不一致）。本版补 U9 并实测
+  「回滚 → 重放 → 再回滚」往返可重入。
+- `db/tools/verify_flyway.sh` 断言随 V9 同步扩展（表数 48→49、新增 5 条 V9 断言、V9 索引纳入
+  回滚无残留与重放恢复核对），实测 **26 项断言全通过**。
+
+### 测试
+- 同步修复受影响的既有用例：支付网关测试补 `CampusPaymentRecordMapper` 替身（构造器 5 参）、
+  直付测试适配 `confirmPayIfAwaitConfirm` 4 参签名、售后测试补 `ICampusOrderService` 替身。
+- 实测：后端 338 用例 0 失败（行覆盖 75.5% / 分支 67.6%，门禁 71/63 通过）；前端 221 用例、
+  lint `--max-warnings 0`、生产构建全通过；Flyway 迁移+回滚+重放 26/26；真实起库起后端跑
+  `e2e_business.py` 业务回归 **ALL_PASS**；存量库升级路径实测
+  `Successfully applied 8 migrations, now at version v9`。
+
+### 未纳入本轮（如实登记）
+- 通知渠道（Email/SMS）仍为空实现，站内信是唯一真实触达能力；
+- 直付有留痕但无仲裁流程；物流为外部 HTTP 依赖，弱网/超时路径未进 E2E。
 
 ## [1.0.26] - 2026-10-18
 

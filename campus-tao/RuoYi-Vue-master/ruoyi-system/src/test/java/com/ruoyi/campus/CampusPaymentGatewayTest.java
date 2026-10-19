@@ -30,6 +30,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.ruoyi.campus.controller.CampusPaymentController;
 import com.ruoyi.campus.domain.CampusOrder;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
+import com.ruoyi.campus.mapper.CampusPaymentRecordMapper;
 import com.ruoyi.campus.observability.CampusMetrics;
 import com.ruoyi.campus.payment.IPaymentGateway;
 import com.ruoyi.campus.payment.PayCommand;
@@ -69,6 +70,9 @@ class CampusPaymentGatewayTest {
     @Mock
     private CampusOrderMapper orderMapper;
 
+    @Mock
+    private CampusPaymentRecordMapper paymentRecordMapper;
+
     // 构造器注入的协作者，Mockito 的 @InjectMocks 可直接按构造器参数匹配注入
     @InjectMocks
     private SandboxPaymentGateway sandbox;
@@ -90,7 +94,7 @@ class CampusPaymentGatewayTest {
         resolver = new PaymentGatewayResolver(Arrays.asList(sandbox, wechat), props);
         meterRegistry = new SimpleMeterRegistry();
         metrics = new CampusMetrics(meterRegistry, resolver, props);
-        paymentService = new CampusPaymentServiceImpl(resolver, props, orderMapper, metrics);
+        paymentService = new CampusPaymentServiceImpl(resolver, props, orderMapper, metrics, paymentRecordMapper);
     }
 
     // ---------------- 渠道路由 ----------------

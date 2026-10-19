@@ -1,7 +1,9 @@
 package com.ruoyi.campus.payment.impl;
 
 import com.ruoyi.campus.domain.CampusOrder;
+import com.ruoyi.campus.domain.CampusPaymentRecord;
 import com.ruoyi.campus.mapper.CampusOrderMapper;
+import com.ruoyi.campus.mapper.CampusPaymentRecordMapper;
 import com.ruoyi.campus.observability.CampusMetrics;
 import com.ruoyi.campus.payment.ICampusPaymentService;
 import com.ruoyi.campus.payment.IPaymentGateway;
@@ -13,6 +15,8 @@ import com.ruoyi.campus.payment.PaymentGatewayResolver;
 import com.ruoyi.campus.payment.RefundCommand;
 import com.ruoyi.campus.payment.RefundResult;
 import com.ruoyi.common.exception.ServiceException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,10 +39,18 @@ public class CampusPaymentServiceImpl implements ICampusPaymentService {
     /** 渠道不可解析时的打标值，与 {@code CampusPaymentController.MODE_UNAVAILABLE} 同义 */
     private static final String MODE_UNAVAILABLE = "unavailable";
 
+    /** 流水交易类型：支付 */
+    private static final String TRADE_PAY = "PAY";
+    /** 流水交易类型：退款 */
+    private static final String TRADE_REFUND = "REFUND";
+
+    private static final Logger log = LoggerFactory.getLogger(CampusPaymentServiceImpl.class);
+
     private final PaymentGatewayResolver resolver;
     private final PaymentChannelProperties props;
     private final CampusOrderMapper orderMapper;
     private final CampusMetrics metrics;
+    private final CampusPaymentRecordMapper paymentRecordMapper;
 
     /**
      * 构造器注入：三个依赖里有两者（resolver / props）不是可 mock 的简单协作者，
@@ -48,11 +60,13 @@ public class CampusPaymentServiceImpl implements ICampusPaymentService {
     public CampusPaymentServiceImpl(PaymentGatewayResolver resolver,
                                     PaymentChannelProperties props,
                                     CampusOrderMapper orderMapper,
-                                    CampusMetrics metrics) {
+                                    CampusMetrics metrics,
+                                    CampusPaymentRecordMapper paymentRecordMapper) {
         this.resolver = resolver;
         this.props = props;
         this.orderMapper = orderMapper;
         this.metrics = metrics;
+        this.paymentRecordMapper = paymentRecordMapper;
     }
 
     @Override
@@ -70,6 +84,10 @@ public class CampusPaymentServiceImpl implements ICampusPaymentService {
         try {
             PayResult result = gateway.pay(cmd);
             success = result.isSuccess();
+            // 落支付流水：保留渠道交易号供对账；沙箱扣款不经手卖家资金，故 sellerId 记空。
+            recordPayment(cmd.getOrderNo(), cmd.getUserId(), null, cmd.getAmount(),
+                    TRADE_PAY, gateway.channel(), result.getChannelTradeNo(),
+                    success, success ? null : result.getFailReason());
             return result;
         } finally {
             // finally 打点：渠道抛异常时也计为 failed，否则"渠道挂了"在指标上是空白
@@ -90,6 +108,13 @@ public class CampusPaymentServiceImpl implements ICampusPaymentService {
         try {
             RefundResult result = gateway.refund(cmd);
             success = result.isSuccess();
+            // 退款流水补全卖家：从订单反查，便于按卖家对账退款去向。
+            CampusOrder order = orderMapper.selectOrderByOrderNo(cmd.getOrderNo());
+            recordPayment(cmd.getOrderNo(), cmd.getUserId(),
+                    order == null ? null : order.getSellerId(), cmd.getAmount(),
+                    TRADE_REFUND, gateway.channel(),
+                    result.getRefundNo() != null ? result.getRefundNo() : cmd.getChannelTradeNo(),
+                    success, success ? null : result.getFailReason());
             return result;
         } finally {
             metrics.refund(gateway.channel(), gateway.mode(), success);
@@ -121,10 +146,40 @@ public class CampusPaymentServiceImpl implements ICampusPaymentService {
         }
         order.setStatus(STATUS_PAID);
         order.setPayTime(new Date());
-        // 注：渠道交易号（channelTradeNo）当前无落库位置。对账需要它，但加列要走 V3 迁移，
-        // 不塞进本任务的范围。待办见 CHANGELOG「未纳入本轮」。
         orderMapper.updateCampusOrder(order);
+        // 渠道回调流水：以回调携带的交易号落库，是后续对账最权威的凭证。
+        recordPayment(notify.getOrderNo(), order.getUserId(), order.getSellerId(),
+                notify.getAmount() != null ? notify.getAmount() : expected,
+                TRADE_PAY, channel, notify.getChannelTradeNo(), true, "渠道回调");
         return true;
+    }
+
+    /**
+     * 落一条支付/退款流水。
+     *
+     * <p>流水写入失败不应阻断主交易链路（支付/退款已由渠道侧完成，抛异常会让用户
+     * 看到"支付失败"但钱已扣），故此处吞掉异常并留下告警日志。</p>
+     */
+    private void recordPayment(String orderNo, Long userId, Long sellerId, BigDecimal amount,
+                               String tradeType, String channel, String channelTradeNo,
+                               boolean success, String remark) {
+        try {
+            CampusPaymentRecord record = new CampusPaymentRecord();
+            record.setOrderNo(orderNo);
+            record.setUserId(userId);
+            record.setSellerId(sellerId);
+            record.setAmount(amount);
+            record.setTradeType(tradeType);
+            record.setChannel(channel);
+            record.setChannelTradeNo(channelTradeNo);
+            record.setStatus(success ? "SUCCESS" : "FAIL");
+            record.setRemark(remark);
+            record.setCreateTime(new Date());
+            paymentRecordMapper.insertCampusPaymentRecord(record);
+        } catch (RuntimeException e) {
+            log.warn("支付流水写入失败 orderNo={} tradeType={} channelTradeNo={}",
+                    orderNo, tradeType, channelTradeNo, e);
+        }
     }
 
     @Override

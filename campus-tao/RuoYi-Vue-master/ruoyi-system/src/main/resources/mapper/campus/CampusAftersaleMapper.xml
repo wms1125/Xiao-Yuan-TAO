@@ -14,6 +14,7 @@
         <result property="reason" column="reason"/>
         <result property="refundAmount" column="refund_amount"/>
         <result property="status" column="status"/>
+        <result property="orderStatusBefore" column="order_status_before"/>
         <result property="handler" column="handler"/>
         <result property="handleRemark" column="handle_remark"/>
         <result property="createTime" column="create_time"/>
@@ -28,7 +29,7 @@
 
     <sql id="Base_Column_List">
         id, aftersale_no, order_id, order_no, user_id, user_name, type, reason, refund_amount,
-        status, handler, handle_remark, create_time, handle_time
+        status, order_status_before, handler, handle_remark, create_time, handle_time
     </sql>
 
     <!-- 列表与概览共用同一筛选条件，避免两处 where 漂移 -->
@@ -41,8 +42,8 @@
     </sql>
 
     <insert id="insertCampusAftersale" parameterType="com.ruoyi.campus.domain.CampusAftersale" useGeneratedKeys="true" keyProperty="id">
-        insert into campus_aftersale (aftersale_no, order_id, order_no, user_id, user_name, type, reason, refund_amount)
-        values (#{aftersaleNo}, #{orderId}, #{orderNo}, #{userId}, #{userName}, #{type}, #{reason}, #{refundAmount})
+        insert into campus_aftersale (aftersale_no, order_id, order_no, user_id, user_name, type, reason, refund_amount, order_status_before)
+        values (#{aftersaleNo}, #{orderId}, #{orderNo}, #{userId}, #{userName}, #{type}, #{reason}, #{refundAmount}, #{orderStatusBefore})
     </insert>
 
     <update id="updateCampusAftersale" parameterType="com.ruoyi.campus.domain.CampusAftersale">

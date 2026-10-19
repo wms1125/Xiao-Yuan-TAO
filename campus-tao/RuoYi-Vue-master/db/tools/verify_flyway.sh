@@ -86,7 +86,7 @@ v=$(tsql "select group_concat(version order by installed_rank) from flyway_schem
 LAST_VER=${MIG_VERSIONS##*,}
 [ "$v" = "$MIG_VERSIONS" ] && ok "flyway_schema_history 记录 V1~V$LAST_VER（共 $MIG_COUNT 个）" || bad "版本记录异常：$v（期望 $MIG_VERSIONS）"
 t=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB';")
-[ "$t" = "48" ] && ok "迁移后表数 48（43 基线 + 4 新增 + 1 版本表）" || bad "迁移后表数异常：$t（期望 48）"
+[ "$t" = "49" ] && ok "迁移后表数 49（43 基线 + 5 新增 + 1 版本表）" || bad "迁移后表数异常：$t（期望 49）"
 i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name='idx_user_time'));")
 [ "$i" = "4" ] && ok "V4 复合索引已生效（4/4）" || bad "V4 索引缺失：$i（期望 4）"
 c=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB' and table_name like 'campus\\_%' and table_collation <> 'utf8mb4_0900_ai_ci';")
@@ -103,13 +103,23 @@ q=$(tsql "select count(*) from information_schema.columns where table_schema=DAT
 [ "$q" = "3" ] && ok "V8 直付列已生效（pay_type/seller_id/pay_proof_url 3/3）" || bad "V8 直付列缺失：$q（期望 3）"
 p=$(tsql "select count(*) from information_schema.tables where table_schema=DATABASE() and table_name='campus_user_pay_qr';")
 [ "$p" = "1" ] && ok "V8 收款码表已建立" || bad "V8 收款码表缺失"
+v9t=$(tsql "select count(*) from information_schema.tables where table_schema=DATABASE() and table_name='campus_payment_record';")
+[ "$v9t" = "1" ] && ok "V9 支付流水表已建立" || bad "V9 支付流水表缺失"
+v9c=$(tsql "select count(*) from information_schema.columns where table_schema=DATABASE() and table_name='campus_order' and column_name in ('pay_confirm_time','pay_confirm_by');")
+[ "$v9c" = "2" ] && ok "V9 直付确认留痕列已生效（pay_confirm_time/pay_confirm_by 2/2）" || bad "V9 直付确认留痕列缺失：$v9c（期望 2）"
+v9a=$(tsql "select count(*) from information_schema.columns where table_schema=DATABASE() and table_name='campus_aftersale' and column_name='order_status_before';")
+[ "$v9a" = "1" ] && ok "V9 售后原状态列 order_status_before 已生效" || bad "V9 order_status_before 缺失：$v9a"
+v9i=$(tsql "select count(*) from information_schema.statistics where table_schema=DATABASE() and table_name='campus_order' and index_name='idx_seller_time' and seq_in_index=1;")
+[ "$v9i" = "1" ] && ok "V9 卖家维度索引 campus_order.idx_seller_time 已生效" || bad "V9 idx_seller_time 缺失：$v9i"
+v9j=$(tsql "select count(*) from sys_job where job_id in (100,101) and status='1';")
+[ "$v9j" = "2" ] && ok "V9 校园淘定时任务已启用（100/101 status=1）" || bad "V9 定时任务未启用：$v9j（期望 2）"
 
 # ---------- 2. 逐表行数核对 ----------
 echo
 echo "[2/5] 逐表行数核对（参照库 vs 迁移库）"
 if [ "$HAVE_REF" = "1" ]; then
   if bash "$SCRIPT_DIR/compare_migration.sh" "$REF_DB" "$TEST_DB" \
-      campus_address campus_favorite campus_search_history campus_message > /tmp/cmp1.txt 2>&1; then
+      campus_address campus_favorite campus_search_history campus_message campus_payment_record > /tmp/cmp1.txt 2>&1; then
     ok "空库迁移后逐表行数与全量脚本一致"
   else
     bad "逐表行数存在非预期差异"; tail -20 /tmp/cmp1.txt | sed 's/^/      /'
@@ -129,8 +139,8 @@ left=$(sql "select group_concat(table_name) from information_schema.tables where
 [ "$left" = "flyway_schema_history" ] && ok "业务表已全部删除（仅保留空的版本表）" || bad "回滚后残留表：$left"
 h=$(tsql "select count(*) from flyway_schema_history;")
 [ "$h" = "0" ] && ok "版本记录已清空" || bad "版本记录残留 $h 行"
-i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name in ('idx_user_time','idx_status_time','idx_status_ship')) or (table_name='campus_message' and index_name='idx_from_user') or (table_name='campus_notice' and index_name='idx_user_read_time'));")
-[ "$i" = "0" ] && ok "回滚后 V4/V6/V7 索引无残留" || bad "回滚后残留索引：$i"
+i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name in ('idx_user_time','idx_status_time','idx_status_ship','idx_seller_time')) or (table_name='campus_message' and index_name='idx_from_user') or (table_name='campus_notice' and index_name='idx_user_read_time'));")
+[ "$i" = "0" ] && ok "回滚后 V4/V6/V7/V9 索引无残留" || bad "回滚后残留索引：$i"
 
 # ---------- 4. 再迁移 ----------
 echo
@@ -142,16 +152,16 @@ else
   bad "再次迁移未按预期完成"; echo "$out" | tail -8 | sed 's/^/      /'
 fi
 t=$(sql "select count(*) from information_schema.tables where table_schema='$TEST_DB';")
-[ "$t" = "48" ] && ok "表数恢复为 48" || bad "表数异常：$t（期望 48）"
-i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name in ('idx_user_time','idx_status_time','idx_status_ship')));")
-[ "$i" = "6" ] && ok "重放后 V4+V7 索引恢复（6/6）" || bad "重放后索引缺失：$i（期望 6）"
+[ "$t" = "49" ] && ok "表数恢复为 49" || bad "表数异常：$t（期望 49）"
+i=$(sql "select count(*) from information_schema.statistics where table_schema='$TEST_DB' and seq_in_index=1 and ((table_name='campus_product' and index_name in ('idx_status_time','idx_seller_time','idx_category_status_time')) or (table_name='campus_order' and index_name in ('idx_user_time','idx_status_time','idx_status_ship','idx_seller_time')));")
+[ "$i" = "7" ] && ok "重放后 V4+V7+V9 索引恢复（7/7）" || bad "重放后索引缺失：$i（期望 7）"
 
 # ---------- 5. 再核对 ----------
 echo
 echo "[5/5] 再次逐表行数核对"
 if [ "$HAVE_REF" = "1" ]; then
   if bash "$SCRIPT_DIR/compare_migration.sh" "$REF_DB" "$TEST_DB" \
-      campus_address campus_favorite campus_search_history campus_message > /tmp/cmp2.txt 2>&1; then
+      campus_address campus_favorite campus_search_history campus_message campus_payment_record > /tmp/cmp2.txt 2>&1; then
     ok "重放后逐表行数仍一致"
   else
     bad "重放后行数存在差异"; tail -20 /tmp/cmp2.txt | sed 's/^/      /'

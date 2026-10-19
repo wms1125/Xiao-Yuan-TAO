@@ -36,6 +36,7 @@ import com.ruoyi.campus.payment.ICampusPaymentService;
 import com.ruoyi.campus.payment.RefundCommand;
 import com.ruoyi.campus.payment.RefundResult;
 import com.ruoyi.campus.service.ICampusNoticeService;
+import com.ruoyi.campus.service.ICampusOrderService;
 import com.ruoyi.campus.service.impl.CampusAftersaleServiceImpl;
 import com.ruoyi.common.exception.ServiceException;
 
@@ -63,6 +64,8 @@ class CampusAftersaleServiceTest {
     private ICampusPaymentService paymentService;
     @Mock
     private ICampusNoticeService noticeService;
+    @Mock
+    private ICampusOrderService orderService;
 
     @InjectMocks
     private CampusAftersaleServiceImpl aftersaleService;

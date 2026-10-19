@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +16,7 @@ import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.campus.domain.CampusOrder;
+import com.ruoyi.campus.security.SelfServiceEndpoint;
 import com.ruoyi.campus.service.ICampusLogisticsService;
 import com.ruoyi.campus.service.ICampusOrderService;
 
@@ -57,8 +57,8 @@ public class CampusLogisticsController extends BaseController {
         return AjaxResult.success(data);
     }
 
-    /** 手工触发轨迹同步（管理员或订单归属人），返回新增节点数 */
-    @PreAuthorize("@ss.hasPermi('campus:order:edit')")
+    /** 手工触发轨迹同步（管理员、买家或卖家），返回新增节点数 */
+    @SelfServiceEndpoint("仅订单买家/卖家本人或管理员：方法内 canAccess 校验订单归属，非本人一律拒绝")
     @Log(title = "校园淘物流", businessType = BusinessType.UPDATE)
     @PostMapping("/sync/{orderNo}")
     public AjaxResult sync(@PathVariable String orderNo) {
@@ -73,12 +73,14 @@ public class CampusLogisticsController extends BaseController {
         return AjaxResult.success("已同步物流轨迹，新增 " + added + " 条节点");
     }
 
-    /** 订单存在且为本人（或当前登录人为管理员）才可访问 */
+    /** 订单存在且为买家本人、卖家本人（或当前登录人为管理员）才可访问 */
     private boolean canAccess(CampusOrder order) {
         if (order == null) {
             return false;
         }
         Long userId = SecurityUtils.getUserId();
-        return userId.equals(order.getUserId()) || SecurityUtils.isAdmin(userId);
+        return userId.equals(order.getUserId())
+                || userId.equals(order.getSellerId())
+                || SecurityUtils.isAdmin(userId);
     }
 }

@@ -45,8 +45,11 @@ public interface CampusOrderMapper {
                                @Param("sellerId") Long sellerId);
 
     /**
-     * C2C 直付：卖家确认收款，原子置「已付款(1)」并写 pay_time。
+     * C2C 直付：卖家确认收款，原子置「已付款(1)」并写 pay_time、确认时间与操作人。
      * 仅当订单仍为待卖家确认(7)时生效；0 表示已被取消等，调用方应报错。
      */
-    int confirmPayIfAwaitConfirm(@Param("orderNo") String orderNo, @Param("payTime") Date payTime);
+    int confirmPayIfAwaitConfirm(@Param("orderNo") String orderNo,
+                                 @Param("payTime") Date payTime,
+                                 @Param("confirmTime") Date confirmTime,
+                                 @Param("confirmBy") Long confirmBy);
 }
