@@ -250,7 +250,6 @@
               type="primary"
               size="small"
               :loading="traceLoading"
-              v-hasRole="['admin']"
               @click="handleSyncTrace"
               >同步轨迹</el-button
             >

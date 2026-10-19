@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -217,11 +218,11 @@ class CampusDirectPayServiceTest {
         order.setStatus(CampusOrderServiceImpl.STATUS_AWAIT_SELLER_CONFIRM);
         order.setSellerId(SELLER_ID);
         when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
-        when(orderMapper.confirmPayIfAwaitConfirm(eq(ORDER_NO), any(Date.class))).thenReturn(1);
+        when(orderMapper.confirmPayIfAwaitConfirm(eq(ORDER_NO), any(Date.class), any(Date.class), anyLong())).thenReturn(1);
 
         orderService.confirmDirectPay(ORDER_NO, SELLER_ID);
 
-        verify(orderMapper).confirmPayIfAwaitConfirm(eq(ORDER_NO), any(Date.class));
+        verify(orderMapper).confirmPayIfAwaitConfirm(eq(ORDER_NO), any(Date.class), any(Date.class), anyLong());
         verify(noticeService).push(eq(BUYER_ID), eq("order"), anyString(), anyString(), eq(ORDER_NO));
     }
 
@@ -236,7 +237,7 @@ class CampusDirectPayServiceTest {
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> orderService.confirmDirectPay(ORDER_NO, BUYER_ID));
         assertTrue(ex.getMessage().contains("卖家本人"));
-        verify(orderMapper, never()).confirmPayIfAwaitConfirm(anyString(), any());
+        verify(orderMapper, never()).confirmPayIfAwaitConfirm(anyString(), any(), any(), any());
     }
 
     @Test
@@ -246,7 +247,7 @@ class CampusDirectPayServiceTest {
         order.setStatus(CampusOrderServiceImpl.STATUS_AWAIT_SELLER_CONFIRM);
         order.setSellerId(SELLER_ID);
         when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
-        when(orderMapper.confirmPayIfAwaitConfirm(eq(ORDER_NO), any(Date.class))).thenReturn(0);
+        when(orderMapper.confirmPayIfAwaitConfirm(eq(ORDER_NO), any(Date.class), any(Date.class), anyLong())).thenReturn(0);
 
         assertThrows(ServiceException.class, () -> orderService.confirmDirectPay(ORDER_NO, SELLER_ID));
         verify(noticeService, never()).push(any(), anyString(), anyString(), anyString(), anyString());
@@ -260,7 +261,7 @@ class CampusDirectPayServiceTest {
         when(orderMapper.selectOrderByOrderNo(ORDER_NO)).thenReturn(order);
 
         assertThrows(ServiceException.class, () -> orderService.confirmDirectPay(ORDER_NO, SELLER_ID));
-        verify(orderMapper, never()).confirmPayIfAwaitConfirm(anyString(), any());
+        verify(orderMapper, never()).confirmPayIfAwaitConfirm(anyString(), any(), any(), any());
     }
 
     // ---------------- cancelOrder（状态 7 分支） ----------------

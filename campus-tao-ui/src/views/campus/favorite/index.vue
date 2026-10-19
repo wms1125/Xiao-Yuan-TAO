@@ -125,7 +125,7 @@ function cover(row) {
 }
 
 function goDetail(row) {
-  router.push({ path: '/campus/mall/detail/' + row.productId })
+  router.push({ path: '/campus/mall-detail', query: { productId: row.productId } })
 }
 
 /** 是否已达上限：达到后入口处直接提示，不再发一次注定失败的请求 */

@@ -28,6 +28,10 @@ public class CampusOrder implements Serializable {
     private String address;
     private String remark;
     private Date payTime;
+    /** 卖家确认收款时间（C2C 直付，V9） */
+    private Date payConfirmTime;
+    /** 确认收款操作人 ID（C2C 直付卖家，V9） */
+    private Long payConfirmBy;
     private Date shipTime;
     /** 物流单号（发货时录入） */
     private String logisticsNo;
@@ -74,6 +78,10 @@ public class CampusOrder implements Serializable {
     public void setRemark(String remark) { this.remark = remark; }
     public Date getPayTime() { return payTime; }
     public void setPayTime(Date payTime) { this.payTime = payTime; }
+    public Date getPayConfirmTime() { return payConfirmTime; }
+    public void setPayConfirmTime(Date payConfirmTime) { this.payConfirmTime = payConfirmTime; }
+    public Long getPayConfirmBy() { return payConfirmBy; }
+    public void setPayConfirmBy(Long payConfirmBy) { this.payConfirmBy = payConfirmBy; }
     public Date getShipTime() { return shipTime; }
     public void setShipTime(Date shipTime) { this.shipTime = shipTime; }
     public String getLogisticsNo() { return logisticsNo; }

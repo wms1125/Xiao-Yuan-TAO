@@ -176,6 +176,6 @@ describe('我的收藏页', () => {
     const btn = wrapper.findAll('.el-button-stub').find((b) => b.text().includes('去看看'))
     await btn.trigger('click')
 
-    expect(pushMock).toHaveBeenCalledWith({ path: '/campus/mall/detail/' + 100 })
+    expect(pushMock).toHaveBeenCalledWith({ path: '/campus/mall-detail', query: { productId: 100 } })
   })
 })

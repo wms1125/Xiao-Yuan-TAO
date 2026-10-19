@@ -13,6 +13,7 @@ import com.ruoyi.campus.payment.RefundCommand;
 import com.ruoyi.campus.payment.RefundResult;
 import com.ruoyi.campus.service.ICampusAftersaleService;
 import com.ruoyi.campus.service.ICampusNoticeService;
+import com.ruoyi.campus.service.ICampusOrderService;
 import com.ruoyi.common.exception.ServiceException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,8 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
     private ICampusPaymentService paymentService;
     @Autowired
     private ICampusNoticeService noticeService;
+    @Autowired
+    private ICampusOrderService orderService;
 
     private String genAftersaleNo(Long userId) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
@@ -66,10 +69,18 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
         as.setReason(reason);
         as.setRefundAmount(order.getTotalAmount());
         as.setStatus(0);
+        // 记录申请前的订单状态：驳回时据此还原，避免"已发货"被强行跳成"已完成"
+        as.setOrderStatusBefore(order.getStatus());
         aftersaleMapper.insertCampusAftersale(as);
         // 订单置为退款中
         order.setStatus(5);
         orderMapper.updateCampusOrder(order);
+        // 站内通知：告知卖家买家提交了售后申请
+        for (Long sid : orderService.resolveSellerIds(orderNo)) {
+            noticeService.push(sid, "aftersale", "买家提交了售后申请",
+                    "订单 " + orderNo + " 买家提交了售后申请，金额 ¥" + order.getTotalAmount()
+                            + "，请关注平台处理结果。", as.getAftersaleNo());
+        }
         return as.getAftersaleNo();
     }
 
@@ -103,7 +114,16 @@ public class CampusAftersaleServiceImpl implements ICampusAftersaleService {
             order.setStatus(6); // 已退款
         } else {
             as.setStatus(2);
-            order.setStatus(STATUS_FINISHED); // 驳回后视为已完成
+            // 驳回后还原申请前的订单状态：原来"已发货(2)"就回到 2，不再强行置"已完成(3)"。
+            // 历史数据无 order_status_before 时保守回退为已完成(3)。
+            Integer before = as.getOrderStatusBefore() != null ? as.getOrderStatusBefore() : STATUS_FINISHED;
+            order.setStatus(before);
+            // 状态一致性：已完成必须有完成时间，其它状态不应残留完成时间。
+            if (before == STATUS_FINISHED) {
+                if (order.getFinishTime() == null) {
+                    order.setFinishTime(new Date());
+                }
+            }
         }
         as.setHandler(handler);
         as.setHandleRemark(remark);
